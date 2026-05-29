@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --check \"C:\\\\Users\\\\nicol\\\\Downloads\\\\claire-project\\\\js\\\\app.js\")"
+    ]
+  }
+}

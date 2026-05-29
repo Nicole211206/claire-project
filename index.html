@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claire — Painel Nicole</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<link rel="stylesheet" href="css/styles.css">
+<script src="https://accounts.google.com/gsi/client" async></script>
+<script>
+// LOGIN — independente do app.js
+function verificarLogin(){
+  var s=document.getElementById('login-senha');
+  var e=document.getElementById('login-erro');
+  // Nick@2026
+  if(s.value==='Nick@2026'){
+    sessionStorage.setItem('claire_ok','1');
+    document.getElementById('login-overlay').style.display='none';
+    s.value='';
+    e.textContent='';
+  } else {
+    e.textContent='Senha incorreta. Tente novamente.';
+    s.value='';
+    s.focus();
+  }
+}
+// Verificar sessão imediatamente
+(function(){
+  if(sessionStorage.getItem('claire_ok')==='1'){
+    // Já autenticado — esconder overlay quando DOM estiver pronto
+    document.addEventListener('DOMContentLoaded',function(){
+      var ov=document.getElementById('login-overlay');
+      if(ov)ov.style.display='none';
+    });
+  }
+  // Se não autenticado, o overlay fica visível (display:flex é o padrão)
+})();
+</script>
+</head>
+<body>
+
+<!-- LOGIN OVERLAY -->
+<div id="login-overlay" style="position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#fff5f5 0%,#fdf2f8 50%,#f0f9ff 100%);display:flex;align-items:center;justify-content:center;">
+  <div style="background:#fff;border:1px solid var(--border);border-radius:16px;padding:40px 36px;width:360px;box-shadow:0 20px 60px rgba(0,0,0,0.12);text-align:center;">
+    <div style="font-family:'Fraunces',serif;font-size:32px;font-weight:700;color:#c0616a;margin-bottom:4px;">Claire<span style="color:#e0a0a5;">.</span></div>
+    <div style="font-size:13px;color:#94a3b8;margin-bottom:28px;">Painel de Gestão WeCare</div>
+    <div style="text-align:left;margin-bottom:16px;">
+      <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;display:block;margin-bottom:6px;">Senha de acesso</label>
+      <input type="password" id="login-senha" placeholder="Digite sua senha..."
+        style="width:100%;padding:11px 14px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:'Plus Jakarta Sans',sans-serif;outline:none;box-sizing:border-box;transition:border 0.15s;"
+        onfocus="this.style.borderColor='#c0616a'" onblur="this.style.borderColor='#e2e8f0'"
+        onkeydown="if(event.key==='Enter')verificarLogin()">
+    </div>
+    <div id="login-erro" style="font-size:12px;color:#ef4444;min-height:18px;margin-bottom:10px;"></div>
+    <button onclick="verificarLogin()"
+      style="width:100%;padding:12px;background:#c0616a;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;font-family:'Plus Jakarta Sans',sans-serif;cursor:pointer;transition:background 0.15s;"
+      onmouseover="this.style.background='#b05560'" onmouseout="this.style.background='#c0616a'">
+      Entrar
+    </button>
+    <div style="margin-top:18px;font-size:11px;color:#cbd5e1;">Acesso exclusivo · WeCare Hosting</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     SIDEBAR
+══════════════════════════════════════════ -->
+<nav id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-mark">Claire<span>.</span></div>
+    <div class="logo-sub">Painel de Gestão</div>
+  </div>
+  <div class="sidebar-nav">
+    <div class="nav-section">Principal</div>
+    <button class="nav-item active" onclick="showPanel('overview',this)"><i class="fa-solid fa-gauge-simple-high"></i> Visão Geral</button>
+    <button class="nav-item" onclick="showPanel('kpis',this)"><i class="fa-solid fa-chart-line"></i> Meus KPIs</button>
+    <button class="nav-item" onclick="showPanel('tasks',this)"><i class="fa-solid fa-list-check"></i> Tarefas <span class="nav-badge" id="tasks-badge">0</span></button>
+    <button class="nav-item" onclick="showPanel('calendar',this)"><i class="fa-regular fa-calendar-days"></i> Calendário</button>
+    <button class="nav-item" onclick="showPanel('ai',this)"><i class="fa-solid fa-wand-magic-sparkles"></i> Assistente IA</button>
+    <div class="nav-section">Equipe</div>
+    <button class="nav-item" onclick="showPanel('team',this)"><i class="fa-solid fa-users"></i> Equipe</button>
+    <button class="nav-item" onclick="showPanel('salary',this)"><i class="fa-solid fa-money-bill-wave"></i> Salários</button>
+    <button class="nav-item" onclick="showPanel('drive',this)"><i class="fa-brands fa-google-drive"></i> Google Drive</button>
+    <button class="nav-item" onclick="showPanel('onboarding',this)"><i class="fa-solid fa-house-flag"></i> Onboarding</button>
+    <button class="nav-item" onclick="showPanel('compras',this)"><i class="fa-solid fa-cart-shopping"></i> Compras</button>
+    <button class="nav-item" onclick="showPanel('gmail',this)"><i class="fa-regular fa-envelope"></i> Gmail <span class="nav-badge" id="gmail-badge" style="display:none;">0</span></button>
+    <div class="nav-section">Projetos</div>
+    <button class="nav-item" onclick="showPanel('projetos',this)"><i class="fa-solid fa-folder-open"></i> Projetos</button>
+    <button class="nav-item" onclick="showPanel('notes',this)"><i class="fa-regular fa-note-sticky"></i> Anotações</button>
+    <button class="nav-item" onclick="showPanel('focus',this)"><i class="fa-regular fa-clock"></i> Foco</button>
+  </div>
+  <div class="sidebar-user">
+    <div class="avatar av-rose" id="sidebar-avatar">N</div>
+    <div>
+      <div class="user-name" id="sidebar-name">Nicole</div>
+      <div class="user-role">Gestão de Operações</div>
+    </div>
+  </div>
+</nav>
+
+<!-- ══════════════════════════════════════════
+     MAIN
+══════════════════════════════════════════ -->
+<div id="main">
+  <header id="topbar">
+    <span class="topbar-title" id="panel-title">Visão Geral</span>
+    <span class="topbar-date" id="top-date"></span>
+    <div class="topbar-right">
+      <div class="search-bar"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Buscar..."></div>
+      <button class="topbar-btn" onclick="openSettings()" title="Configurações"><i class="fa-solid fa-gear"></i></button>
+    </div>
+  </header>
+
+  <div id="content">
+
+    <!-- ── VISÃO GERAL ── -->
+    <div class="panel active" id="panel-overview">
+      <div style="margin-bottom:22px;">
+        <h1 style="font-family:var(--font-display);font-size:24px;font-weight:700;" id="greeting">Bom dia, Nicole! 🌸</h1>
+        <p style="color:var(--text3);font-size:13.5px;margin-top:3px;" id="overview-sub">Aqui está o resumo do seu dia.</p>
+      </div>
+      <div class="metrics-grid">
+        <div class="metric-card rose">
+          <div class="metric-icon rose"><i class="fa-solid fa-chart-line"></i></div>
+          <div class="metric-value" id="ov-kpi">—</div>
+          <div class="metric-label">KPI Global</div>
+          <div class="metric-delta neutral" id="ov-band">Configure seus KPIs</div>
+        </div>
+        <div class="metric-card sage">
+          <div class="metric-icon sage"><i class="fa-solid fa-list-check"></i></div>
+          <div class="metric-value" id="ov-tasks">0</div>
+          <div class="metric-label">Tarefas Pendentes</div>
+          <div class="metric-delta up">atualize suas tarefas</div>
+        </div>
+        <div class="metric-card peach">
+          <div class="metric-icon peach"><i class="fa-solid fa-users"></i></div>
+          <div class="metric-value">4</div>
+          <div class="metric-label">Atendentes Ativas</div>
+          <div class="metric-delta neutral">equipe completa</div>
+        </div>
+        <div class="metric-card lav">
+          <div class="metric-icon lav"><i class="fa-solid fa-circle-dollar-to-slot"></i></div>
+          <div class="metric-value" id="ov-salary">R$ —</div>
+          <div class="metric-label">Salário Estimado</div>
+          <div class="metric-delta neutral" id="ov-nivel-lbl">Selecione seu nível</div>
+        </div>
+      </div>
+      <div class="two-col" style="margin-bottom:18px;">
+        <div class="card">
+          <div class="card-header">
+            <div class="metric-icon rose" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-solid fa-chart-pie"></i></div>
+            <div><div class="card-title">KPIs do Mês</div><div class="card-sub">Atingimento ponderado</div></div>
+            <button class="card-action" onclick="showPanel('kpis',document.querySelectorAll('.nav-item')[1])">Ver detalhes →</button>
+          </div>
+          <div class="card-body" id="ov-kpi-list"><p style="color:var(--text3);font-size:13px;text-align:center;padding:12px 0;">Preencha os KPIs para ver o resumo.</p></div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="metric-icon peach" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-regular fa-calendar"></i></div>
+            <div><div class="card-title">Agenda de Hoje</div></div>
+            <button class="card-action" onclick="loadCalendarEvents();showPanel('calendar',document.querySelectorAll('.nav-item')[3])">Sincronizar →</button>
+          </div>
+          <div class="card-body">
+            <div id="ov-agenda-body" style="font-size:13px;color:var(--text3);text-align:center;padding:12px 0;">Carregando agenda...</div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="metric-icon sage" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-solid fa-users"></i></div>
+          <div><div class="card-title">Resumo da Equipe</div></div>
+          <button class="card-action" onclick="showPanel('team',document.querySelectorAll('.nav-item')[5])">Ver equipe →</button>
+        </div>
+        <div class="card-body" style="padding:0;">
+          <table class="data-table"><thead><tr><th>Atendente</th><th>Tempo Resp.</th><th>Demandas</th><th>Concluídas</th><th>Status</th></tr></thead>
+          <tbody id="team-ov-tbody"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── KPIs ── -->
+    <div class="panel" id="panel-kpis">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+        <div><h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Meus KPIs</h2><p style="color:var(--text3);font-size:13px;margin-top:2px;">Comissionamento por desempenho — WeCare</p></div>
+        <div id="kpi-band-pill"></div>
+      </div>
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-body" style="padding:20px;">
+          <div style="display:grid;grid-template-columns:1fr auto;gap:20px;align-items:center;">
+            <div>
+              <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Atingimento Global Ponderado</div>
+              <div style="display:flex;align-items:baseline;gap:12px;">
+                <div style="font-family:var(--font-display);font-size:44px;font-weight:700;" id="kpi-global">0%</div>
+                <div id="kpi-global-band-html"></div>
+              </div>
+              <div class="kpi-bar-wrap" style="margin-top:10px;"><div class="kpi-track" style="height:8px;"><div class="kpi-fill rose" id="kpi-global-bar" style="width:0%"></div></div></div>
+              <div style="display:flex;gap:14px;margin-top:8px;flex-wrap:wrap;">
+                <span style="font-size:11.5px;color:var(--text3);">0-79% <span style="color:var(--vermelha);font-weight:600;">Vermelha 0%</span></span>
+                <span style="font-size:11.5px;color:var(--text3);">80-99% <span style="color:var(--amarela);font-weight:600;">Amarela 50%</span></span>
+                <span style="font-size:11.5px;color:var(--text3);">100-120% <span style="color:var(--verde-flag);font-weight:600;">Verde 100%</span></span>
+                <span style="font-size:11.5px;color:var(--text3);">121-150% <span style="color:var(--azul-flag);font-weight:600;">Azul 150%</span></span>
+                <span style="font-size:11.5px;color:var(--text3);">>150% <span style="color:var(--elite);font-weight:600;">Elite 200%</span></span>
+              </div>
+            </div>
+            <div style="text-align:center;padding:0 20px;border-left:1px solid var(--border);">
+              <div style="font-size:11px;color:var(--text3);text-transform:uppercase;margin-bottom:5px;">Variável Pago</div>
+              <div style="font-family:var(--font-display);font-size:28px;font-weight:700;color:var(--rose);" id="kpi-var-val">R$ 0</div>
+              <div style="font-size:12px;color:var(--text3);margin-top:3px;">de <span id="kpi-var-max" style="font-weight:600;">R$ 0</span> máx</div>
+              <div style="font-size:12px;color:var(--text3);margin-top:8px;">Fixo: <span id="kpi-fixo" style="font-weight:600;color:var(--text);">R$ 0</span></div>
+              <div style="font-size:14px;font-weight:700;color:var(--sage);margin-top:5px;" id="kpi-total-sal">Total: R$ 0</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:14px;">
+            <button class="btn btn-rose" onclick="exportarKPIPDF()"><i class="fa-solid fa-file-pdf"></i> Relatório PDF do Mês</button>
+            <button class="btn" onclick="zerarKPIs()" style="color:var(--text3);"><i class="fa-solid fa-rotate-left"></i> Zerar para Próximo Mês</button>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header">
+          <i class="fa-solid fa-stairs" style="color:var(--lavender);font-size:14px;"></i>
+          <div><div class="card-title">Nível Salarial</div><div class="card-sub">3 meses na bandeira Verde = sobe automaticamente</div></div>
+        </div>
+        <div class="card-body">
+          <div style="display:grid;grid-template-columns:repeat(8,1fr);gap:8px;" id="nivel-grid"></div>
+          <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+            <div style="text-align:center;"><div style="font-size:11px;color:var(--text3);margin-bottom:3px;">FIXO MENSAL</div><div style="font-family:var(--font-display);font-size:20px;font-weight:700;" id="n-fixo">—</div></div>
+            <div style="text-align:center;border-left:1px solid var(--border);border-right:1px solid var(--border);"><div style="font-size:11px;color:var(--text3);margin-bottom:3px;">VARIÁVEL META 100%</div><div style="font-family:var(--font-display);font-size:20px;font-weight:700;color:var(--rose);" id="n-var">—</div></div>
+            <div style="text-align:center;"><div style="font-size:11px;color:var(--text3);margin-bottom:3px;">OTE TOTAL</div><div style="font-family:var(--font-display);font-size:20px;font-weight:700;color:var(--sage);" id="n-ote">—</div></div>
+          </div>
+          <div style="margin-top:10px;background:var(--lav-light);border-radius:var(--r-sm);padding:10px 12px;font-size:12.5px;color:var(--lavender);"><i class="fa-solid fa-circle-info"></i> NPS proprietário (35%) + NPS hóspede/rating OTAs (30%) + Onboarding (35%) são os pilares principais.</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;" id="kpi-cards"></div>
+    </div>
+
+    <!-- ── TAREFAS ── -->
+    <div class="panel" id="panel-tasks">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
+        <div class="tab-bar"><button class="tab-btn active" onclick="switchView('list',this)">Lista</button><button class="tab-btn" onclick="switchView('kanban',this)">Kanban</button></div>
+        <select class="form-select" style="width:auto;padding:6px 10px;font-size:12.5px;" id="task-filter-sel" onchange="filterTasks(this.value)"></select>
+        <button class="btn btn-sm" onclick="abrirGerenciarCats()" title="Gerenciar categorias" style="padding:6px 10px;"><i class="fa-solid fa-tags"></i></button>
+        <button class="btn btn-rose" style="margin-left:auto;" onclick="openAddTask()"><i class="fa-solid fa-plus"></i> Nova Tarefa</button>
+      </div>
+      <div id="task-list-view"><div class="card"><div class="card-body" id="all-tasks-list" style="padding:6px 14px;"></div></div></div>
+      <div id="task-kanban-view" style="display:none;"><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;" id="kanban-board"></div></div>
+    </div>
+
+    <!-- ── CALENDÁRIO ── -->
+    <div class="panel" id="panel-calendar">
+      <div style="display:grid;grid-template-columns:1fr 300px;gap:18px;">
+        <div>
+          <div class="card" style="margin-bottom:14px;">
+            <div class="card-body">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+                <div style="font-family:var(--font-display);font-size:16px;font-weight:600;" id="cal-label">Maio 2026</div>
+                <div style="display:flex;gap:6px;"><button class="btn btn-sm" onclick="changeMonth(-1)"><i class="fa-solid fa-chevron-left"></i></button><button class="btn btn-sm" onclick="changeMonth(1)"><i class="fa-solid fa-chevron-right"></i></button></div>
+              </div>
+              <div class="cal-grid" id="cal-grid"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <i class="fa-brands fa-google" style="color:#4285F4;font-size:14px;"></i>
+              <div><div class="card-title">Google Agenda</div><div class="card-sub" id="gcal-sub" style="color:var(--sage);">Conectado</div></div>
+              <button class="btn btn-sm" onclick="loadCalendarEvents()"><i class="fa-solid fa-rotate"></i> Sincronizar</button>
+            </div>
+            <div class="card-body" id="gcal-body">
+              <div id="gcal-events-list" style="font-size:13px;color:var(--text3);text-align:center;padding:6px 0;">
+                <button class="btn btn-sm" onclick="loadCalendarEvents()"><i class="fa-solid fa-rotate"></i> Carregar eventos</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card"><div class="card-header"><div class="card-title">Agenda</div></div><div id="agenda-list" style="max-height:520px;overflow-y:auto;"></div></div>
+      </div>
+    </div>
+
+    <!-- ── ASSISTENTE IA ── -->
+    <div class="panel" id="panel-ai">
+      <div class="chat-wrap">
+        <div class="chat-head">
+          <div class="ai-orb"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+          <div><div style="font-family:var(--font-display);font-size:14px;font-weight:600;">Claire</div><div class="ai-status"><div class="status-dot"></div> Pronto para ajudar</div></div>
+          <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
+            <div style="font-size:11px;color:var(--text3);" id="gmail-ind"></div>
+            <button class="btn btn-sm" onclick="clearChat()"><i class="fa-solid fa-rotate"></i> Limpar</button>
+          </div>
+        </div>
+        <div class="chat-msgs" id="chat-messages">
+          <div class="msg ai">
+            <div class="avatar av-rose" style="width:28px;height:28px;font-size:11px;flex-shrink:0;">C</div>
+            <div><div class="msg-bub">Olá, Nicole! 🌸 Sou Claire, sua assistente pessoal da WeCare. Posso analisar seus KPIs, calcular seu salário estimado, redigir e-mails e muito mais. Como posso te ajudar hoje?</div><div class="msg-time">Agora</div></div>
+          </div>
+        </div>
+        <div class="chat-footer">
+          <div class="quick-chips">
+            <button class="chip" onclick="sendQuick('Analise meus KPIs e diga em qual bandeira estou')">📊 Analisar KPIs</button>
+            <button class="chip" onclick="sendQuick('Calcule meu salário estimado deste mês')">💰 Calcular salário</button>
+            <button class="chip" onclick="sendQuick('Redija um e-mail de feedback para minha equipe')">✉️ E-mail equipe</button>
+            <button class="chip" onclick="sendQuick('Quais são as tarefas mais urgentes?')">✅ Prioridades</button>
+          </div>
+          <div class="chat-input-row">
+            <textarea class="chat-textarea" id="chat-input" placeholder="Pergunte qualquer coisa... (Enter para enviar)" rows="1" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+            <button class="send-btn" id="send-btn" onclick="sendMsg()"><i class="fa-solid fa-paper-plane"></i></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── EQUIPE ── -->
+    <div class="panel" id="panel-team">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+        <div>
+          <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Equipe</h2>
+          <p style="color:var(--text3);font-size:13px;margin-top:2px;">Gerencie sua equipe de atendimento</p>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn" onclick="openAddDemand()"><i class="fa-solid fa-plus"></i> Nova Demanda</button>
+          <button class="btn btn-rose" onclick="adicionarMembro()"><i class="fa-solid fa-user-plus"></i> Novo Membro</button>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;" id="team-grid"></div>
+    </div>
+
+    <!-- ── SALÁRIOS ── -->
+    <div class="panel" id="panel-salary">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+        <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Calculadora de Salários</h2>
+      </div>
+      <div class="two-col-eq" style="margin-bottom:18px;">
+        <div class="card">
+          <div class="card-header"><div class="metric-icon sage" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-solid fa-users"></i></div><div><div class="card-title">Atendentes — Por Hora</div><div class="card-sub">Escala 12×36 · dias editáveis</div></div></div>
+          <div class="card-body" id="sal-att-body"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="metric-icon lav" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-solid fa-crown"></i></div><div><div class="card-title">Heads</div><div class="card-sub">Fixo (50/50) + comissão</div></div></div>
+          <div class="card-body" id="sal-heads-body"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><i class="fa-solid fa-file-invoice-dollar" style="color:var(--sage);font-size:14px;"></i><div class="card-title">Folha Total Estimada</div></div>
+        <div class="card-body"><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;" id="folha-grid"></div></div>
+      </div>
+    </div>
+
+    <!-- ── GOOGLE DRIVE ── -->
+    <div class="panel" id="panel-drive">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+        <div><h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Google Drive</h2><p style="color:var(--text3);font-size:13px;margin-top:2px;">Acesse, crie e edite seus documentos com IA</p></div>
+        <div style="display:flex;gap:8px;"><button class="btn" onclick="loadDriveFiles()"><i class="fa-solid fa-rotate"></i> Atualizar</button><button class="btn btn-rose" onclick="openCreateDoc()"><i class="fa-solid fa-plus"></i> Novo Documento</button></div>
+      </div>
+      <div class="card" style="margin-bottom:16px;"><div class="card-body" style="padding:12px 16px;"><div style="display:flex;gap:10px;align-items:center;"><div class="search-bar" style="width:100%;max-width:420px;"><i class="fa-solid fa-magnifying-glass"></i><input type="text" id="drive-search-input" placeholder="Buscar arquivos no Drive..." onkeydown="if(event.key==='Enter')searchDrive(this.value)"></div><button class="btn" onclick="searchDrive(document.getElementById('drive-search-input').value)">Buscar</button><button class="btn" onclick="loadDriveFiles()">Recentes</button></div></div></div>
+      <div class="two-col-eq">
+        <div class="card">
+          <div class="card-header"><div class="metric-icon sky" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-brands fa-google-drive"></i></div><div><div class="card-title" id="drive-list-title">Arquivos Recentes</div><div class="card-sub">Clique para visualizar ou editar</div></div></div>
+          <div id="drive-file-list" style="min-height:220px;max-height:480px;overflow-y:auto;">
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;color:var(--text3);"><i class="fa-brands fa-google-drive" style="font-size:32px;margin-bottom:10px;opacity:0.35;"></i><div style="font-size:13px;margin-bottom:10px;">Clique em "Atualizar" para carregar</div><button class="btn btn-sm" onclick="loadDriveFiles()"><i class="fa-solid fa-rotate"></i> Carregar arquivos</button></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="metric-icon rose" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-regular fa-file-lines"></i></div>
+            <div style="flex:1;"><div class="card-title" id="doc-view-title">Visualizador / Editor</div><div class="card-sub" id="doc-view-sub">Selecione um arquivo</div></div>
+            <div id="doc-actions" style="gap:6px;display:none;">
+              <button class="btn btn-sm" id="open-drive-btn" onclick="openInDrive()" title="Abrir no Drive"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
+              <button class="btn btn-sm" onclick="openEditModal()" title="Editar com IA"><i class="fa-solid fa-pencil"></i> Editar</button>
+              <button class="btn btn-sm btn-rose" onclick="summarizeWithAI()" title="Resumir com IA"><i class="fa-solid fa-wand-magic-sparkles"></i> Resumir</button>
+            </div>
+          </div>
+          <div id="doc-view-body" style="padding:16px 18px;min-height:360px;max-height:460px;overflow-y:auto;">
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;color:var(--text3);"><i class="fa-regular fa-file-lines" style="font-size:32px;margin-bottom:10px;opacity:0.35;"></i><div style="font-size:13px;">Selecione um arquivo para visualizar</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── COMPRAS ── -->
+<div class="panel" id="panel-compras">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+    <div>
+      <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Registro de Compras</h2>
+      <p style="color:var(--text3);font-size:13px;margin-top:2px;">Controle de gastos e repasses</p>
+    </div>
+    <button class="btn btn-rose" onclick="abrirNovaCompra()"><i class="fa-solid fa-plus"></i> Nova Compra</button>
+  </div>
+  <!-- Cards de resumo -->
+  <div class="metrics-grid" style="margin-bottom:18px;" id="compras-resumo"></div>
+  <!-- Filtros -->
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-body" style="padding:12px 16px;">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <div>
+          <label style="font-size:10.5px;color:var(--text3);text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px;">Mês</label>
+          <input type="month" class="form-input" id="compras-filtro-mes" style="padding:5px 8px;font-size:12.5px;" onchange="renderCompras()">
+        </div>
+        <div>
+          <label style="font-size:10.5px;color:var(--text3);text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px;">Imóvel</label>
+          <select class="form-select" id="compras-filtro-imovel" style="font-size:12.5px;padding:5px 8px;" onchange="renderCompras()">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:10.5px;color:var(--text3);text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px;">Repassar?</label>
+          <select class="form-select" id="compras-filtro-repassar" style="font-size:12.5px;padding:5px 8px;" onchange="renderCompras()">
+            <option value="">Todos</option>
+            <option value="sim">Sim</option>
+            <option value="nao">Não</option>
+          </select>
+        </div>
+        <button class="btn btn-sm" onclick="exportarComprasCSV()" style="margin-left:auto;align-self:flex-end;" title="Exportar CSV"><i class="fa-solid fa-download"></i> Exportar CSV</button>
+        <button class="btn btn-sm" onclick="abrirGerenciarImoveisCatalog()" title="Gerenciar imóveis do catálogo" style="align-self:flex-end;"><i class="fa-solid fa-building"></i> Imóveis</button>
+      </div>
+    </div>
+  </div>
+  <!-- Tabela -->
+  <div class="card">
+    <div style="overflow-x:auto;">
+      <table class="data-table" id="compras-table">
+        <thead>
+          <tr>
+            <th>Mês</th>
+            <th>Data Compra</th>
+            <th>Data Pag.</th>
+            <th>Item</th>
+            <th>Imóvel</th>
+            <th>Fornecedor</th>
+            <th>Forma Pag.</th>
+            <th>Valor</th>
+            <th>Repassar?</th>
+            <th>Vl. Repasse</th>
+            <th>Obs.</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="compras-tbody">
+          <tr><td colspan="12" style="text-align:center;padding:24px;color:var(--text3);font-size:13px;">Nenhuma compra registrada. Clique em "+ Nova Compra" para começar.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+    <!-- ── GMAIL ── -->
+    <div class="panel" id="panel-gmail">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+        <div><h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Gmail</h2><p style="color:var(--text3);font-size:13px;margin-top:2px;">Leia e envie e-mails diretamente pelo painel</p></div>
+        <div style="display:flex;gap:8px;"><button class="btn" onclick="loadEmails()"><i class="fa-solid fa-rotate"></i> Atualizar</button><button class="btn btn-rose" onclick="openComposeModal()"><i class="fa-solid fa-pen"></i> Novo E-mail</button></div>
+      </div>
+      <div id="gmail-not-configured" style="display:none;"><div class="card"><div class="card-body" style="text-align:center;padding:40px 24px;"><i class="fa-regular fa-envelope" style="font-size:40px;color:var(--text3);margin-bottom:14px;"></i><div style="font-family:var(--font-display);font-size:18px;font-weight:600;margin-bottom:8px;">Gmail não configurado</div><p style="color:var(--text3);font-size:13.5px;max-width:380px;margin:0 auto 18px;">Configure seu OAuth Token nas configurações.</p><button class="btn btn-rose" onclick="openSettings()"><i class="fa-solid fa-gear"></i> Configurar agora</button></div></div></div>
+      <div id="gmail-main" style="display:none;">
+        <div style="display:flex;gap:6px;margin-bottom:14px;">
+          <button class="tab-btn active" id="gmail-tab-inbox" onclick="switchEmailTab('inbox',this)">Caixa de Entrada</button>
+          <button class="tab-btn" id="gmail-tab-sent" onclick="switchEmailTab('sent',this)">Enviados</button>
+          <div style="margin-left:auto;"><div class="search-bar" style="width:240px;"><i class="fa-solid fa-magnifying-glass"></i><input type="text" id="gmail-search" placeholder="Buscar e-mails..." onkeydown="if(event.key==='Enter')searchEmails(this.value)"></div></div>
+        </div>
+        <div class="two-col-eq" style="align-items:start;">
+          <div class="card"><div id="email-list" style="max-height:520px;overflow-y:auto;"><div style="padding:32px;text-align:center;color:var(--text3);"><i class="fa-solid fa-spinner fa-spin" style="font-size:20px;"></i></div></div></div>
+          <div class="card">
+            <div class="card-header">
+              <div class="metric-icon rose" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-regular fa-envelope-open"></i></div>
+              <div style="flex:1;"><div class="card-title" id="email-view-from">Visualizador</div><div class="card-sub" id="email-view-sub">Selecione um e-mail</div></div>
+              <div id="email-actions" style="gap:6px;display:none;">
+                <button class="btn btn-sm" onclick="replyEmail()" title="Responder"><i class="fa-solid fa-reply"></i> Responder</button>
+              </div>
+            </div>
+            <div id="email-view-body" style="padding:16px 18px;min-height:360px;max-height:460px;overflow-y:auto;"><div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;color:var(--text3);"><i class="fa-regular fa-envelope-open" style="font-size:32px;margin-bottom:10px;opacity:0.35;"></i><div style="font-size:13px;">Selecione um e-mail para ler</div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── ONBOARDING ── -->
+    <div class="panel" id="panel-onboarding">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+        <div>
+          <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Onboarding de Imóveis</h2>
+          <p style="color:var(--text3);font-size:13px;margin-top:2px;">Do contrato assinado ao anúncio ativo</p>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn" onclick="abrirObConfig()"><i class="fa-solid fa-gear"></i> Configurações</button>
+          <button class="btn btn-rose" onclick="abrirNovoImovel()"><i class="fa-solid fa-plus"></i> Novo Imóvel</button>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;overflow-x:auto;" id="onboarding-kanban"></div>
+    </div>
+
+    <!-- ── PROJETOS ── -->
+    <div class="panel" id="panel-projetos">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+        <div>
+          <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Projetos</h2>
+          <p style="color:var(--text3);font-size:13px;margin-top:2px;">Gerencie projetos e acompanhe o progresso</p>
+        </div>
+        <button class="btn btn-rose" onclick="abrirNovoProjeto()"><i class="fa-solid fa-plus"></i> Novo Projeto</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;" id="projetos-kanban"></div>
+    </div>
+
+    <!-- ── ANOTAÇÕES ── -->
+    <div class="panel" id="panel-notes">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+        <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Anotações</h2>
+        <button class="btn btn-rose" onclick="openAddNote()"><i class="fa-solid fa-plus"></i> Nova Nota</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;" id="notes-grid"></div>
+    </div>
+
+    <!-- ── FOCO ── -->
+    <div class="panel" id="panel-focus">
+      <div style="max-width:380px;margin:36px auto;text-align:center;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:10px;" id="focus-lbl">MODO FOCO</div>
+        <div style="position:relative;display:inline-block;margin-bottom:8px;">
+          <svg width="180" height="180" style="transform:rotate(-90deg);"><circle cx="90" cy="90" r="80" fill="none" stroke="var(--bg4)" stroke-width="8"/><circle cx="90" cy="90" r="80" fill="none" stroke="var(--rose)" stroke-width="8" stroke-dasharray="502" id="ring" stroke-dashoffset="502" stroke-linecap="round" style="transition:stroke-dashoffset 1s linear;"/></svg>
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:44px;font-weight:700;" id="timer-disp">25:00</div>
+        </div>
+        <div style="font-size:13px;color:var(--text3);margin-bottom:24px;" id="focus-sub">Sessão Pomodoro</div>
+        <div style="display:flex;gap:8px;justify-content:center;margin-bottom:18px;">
+          <button class="btn btn-sm" onclick="setTimer(25,'Sessão Pomodoro')">25 min</button>
+          <button class="btn btn-sm" onclick="setTimer(15,'Sessão Curta')">15 min</button>
+          <button class="btn btn-sm" onclick="setTimer(50,'Sessão Longa')">50 min</button>
+          <button class="btn btn-sm" onclick="setTimer(5,'Pausa')">5 min</button>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:center;">
+          <button class="btn btn-rose" id="focus-btn" onclick="toggleTimer()" style="padding:9px 22px;font-size:14px;"><i class="fa-solid fa-play"></i> Iniciar</button>
+          <button class="btn" onclick="resetTimer()"><i class="fa-solid fa-rotate-left"></i></button>
+        </div>
+        <div style="margin-top:20px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:14px;">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:6px;">Tarefa em foco</div>
+          <select class="form-select" id="focus-sel"></select>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- #content -->
+</div><!-- #main -->
+
+<!-- ══════════════════════════════════════════
+     MODAIS
+══════════════════════════════════════════ -->
+
+<!-- Nova Tarefa -->
+<div class="modal-overlay" id="modal-task">
+  <div class="modal">
+    <div class="modal-title">Nova Tarefa</div>
+    <div class="form-group"><label class="form-label">Título</label><input type="text" class="form-input" id="t-title" placeholder="Descreva a tarefa..."></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Categoria</label><select class="form-select" id="t-cat"></select></div>
+      <div class="form-group"><label class="form-label">Prioridade</label><select class="form-select" id="t-prio"><option value="high">Alta</option><option value="med">Média</option><option value="low">Baixa</option></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Data</label><input type="date" class="form-input" id="t-date"></div>
+      <div class="form-group"><label class="form-label">Hora (opcional)</label><input type="time" class="form-input" id="t-hora"></div>
+    </div>
+    <!-- Recorrência -->
+    <div class="form-group">
+      <label class="form-label">Recorrência</label>
+      <select class="form-select" id="t-recorrencia" onchange="toggleRecorrenciaUI(this.value)">
+        <option value="">Não se repete</option>
+        <option value="diaria">Diária</option>
+        <option value="semanal">Semanal</option>
+        <option value="quinzenal">A cada 2 semanas</option>
+        <option value="mensal">Mensal (mesmo dia do mês)</option>
+        <option value="anual">Anual</option>
+      </select>
+    </div>
+    <div id="t-recorr-detail" style="display:none;background:var(--bg3);border-radius:var(--r-sm);padding:10px 12px;font-size:12.5px;color:var(--text2);margin-bottom:4px;">
+      <span id="t-recorr-preview"></span>
+    </div>
+    <!-- Google Agenda -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+      <input type="checkbox" id="t-gcal" style="width:15px;height:15px;">
+      <label for="t-gcal" style="font-size:13px;cursor:pointer;"><i class="fa-brands fa-google" style="color:#4285F4;"></i> Criar também no Google Agenda</label>
+    </div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-task')">Cancelar</button><button class="btn btn-rose" onclick="addTask()"><i class="fa-solid fa-plus"></i> Adicionar</button></div>
+  </div>
+</div>
+
+<!-- Nova Demanda -->
+<div class="modal-overlay" id="modal-demand">
+  <div class="modal">
+    <div class="modal-title">Nova Demanda</div>
+    <div class="form-group"><label class="form-label">Atendente</label><select class="form-select" id="d-att"><option value="patricia">Patrícia</option><option value="sara">Sara</option><option value="lisarb">Lisarb</option><option value="lais">Laís</option></select></div>
+    <div class="form-group"><label class="form-label">Descrição</label><textarea class="form-input" id="d-desc" rows="3" placeholder="Descreva a demanda..."></textarea></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Prazo</label><input type="date" class="form-input" id="d-date"></div>
+      <div class="form-group"><label class="form-label">Prioridade</label><select class="form-select" id="d-prio"><option value="high">Alta</option><option value="med">Média</option><option value="low">Baixa</option></select></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Demanda Fixa / Recorrente</label>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <input type="checkbox" id="d-recorrente" style="width:16px;height:16px;">
+        <label style="font-size:13px;">Sim, é recorrente</label>
+      </div>
+      <input type="text" class="form-input" id="d-recorrencia" placeholder='Ex: "Todo dia 30", "Toda segunda"' style="margin-top:6px;display:none;">
+    </div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-demand')">Cancelar</button><button class="btn btn-rose" onclick="addDemand()"><i class="fa-solid fa-plus"></i> Adicionar</button></div>
+  </div>
+</div>
+
+<!-- Nova Nota -->
+<div class="modal-overlay" id="modal-note">
+  <div class="modal">
+    <div class="modal-title">Nova Anotação</div>
+    <div class="form-group"><label class="form-label">Título</label><input type="text" class="form-input" id="n-title" placeholder="Título..."></div>
+    <div class="form-group"><label class="form-label">Conteúdo</label><textarea class="form-input" id="n-content" rows="5" placeholder="Escreva aqui..."></textarea></div>
+    <div class="form-group"><label class="form-label">Cor</label>
+      <div style="display:flex;gap:8px;">
+        <div class="note-clr" data-c="rose" style="width:22px;height:22px;border-radius:50%;background:var(--rose);cursor:pointer;border:2px solid var(--rose);" onclick="selNoteClr(this)"></div>
+        <div class="note-clr" data-c="sage" style="width:22px;height:22px;border-radius:50%;background:var(--sage);cursor:pointer;border:2px solid transparent;" onclick="selNoteClr(this)"></div>
+        <div class="note-clr" data-c="lav" style="width:22px;height:22px;border-radius:50%;background:var(--lavender);cursor:pointer;border:2px solid transparent;" onclick="selNoteClr(this)"></div>
+        <div class="note-clr" data-c="peach" style="width:22px;height:22px;border-radius:50%;background:var(--peach);cursor:pointer;border:2px solid transparent;" onclick="selNoteClr(this)"></div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-note')">Cancelar</button><button class="btn btn-rose" onclick="addNote()">Salvar</button></div>
+  </div>
+</div>
+
+<!-- Configurações -->
+<div class="modal-overlay" id="modal-settings">
+  <div class="modal" style="width:520px;">
+    <div class="modal-title">Configurações</div>
+
+    <!-- Perfil -->
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin-bottom:8px;">Perfil</div>
+    <div class="form-group"><label class="form-label">Seu nome</label><input type="text" class="form-input" id="s-name" placeholder="Nicole"></div>
+
+    <!-- Assistente IA -->
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin:14px 0 8px;">Assistente IA (Claude)</div>
+    <div class="form-group">
+      <label class="form-label">Chave API Anthropic</label>
+      <input type="password" class="form-input" id="s-api" placeholder="sk-ant-api03-...">
+      <div style="font-size:11px;color:var(--text3);margin-top:4px;">Obtenha em <strong>console.anthropic.com</strong> → API Keys. Salva apenas no seu navegador.</div>
+    </div>
+
+    <!-- Google -->
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin:14px 0 8px;">Google (Drive · Gmail · Agenda)</div>
+    <div class="form-group">
+      <label class="form-label">Google Client ID</label>
+      <input type="text" class="form-input" id="s-gclientid" placeholder="000000000000-xxxxxxxx.apps.googleusercontent.com">
+      <div style="font-size:11px;color:var(--text3);margin-top:4px;">Crie em <strong>console.cloud.google.com</strong> → Credenciais → OAuth 2.0 → Aplicativo Web.</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+      <button class="btn" id="google-connect-btn" onclick="connectGoogle()" style="display:flex;align-items:center;gap:7px;font-size:13px;padding:8px 16px;">
+        <i class="fa-brands fa-google"></i> Conectar Google
+      </button>
+      <span id="google-connect-status" style="font-size:13px;"><span style="color:var(--text3);">Não conectado</span></span>
+      <button onclick="disconnectGoogle()" style="margin-left:auto;background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;" title="Desconectar Google"><i class="fa-solid fa-xmark"></i> Desconectar</button>
+    </div>
+    <div style="background:var(--sky-light);border-radius:var(--r-sm);padding:10px 12px;font-size:12px;color:var(--sky);margin-bottom:4px;">
+      <i class="fa-solid fa-circle-info"></i>
+      O token Google expira em ~1h. Clique em <strong>Conectar Google</strong> novamente quando precisar renovar. Certifique-se de adicionar sua URL do Netlify como origem autorizada no Google Cloud.
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-settings')">Cancelar</button>
+      <button class="btn btn-rose" onclick="saveSettings()"><i class="fa-solid fa-check"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Detalhes Atendente -->
+<div class="modal-overlay" id="modal-att">
+  <div class="modal" style="width:580px;">
+    <div class="modal-title" id="att-modal-title">Demandas</div>
+    <div id="att-modal-body"></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-att')">Fechar</button></div>
+  </div>
+</div>
+
+<!-- Criar Documento -->
+<div class="modal-overlay" id="modal-create-doc">
+  <div class="modal" style="width:540px;">
+    <div class="modal-title">Criar Novo Documento</div>
+    <div class="form-group"><label class="form-label">Nome do documento</label><input type="text" class="form-input" id="new-doc-name" placeholder="Ex: Relatorio KPIs Maio 2026"></div>
+    <div class="form-group"><label class="form-label">Conteúdo inicial (opcional)</label><textarea class="form-input" id="new-doc-content" rows="7" placeholder="Digite o conteudo, ou deixe vazio..."></textarea></div>
+    <div style="background:var(--sky-light);border-radius:var(--r-sm);padding:10px 12px;font-size:12px;color:var(--sky);margin-bottom:4px;"><i class="fa-solid fa-circle-info"></i> Será criado como arquivo de texto no seu Google Drive.</div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-create-doc')">Cancelar</button><button class="btn btn-rose" id="create-doc-btn" onclick="createDriveDoc()"><i class="fa-brands fa-google-drive"></i> Criar no Drive</button></div>
+  </div>
+</div>
+
+<!-- Editar com IA -->
+<div class="modal-overlay" id="modal-edit-doc">
+  <div class="modal" style="width:560px;">
+    <div class="modal-title">Editar com IA — <span id="edit-doc-name" style="color:var(--rose);font-size:16px;"></span></div>
+    <div style="background:var(--sage-light);border-radius:var(--r-sm);padding:10px 12px;font-size:12.5px;color:var(--sage);margin-bottom:14px;"><i class="fa-solid fa-wand-magic-sparkles"></i> A IA vai ler o documento, aplicar sua instrução e salvar uma nova versão no Drive.</div>
+    <div class="form-group"><label class="form-label">O que você quer alterar?</label><textarea class="form-input" id="edit-instruction" rows="4" placeholder="Ex: Adicione no final: reuniao agendada para dia 5 as 14h&#10;Ex: Corrija erros de portugues&#10;Ex: Adicione um resumo executivo no inicio"></textarea></div>
+    <div class="form-group"><label class="form-label">Nome do arquivo salvo</label><input type="text" class="form-input" id="edit-save-name" placeholder="Nome do novo arquivo..."></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-edit-doc')">Cancelar</button><button class="btn btn-rose" id="edit-doc-btn" onclick="editDocWithAI()"><i class="fa-solid fa-wand-magic-sparkles"></i> Aplicar e Salvar no Drive</button></div>
+  </div>
+</div>
+
+<!-- Compor E-mail -->
+<div class="modal-overlay" id="modal-compose">
+  <div class="modal" style="width:580px;">
+    <div class="modal-title" id="compose-title">Novo E-mail</div>
+    <div class="form-group"><label class="form-label">Para</label><input type="email" class="form-input" id="compose-to" placeholder="destinatario@email.com"></div>
+    <div class="form-group"><label class="form-label">Assunto</label><input type="text" class="form-input" id="compose-subject" placeholder="Assunto do e-mail"></div>
+    <div class="form-group"><label class="form-label">Mensagem</label><textarea class="form-input" id="compose-body" rows="10" placeholder="Digite sua mensagem..."></textarea></div>
+    <div style="background:var(--peach-light);border-radius:var(--r-sm);padding:9px 12px;font-size:12px;color:var(--peach);margin-bottom:4px;"><i class="fa-solid fa-triangle-exclamation"></i> Verifique o destinatário e o conteúdo antes de enviar.</div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-compose')">Cancelar</button><button class="btn btn-rose" id="send-email-btn" onclick="sendEmail()"><i class="fa-solid fa-paper-plane"></i> Enviar</button></div>
+  </div>
+</div>
+
+<!-- Modal Imóvel Onboarding -->
+<div class="modal-overlay" id="modal-imovel">
+  <div class="modal" style="width:760px;max-height:88vh;overflow-y:auto;">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+      <input type="text" id="ob-imovel-nome" class="form-input" style="flex:1;font-size:18px;font-weight:700;font-family:var(--font-display);" placeholder="Nome do Imóvel..." oninput="salvarCampoImovel(imovelAtivo,'nome',this.value)">
+      <span id="ob-status-badge" style="padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;white-space:nowrap;"></span>
+      <button onclick="closeModal('modal-imovel')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;padding:4px;"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:16px;border-bottom:1px solid var(--border);padding-bottom:12px;" id="ob-tabs">
+      <button class="tab-btn active" onclick="obMudarAba('dados',this)">Dados</button>
+      <button class="tab-btn" onclick="obMudarAba('definicoes',this)">Definições</button>
+      <button class="tab-btn" onclick="obMudarAba('operacional',this)">Operacional</button>
+      <button class="tab-btn" onclick="obMudarAba('custos',this)">Custos</button>
+      <button class="tab-btn" onclick="obMudarAba('compras',this)">Compras</button>
+      <button class="tab-btn" onclick="obMudarAba('final',this)">Final</button>
+    </div>
+    <div id="ob-aba-content" style="min-height:320px;"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;padding-top:12px;border-top:1px solid var(--border);">
+      <button class="btn" onclick="obApagarImovel()" style="color:var(--vermelha);border-color:var(--vermelha);margin-right:auto;"><i class="fa-solid fa-trash"></i> Apagar</button>
+      <button class="btn" onclick="obMarcarPerdido()" style="color:var(--text3);border-color:var(--text3);" title="Marcar como perdido — proprietário sumiu"><i class="fa-solid fa-user-slash"></i> Perdido</button>
+      <button class="btn" onclick="closeModal('modal-imovel')">Fechar</button>
+      <button class="btn btn-rose" id="ob-btn-avancar" onclick="obAvancarFase()"><i class="fa-solid fa-arrow-right"></i> Avançar Fase</button>
+      <button class="btn" id="ob-btn-baixa" onclick="obDarBaixa()" style="display:none;background:var(--sage-light);color:var(--sage);border-color:var(--sage-mid);">&#10003; Dar Baixa</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Projeto -->
+<div class="modal-overlay" id="modal-projeto">
+  <div class="modal" style="width:780px;max-height:92vh;overflow-y:auto;">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+      <input id="proj-nome-input" class="form-input" style="font-size:18px;font-weight:600;font-family:var(--font-display);flex:1;" placeholder="Nome do projeto...">
+      <span id="proj-status-badge" class="bandeira verde" style="white-space:nowrap;"></span>
+      <button onclick="closeModal('modal-projeto')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="tab-bar" style="margin-bottom:16px;">
+      <button class="tab-btn active" id="ptab-info" onclick="projMudarAba('info',this)">📋 Informações</button>
+      <button class="tab-btn" id="ptab-notas" onclick="projMudarAba('notas',this)">📝 Notas</button>
+      <button class="tab-btn" id="ptab-tarefas" onclick="projMudarAba('tarefas',this)">✅ Tarefas</button>
+    </div>
+    <div id="proj-aba-content"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-projeto')">Fechar</button>
+      <button class="btn btn-rose" onclick="salvarProjeto()"><i class="fa-solid fa-check"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Gerenciar Categorias -->
+<div class="modal-overlay" id="modal-cats">
+  <div class="modal" style="width:420px;">
+    <div class="modal-title">Gerenciar Categorias</div>
+    <div id="cats-list" style="margin-bottom:16px;"></div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:8px;">Nova Categoria</div>
+    <div style="display:flex;gap:8px;">
+      <input type="text" class="form-input" id="new-cat-name" placeholder="Nome da categoria..." style="flex:1;" onkeydown="if(event.key==='Enter')adicionarCat()">
+      <button class="btn btn-rose" onclick="adicionarCat()"><i class="fa-solid fa-plus"></i> Adicionar</button>
+    </div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-cats')">Fechar</button></div>
+  </div>
+</div>
+
+<!-- Detalhe da Tarefa -->
+<div class="modal-overlay" id="modal-task-detalhe">
+  <div class="modal" style="width:560px;">
+    <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:6px;">
+      <div style="flex:1;">
+        <div style="font-family:var(--font-display);font-size:17px;font-weight:700;margin-bottom:6px;" id="td-titulo"></div>
+        <div id="td-meta" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;"></div>
+      </div>
+      <button onclick="closeModal('modal-task-detalhe')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;flex-shrink:0;"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div style="margin:14px 0 10px;border-top:1px solid var(--border);padding-top:14px;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);letter-spacing:0.5px;margin-bottom:10px;">📋 Atualizações</div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;">
+        <textarea id="td-nova-update" class="form-input" rows="2" style="flex:1;resize:none;font-size:13px;" placeholder="Escreva uma atualização sobre essa tarefa..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();adicionarUpdate();}"></textarea>
+        <button class="btn btn-rose" onclick="adicionarUpdate()" style="align-self:flex-end;white-space:nowrap;"><i class="fa-solid fa-paper-plane"></i> Adicionar</button>
+      </div>
+      <div id="td-updates-list" style="max-height:320px;overflow-y:auto;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Config Onboarding -->
+<div class="modal-overlay" id="modal-ob-config">
+  <div class="modal" style="width:600px;max-height:92vh;overflow-y:auto;">
+    <div class="modal-title">⚙️ Configurações de Onboarding</div>
+    <div style="font-size:12.5px;color:var(--text3);margin-bottom:14px;">Gerencie os itens obrigatórios da lista de compras e campos do formulário.</div>
+    <div id="ob-config-body"></div>
+    <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:8px;">Nova Categoria</div>
+      <div style="display:flex;gap:8px;">
+        <input type="text" class="form-input" id="ob-new-cat" placeholder="Nome da categoria..." style="flex:1;" onkeydown="if(event.key==='Enter')obAdicionarCategoria()">
+        <button class="btn btn-rose" onclick="obAdicionarCategoria()"><i class="fa-solid fa-plus"></i> Adicionar</button>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-ob-config')">Fechar</button></div>
+  </div>
+</div>
+
+<!-- Nova Compra -->
+<div class="modal-overlay" id="modal-compra">
+  <div class="modal" style="width:640px;">
+    <div class="modal-title" id="modal-compra-title">Nova Compra</div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Mês Vigente</label><input type="month" class="form-input" id="c-mes"></div>
+      <div class="form-group"><label class="form-label">Data da Compra</label><input type="date" class="form-input" id="c-datacompra"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Data de Pagamento</label><input type="date" class="form-input" id="c-datapag"></div>
+      <div class="form-group"><label class="form-label">Fornecedor</label><input type="text" class="form-input" id="c-fornecedor" placeholder="Nome do fornecedor..."></div>
+    </div>
+    <div class="form-group"><label class="form-label">Item</label><input type="text" class="form-input" id="c-item" placeholder="Descrição do item..."></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Imóvel</label>
+        <select class="form-select" id="c-imovel">
+          <option value="">Nenhum / Geral</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Forma de Pagamento</label>
+        <input type="text" class="form-input" id="c-forma" list="formas-pag-list" placeholder="Ex: PIX, Crédito Itaú 2x, Nubank...">
+        <datalist id="formas-pag-list">
+          <option value="PIX">
+          <option value="Cartão de Crédito">
+          <option value="Cartão de Débito">
+          <option value="Boleto">
+          <option value="Dinheiro">
+          <option value="Transferência">
+        </datalist>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Valor (R$)</label><input type="number" step="0.01" class="form-input" id="c-valor" placeholder="0,00"></div>
+      <div class="form-group">
+        <label class="form-label">Repassar?</label>
+        <select class="form-select" id="c-repassar" onchange="toggleRepasse(this.value)">
+          <option value="nao">Não</option>
+          <option value="sim">Sim</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group" id="c-repasse-group" style="display:none;">
+      <label class="form-label">Valor a Repassar (R$)</label>
+      <input type="number" step="0.01" class="form-input" id="c-valorrepasse" placeholder="0,00">
+    </div>
+    <div class="form-group"><label class="form-label">Observações</label><textarea class="form-input" id="c-obs" rows="2" placeholder="Observações..."></textarea></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-compra')">Cancelar</button>
+      <button class="btn btn-rose" onclick="salvarCompraItem()"><i class="fa-solid fa-check"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Gerenciar Imóveis Catálogo -->
+<div class="modal-overlay" id="modal-catalog-imoveis">
+  <div class="modal" style="width:560px;max-height:92vh;overflow-y:auto;">
+    <div class="modal-title">&#x1F3E2; Catálogo de Imóveis</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px;">Imóveis disponíveis para selecionar nas Compras. Os imóveis do módulo Onboarding aparecem automaticamente.</div>
+    <div id="catalog-imoveis-list" style="max-height:360px;overflow-y:auto;margin-bottom:14px;"></div>
+    <div style="border-top:1px solid var(--border);padding-top:12px;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:8px;">Adicionar Imóvel</div>
+      <div style="display:flex;gap:8px;">
+        <input type="text" class="form-input" id="new-catalog-imovel" placeholder="Ex: WC-00999 - Nome do Imóvel..." style="flex:1;" onkeydown="if(event.key==='Enter')adicionarCatalogImovel()">
+        <button class="btn btn-rose" onclick="adicionarCatalogImovel()"><i class="fa-solid fa-plus"></i></button>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-catalog-imoveis')">Fechar</button></div>
+  </div>
+</div>
+
+<script src="js/app.js?v=4"></script>
+</body>
+</html>

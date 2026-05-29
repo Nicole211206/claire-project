@@ -1,0 +1,557 @@
+<!-- SIDEBAR -->
+<nav id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-mark">Claire<span>.</span></div>
+    <div class="logo-sub">Painel de Gestão</div>
+  </div>
+  <div class="sidebar-nav">
+    <div class="nav-section">Principal</div>
+    <button class="nav-item active" onclick="showPanel('overview',this)"><i class="fa-solid fa-gauge-simple-high"></i> Visão Geral</button>
+    <button class="nav-item" onclick="showPanel('kpis',this)"><i class="fa-solid fa-chart-line"></i> Meus KPIs</button>
+    <button class="nav-item" onclick="showPanel('tasks',this)"><i class="fa-solid fa-list-check"></i> Tarefas <span class="nav-badge" id="tasks-badge">0</span></button>
+    <button class="nav-item" onclick="showPanel('calendar',this)"><i class="fa-regular fa-calendar-days"></i> Calendário</button>
+    <button class="nav-item" onclick="showPanel('ai',this)"><i class="fa-solid fa-wand-magic-sparkles"></i> Assistente IA</button>
+    <div class="nav-section">Equipe</div>
+    <button class="nav-item" onclick="showPanel('team',this)"><i class="fa-solid fa-users"></i> Atendentes</button>
+    <button class="nav-item" onclick="showPanel('salary',this)"><i class="fa-solid fa-money-bill-wave"></i> Salários</button>
+    <button class="nav-item" onclick="showPanel('drive',this)"><i class="fa-brands fa-google-drive"></i> Google Drive</button>
+    <button class="nav-item" onclick="showPanel('gmail',this)"><i class="fa-regular fa-envelope"></i> Gmail <span class="nav-badge" id="gmail-badge" style="display:none;">0</span></button>
+    <div class="nav-section">Pessoal</div>
+    <button class="nav-item" onclick="showPanel('notes',this)"><i class="fa-regular fa-note-sticky"></i> Anotações</button>
+    <button class="nav-item" onclick="showPanel('focus',this)"><i class="fa-regular fa-clock"></i> Foco</button>
+  </div>
+  <div class="sidebar-user">
+    <div class="avatar av-rose" id="sidebar-avatar">N</div>
+    <div>
+      <div class="user-name" id="sidebar-name">Nicole</div>
+      <div class="user-role">Gestão de Operações</div>
+    </div>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<div id="main">
+  <header id="topbar">
+    <span class="topbar-title" id="panel-title">Visão Geral</span>
+    <span class="topbar-date" id="top-date"></span>
+    <div class="topbar-right">
+      <div class="search-bar"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Buscar..."></div>
+      <button class="topbar-btn" onclick="openSettings()" title="Configurações"><i class="fa-solid fa-gear"></i></button>
+    </div>
+  </header>
+
+  <div id="content">
+
+    <!-- OVERVIEW -->
+    <div class="panel active" id="panel-overview">
+      <div style="margin-bottom:22px;">
+        <h1 style="font-family:var(--font-display);font-size:24px;font-weight:700;" id="greeting">Bom dia, Nicole! 🌸</h1>
+        <p style="color:var(--text3);font-size:13.5px;margin-top:3px;" id="overview-sub">Aqui está o resumo do seu dia.</p>
+      </div>
+      <div class="metrics-grid">
+        <div class="metric-card rose">
+          <div class="metric-icon rose"><i class="fa-solid fa-chart-line"></i></div>
+          <div class="metric-value" id="ov-kpi">—</div>
+          <div class="metric-label">KPI Global</div>
+          <div class="metric-delta neutral" id="ov-band">Configure seus KPIs</div>
+        </div>
+        <div class="metric-card sage">
+          <div class="metric-icon sage"><i class="fa-solid fa-list-check"></i></div>
+          <div class="metric-value" id="ov-tasks">0</div>
+          <div class="metric-label">Tarefas Pendentes</div>
+          <div class="metric-delta up">atualize suas tarefas</div>
+        </div>
+        <div class="metric-card peach">
+          <div class="metric-icon peach"><i class="fa-solid fa-users"></i></div>
+          <div class="metric-value">4</div>
+          <div class="metric-label">Atendentes Ativas</div>
+          <div class="metric-delta neutral">equipe completa</div>
+        </div>
+        <div class="metric-card lav">
+          <div class="metric-icon lav"><i class="fa-solid fa-circle-dollar-to-slot"></i></div>
+          <div class="metric-value" id="ov-salary">R$ —</div>
+          <div class="metric-label">Salário Estimado</div>
+          <div class="metric-delta neutral" id="ov-nivel-lbl">Selecione seu nível</div>
+        </div>
+      </div>
+      <div class="two-col" style="margin-bottom:18px;">
+        <div class="card">
+          <div class="card-header">
+            <div class="metric-icon rose" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-solid fa-chart-pie"></i></div>
+            <div><div class="card-title">KPIs do Mês</div><div class="card-sub">Atingimento ponderado</div></div>
+            <button class="card-action" onclick="showPanel('kpis',document.querySelectorAll('.nav-item')[1])">Ver detalhes →</button>
+          </div>
+          <div class="card-body" id="ov-kpi-list"><p style="color:var(--text3);font-size:13px;text-align:center;padding:12px 0;">Preencha os KPIs para ver o resumo.</p></div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="metric-icon peach" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-regular fa-calendar"></i></div>
+            <div><div class="card-title">Agenda de Hoje</div></div>
+            <button class="card-action" onclick="loadCalendarEvents();showPanel('calendar',document.querySelectorAll('.nav-item')[3])">Sincronizar →</button>
+          </div>
+          <div class="card-body">
+            <div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);"><div style="font-size:11px;color:var(--text3);width:40px;flex-shrink:0;">09:00</div><div style="width:3px;border-radius:2px;background:var(--sky);flex-shrink:0;"></div><div><div style="font-size:13px;font-weight:500;">Daily Team Sync</div><div style="font-size:11px;color:var(--text3);">Google Meet · 30min</div></div></div>
+            <div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);"><div style="font-size:11px;color:var(--text3);width:40px;flex-shrink:0;">11:00</div><div style="width:3px;border-radius:2px;background:var(--sage);flex-shrink:0;"></div><div><div style="font-size:13px;font-weight:500;">Revisão de Onboardings</div><div style="font-size:11px;color:var(--text3);">Sala A · 1h</div></div></div>
+            <div style="display:flex;gap:10px;padding:8px 0;"><div style="font-size:11px;color:var(--text3);width:40px;flex-shrink:0;">15:00</div><div style="width:3px;border-radius:2px;background:var(--rose);flex-shrink:0;"></div><div><div style="font-size:13px;font-weight:500;">Avaliação de Equipe</div><div style="font-size:11px;color:var(--text3);">1h30</div></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="metric-icon sage" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-solid fa-users"></i></div>
+          <div><div class="card-title">Resumo da Equipe</div></div>
+          <button class="card-action" onclick="showPanel('team',document.querySelectorAll('.nav-item')[5])">Ver equipe →</button>
+        </div>
+        <div class="card-body" style="padding:0;">
+          <table class="data-table"><thead><tr><th>Atendente</th><th>Tempo Resp.</th><th>Demandas</th><th>Concluídas</th><th>Status</th></tr></thead>
+          <tbody id="team-ov-tbody"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="panel" id="panel-kpis">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+        <div><h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Meus KPIs</h2><p style="color:var(--text3);font-size:13px;margin-top:2px;">Comissionamento por desempenho — WeCare</p></div>
+        <div id="kpi-band-pill"></div>
+      </div>
+      <!-- GLOBAL -->
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-body" style="padding:20px;">
+          <div style="display:grid;grid-template-columns:1fr auto;gap:20px;align-items:center;">
+            <div>
+              <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Atingimento Global Ponderado</div>
+              <div style="display:flex;align-items:baseline;gap:12px;">
+                <div style="font-family:var(--font-display);font-size:44px;font-weight:700;" id="kpi-global">0%</div>
+                <div id="kpi-global-band-html"></div>
+              </div>
+              <div class="kpi-bar-wrap" style="margin-top:10px;"><div class="kpi-track" style="height:8px;"><div class="kpi-fill rose" id="kpi-global-bar" style="width:0%"></div></div></div>
+              <div style="display:flex;gap:14px;margin-top:8px;flex-wrap:wrap;">
+                <span style="font-size:11.5px;color:var(--text3);">0-79% <span style="color:var(--vermelha);font-weight:600;">Vermelha 0%</span></span>
+                <span style="font-size:11.5px;color:var(--text3);">80-99% <span style="color:var(--amarela);font-weight:600;">Amarela 50%</span></span>
+                <span style="font-size:11.5px;color:var(--text3);">100-120% <span style="color:var(--verde-flag);font-weight:600;">Verde 100%</span></span>
+                <span style="font-size:11.5px;color:var(--text3);">121-150% <span style="color:var(--azul-flag);font-weight:600;">Azul 150%</span></span>
+                <span style="font-size:11.5px;color:var(--text3);">>150% <span style="color:var(--elite);font-weight:600;">Elite 200%</span></span>
+              </div>
+            </div>
+            <div style="text-align:center;padding:0 20px;border-left:1px solid var(--border);">
+              <div style="font-size:11px;color:var(--text3);text-transform:uppercase;margin-bottom:5px;">Variável Pago</div>
+              <div style="font-family:var(--font-display);font-size:28px;font-weight:700;color:var(--rose);" id="kpi-var-val">R$ 0</div>
+              <div style="font-size:12px;color:var(--text3);margin-top:3px;">de <span id="kpi-var-max" style="font-weight:600;">R$ 0</span> máx</div>
+              <div style="font-size:12px;color:var(--text3);margin-top:8px;">Fixo: <span id="kpi-fixo" style="font-weight:600;color:var(--text);">R$ 0</span></div>
+              <div style="font-size:14px;font-weight:700;color:var(--sage);margin-top:5px;" id="kpi-total-sal">Total: R$ 0</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- NÍVEL -->
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header">
+          <i class="fa-solid fa-stairs" style="color:var(--lavender);font-size:14px;"></i>
+          <div><div class="card-title">Nível Salarial</div><div class="card-sub">3 meses na bandeira Verde = sobe automaticamente</div></div>
+        </div>
+        <div class="card-body">
+          <div style="display:grid;grid-template-columns:repeat(8,1fr);gap:8px;" id="nivel-grid"></div>
+          <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+            <div style="text-align:center;"><div style="font-size:11px;color:var(--text3);margin-bottom:3px;">FIXO MENSAL</div><div style="font-family:var(--font-display);font-size:20px;font-weight:700;" id="n-fixo">—</div></div>
+            <div style="text-align:center;border-left:1px solid var(--border);border-right:1px solid var(--border);"><div style="font-size:11px;color:var(--text3);margin-bottom:3px;">VARIÁVEL META 100%</div><div style="font-family:var(--font-display);font-size:20px;font-weight:700;color:var(--rose);" id="n-var">—</div></div>
+            <div style="text-align:center;"><div style="font-size:11px;color:var(--text3);margin-bottom:3px;">OTE TOTAL</div><div style="font-family:var(--font-display);font-size:20px;font-weight:700;color:var(--sage);" id="n-ote">—</div></div>
+          </div>
+          <div style="margin-top:10px;background:var(--lav-light);border-radius:var(--r-sm);padding:10px 12px;font-size:12.5px;color:var(--lavender);"><i class="fa-solid fa-circle-info"></i> NPS proprietário (35%) + NPS hóspede/rating OTAs (30%) + Onboarding (35%) são os pilares principais da sua avaliação.</div>
+        </div>
+      </div>
+      <!-- 6 KPI CARDS -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;" id="kpi-cards"></div>
+    </div>
+
+    <!-- TASKS -->
+    <div class="panel" id="panel-tasks">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
+        <div class="tab-bar"><button class="tab-btn active" onclick="switchView('list',this)">Lista</button><button class="tab-btn" onclick="switchView('kanban',this)">Kanban</button></div>
+        <select class="form-select" style="width:auto;padding:6px 10px;font-size:12.5px;" onchange="filterTasks(this.value)"><option value="all">Todas</option><option value="work">Trabalho</option><option value="personal">Pessoal</option><option value="urgent">Urgente</option></select>
+        <button class="btn btn-rose" style="margin-left:auto;" onclick="openAddTask()"><i class="fa-solid fa-plus"></i> Nova Tarefa</button>
+      </div>
+      <div id="task-list-view"><div class="card"><div class="card-body" id="all-tasks-list" style="padding:6px 14px;"></div></div></div>
+      <div id="task-kanban-view" style="display:none;"><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;" id="kanban-board"></div></div>
+    </div>
+
+    <!-- CALENDAR -->
+    <div class="panel" id="panel-calendar">
+      <div style="display:grid;grid-template-columns:1fr 300px;gap:18px;">
+        <div>
+          <div class="card" style="margin-bottom:14px;">
+            <div class="card-body">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+                <div style="font-family:var(--font-display);font-size:16px;font-weight:600;" id="cal-label">Maio 2026</div>
+                <div style="display:flex;gap:6px;"><button class="btn btn-sm" onclick="changeMonth(-1)"><i class="fa-solid fa-chevron-left"></i></button><button class="btn btn-sm" onclick="changeMonth(1)"><i class="fa-solid fa-chevron-right"></i></button></div>
+              </div>
+              <div class="cal-grid" id="cal-grid"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <i class="fa-brands fa-google" style="color:#4285F4;font-size:14px;"></i>
+              <div><div class="card-title">Google Agenda</div><div class="card-sub" id="gcal-sub" style="color:var(--sage);">Conectado</div></div>
+              <button class="btn btn-sm" onclick="loadCalendarEvents()"><i class="fa-solid fa-rotate"></i> Sincronizar</button>
+            </div>
+            <div class="card-body" id="gcal-body">
+              <div id="gcal-events-list" style="font-size:13px;color:var(--text3);text-align:center;padding:6px 0;">
+                <button class="btn btn-sm" onclick="loadCalendarEvents()"><i class="fa-solid fa-rotate"></i> Carregar eventos</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card"><div class="card-header"><div class="card-title">Agenda</div></div><div id="agenda-list" style="max-height:520px;overflow-y:auto;"></div></div>
+      </div>
+    </div>
+
+    <!-- AI -->
+    <div class="panel" id="panel-ai">
+      <div class="chat-wrap">
+        <div class="chat-head">
+          <div class="ai-orb"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+          <div><div style="font-family:var(--font-display);font-size:14px;font-weight:600;">Claire</div><div class="ai-status"><div class="status-dot"></div> Pronto para ajudar</div></div>
+          <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
+            <div style="font-size:11px;color:var(--text3);" id="gmail-ind"></div>
+            <button class="btn btn-sm" onclick="clearChat()"><i class="fa-solid fa-rotate"></i> Limpar</button>
+          </div>
+        </div>
+        <div class="chat-msgs" id="chat-messages">
+          <div class="msg ai">
+            <div class="avatar av-rose" style="width:28px;height:28px;font-size:11px;flex-shrink:0;">N</div>
+            <div><div class="msg-bub">Olá, Nicole! 🌸 Sou Claire, sua assistente pessoal da WeCare. Posso analisar seus KPIs, calcular seu salário estimado, redigir e-mails profissionais para sua equipe e muito mais. Como posso te ajudar hoje?</div><div class="msg-time">Agora</div></div>
+          </div>
+        </div>
+        <div class="chat-footer">
+          <div class="quick-chips">
+            <button class="chip" onclick="sendQuick('Analise meus KPIs e diga em qual bandeira estou')">📊 Analisar KPIs</button>
+            <button class="chip" onclick="sendQuick('Calcule meu salário estimado deste mês com os KPIs atuais')">💰 Calcular salário</button>
+            <button class="chip" onclick="sendQuick('Redija um e-mail de feedback para minha equipe')">✉️ E-mail equipe</button>
+            <button class="chip" onclick="sendQuick('Quais são as tarefas mais urgentes?')">✅ Prioridades</button>
+          </div>
+          <div class="chat-input-row">
+            <textarea class="chat-textarea" id="chat-input" placeholder="Pergunte qualquer coisa... (Enter para enviar)" rows="1" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+            <button class="send-btn" id="send-btn" onclick="sendMsg()"><i class="fa-solid fa-paper-plane"></i></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TEAM -->
+    <div class="panel" id="panel-team">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+        <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Equipe de Atendimento</h2>
+        <button class="btn btn-rose" onclick="openAddDemand()"><i class="fa-solid fa-plus"></i> Nova Demanda</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;" id="team-grid"></div>
+    </div>
+
+    <!-- SALARY -->
+    <div class="panel" id="panel-salary">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+        <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Calculadora de Salários</h2>
+      </div>
+      <div class="two-col-eq" style="margin-bottom:18px;">
+        <div class="card">
+          <div class="card-header"><div class="metric-icon sage" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-solid fa-users"></i></div><div><div class="card-title">Atendentes — Por Hora</div><div class="card-sub">Escala 12×36 · dias editáveis</div></div></div>
+          <div class="card-body" id="sal-att-body"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="metric-icon lav" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-solid fa-crown"></i></div><div><div class="card-title">Heads</div><div class="card-sub">Fixo (50/50) + comissão</div></div></div>
+          <div class="card-body" id="sal-heads-body"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><i class="fa-solid fa-file-invoice-dollar" style="color:var(--sage);font-size:14px;"></i><div class="card-title">Folha Total Estimada</div></div>
+        <div class="card-body"><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;" id="folha-grid"></div></div>
+      </div>
+    </div>
+
+    <!-- DRIVE -->
+    <div class="panel" id="panel-drive">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+        <div>
+          <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Google Drive</h2>
+          <p style="color:var(--text3);font-size:13px;margin-top:2px;">Acesse, crie e edite seus documentos</p>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn" onclick="loadDriveFiles()"><i class="fa-solid fa-rotate"></i> Atualizar</button>
+          <button class="btn btn-rose" onclick="openCreateDoc()"><i class="fa-solid fa-plus"></i> Novo Documento</button>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-body" style="padding:12px 16px;">
+          <div style="display:flex;gap:10px;align-items:center;">
+            <div class="search-bar" style="width:100%;max-width:420px;"><i class="fa-solid fa-magnifying-glass"></i><input type="text" id="drive-search-input" placeholder="Buscar arquivos no Drive..." onkeydown="if(event.key==='Enter')searchDrive(this.value)"></div>
+            <button class="btn" onclick="searchDrive(document.getElementById('drive-search-input').value)">Buscar</button>
+            <button class="btn" onclick="loadDriveFiles()">Recentes</button>
+          </div>
+        </div>
+      </div>
+      <div class="two-col-eq">
+        <div class="card">
+          <div class="card-header">
+            <div class="metric-icon sky" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-brands fa-google-drive"></i></div>
+            <div><div class="card-title" id="drive-list-title">Arquivos Recentes</div><div class="card-sub">Clique para visualizar</div></div>
+          </div>
+          <div id="drive-file-list" style="min-height:220px;max-height:480px;overflow-y:auto;">
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;color:var(--text3);">
+              <i class="fa-brands fa-google-drive" style="font-size:32px;margin-bottom:10px;opacity:0.35;"></i>
+              <div style="font-size:13px;margin-bottom:10px;">Clique em "Atualizar" para carregar</div>
+              <button class="btn btn-sm" onclick="loadDriveFiles()"><i class="fa-solid fa-rotate"></i> Carregar arquivos</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="metric-icon rose" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-regular fa-file-lines"></i></div>
+            <div style="flex:1;"><div class="card-title" id="doc-view-title">Visualizador</div><div class="card-sub" id="doc-view-sub">Selecione um arquivo</div></div>
+            <div id="doc-actions" style="gap:6px;display:none;">
+              <button class="btn btn-sm" id="open-drive-btn" onclick="openInDrive()"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
+              <button class="btn btn-sm" onclick="openEditModal()" title="Editar com IA"><i class="fa-solid fa-pencil"></i> Editar</button>
+              <button class="btn btn-sm btn-rose" onclick="summarizeWithAI()"><i class="fa-solid fa-wand-magic-sparkles"></i> Resumir</button>
+            </div>
+          </div>
+          <div id="doc-view-body" style="padding:16px 18px;min-height:360px;max-height:460px;overflow-y:auto;">
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;color:var(--text3);">
+              <i class="fa-regular fa-file-lines" style="font-size:32px;margin-bottom:10px;opacity:0.35;"></i>
+              <div style="font-size:13px;">Selecione um arquivo para visualizar</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-create-doc">
+      <div class="modal" style="width:540px;">
+        <div class="modal-title">Criar Novo Documento</div>
+        <div class="form-group"><label class="form-label">Nome do documento</label><input type="text" class="form-input" id="new-doc-name" placeholder="Ex: Relatorio KPIs Maio 2026"></div>
+        <div class="form-group"><label class="form-label">Conteudo inicial (opcional)</label><textarea class="form-input" id="new-doc-content" rows="7" placeholder="Digite o conteudo, ou deixe vazio..."></textarea></div>
+        <div style="background:var(--sky-light);border-radius:var(--r-sm);padding:10px 12px;font-size:12px;color:var(--sky);margin-bottom:4px;"><i class="fa-solid fa-circle-info"></i> Sera criado como arquivo de texto no seu Google Drive.</div>
+        <div class="modal-footer">
+          <button class="btn" onclick="closeModal('modal-create-doc')">Cancelar</button>
+          <button class="btn btn-rose" id="create-doc-btn" onclick="createDriveDoc()"><i class="fa-brands fa-google-drive"></i> Criar no Drive</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- GMAIL -->
+    <div class="panel" id="panel-gmail">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+        <div>
+          <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Gmail</h2>
+          <p style="color:var(--text3);font-size:13px;margin-top:2px;">Leia e envie e-mails diretamente pelo painel</p>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn" onclick="loadEmails()"><i class="fa-solid fa-rotate"></i> Atualizar</button>
+          <button class="btn btn-rose" onclick="openComposeModal()"><i class="fa-solid fa-pen"></i> Novo E-mail</button>
+        </div>
+      </div>
+
+      <!-- Gmail not configured -->
+      <div id="gmail-not-configured" style="display:none;">
+        <div class="card">
+          <div class="card-body" style="text-align:center;padding:40px 24px;">
+            <i class="fa-regular fa-envelope" style="font-size:40px;color:var(--text3);margin-bottom:14px;"></i>
+            <div style="font-family:var(--font-display);font-size:18px;font-weight:600;margin-bottom:8px;">Gmail nao configurado</div>
+            <p style="color:var(--text3);font-size:13.5px;max-width:380px;margin:0 auto 18px;">Para usar o Gmail, configure seu OAuth Token nas configuracoes. Acesse: Google Cloud Console > APIs > Gmail API > Credentials.</p>
+            <button class="btn btn-rose" onclick="openSettings()"><i class="fa-solid fa-gear"></i> Configurar agora</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="gmail-main" style="display:none;">
+        <!-- Tabs -->
+        <div style="display:flex;gap:6px;margin-bottom:14px;">
+          <button class="tab-btn active" id="gmail-tab-inbox" onclick="switchEmailTab('inbox',this)">Caixa de Entrada</button>
+          <button class="tab-btn" id="gmail-tab-sent" onclick="switchEmailTab('sent',this)">Enviados</button>
+          <div style="margin-left:auto;">
+            <div class="search-bar" style="width:240px;"><i class="fa-solid fa-magnifying-glass"></i><input type="text" id="gmail-search" placeholder="Buscar e-mails..." onkeydown="if(event.key==='Enter')searchEmails(this.value)"></div>
+          </div>
+        </div>
+        <div class="two-col-eq" style="align-items:start;">
+          <!-- EMAIL LIST -->
+          <div class="card">
+            <div id="email-list" style="max-height:520px;overflow-y:auto;">
+              <div style="padding:32px;text-align:center;color:var(--text3);"><i class="fa-solid fa-spinner fa-spin" style="font-size:20px;"></i><div style="margin-top:8px;font-size:13px;">Carregando...</div></div>
+            </div>
+          </div>
+          <!-- EMAIL VIEWER -->
+          <div class="card">
+            <div class="card-header">
+              <div class="metric-icon rose" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-regular fa-envelope-open"></i></div>
+              <div style="flex:1;"><div class="card-title" id="email-view-from">Visualizador</div><div class="card-sub" id="email-view-sub">Selecione um e-mail</div></div>
+              <div id="email-actions" style="gap:6px;display:none;">
+                <button class="btn btn-sm" onclick="replyEmail()" title="Responder"><i class="fa-solid fa-reply"></i></button>
+                
+              </div>
+            </div>
+            <div id="email-view-body" style="padding:16px 18px;min-height:360px;max-height:460px;overflow-y:auto;">
+              <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;color:var(--text3);">
+                <i class="fa-regular fa-envelope-open" style="font-size:32px;margin-bottom:10px;opacity:0.35;"></i>
+                <div style="font-size:13px;">Selecione um e-mail para ler</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COMPOSE MODAL -->
+    <div class="modal-overlay" id="modal-compose">
+      <div class="modal" style="width:580px;">
+        <div class="modal-title" id="compose-title">Novo E-mail</div>
+        <div class="form-group"><label class="form-label">Para</label><input type="email" class="form-input" id="compose-to" placeholder="destinatario@email.com"></div>
+        <div class="form-group"><label class="form-label">Assunto</label><input type="text" class="form-input" id="compose-subject" placeholder="Assunto do e-mail"></div>
+        <div class="form-group">
+          <label class="form-label">Mensagem</label>
+          <textarea class="form-input" id="compose-body" rows="10" placeholder="Digite sua mensagem..."></textarea>
+        </div>
+        <div style="background:var(--peach-light);border-radius:var(--r-sm);padding:9px 12px;font-size:12px;color:var(--peach);margin-bottom:4px;" id="compose-warning">
+          <i class="fa-solid fa-triangle-exclamation"></i> Verifique o destinatario e o conteudo antes de enviar.
+        </div>
+        <div class="modal-footer">
+          <button class="btn" onclick="closeModal('modal-compose')">Cancelar</button>
+          
+          <button class="btn btn-rose" id="send-email-btn" onclick="sendEmail()"><i class="fa-solid fa-paper-plane"></i> Enviar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- EDIT WITH AI MODAL -->
+    <div class="modal-overlay" id="modal-edit-doc">
+      <div class="modal" style="width:560px;">
+        <div class="modal-title">Editar com IA &mdash; <span id="edit-doc-name" style="color:var(--rose);font-size:16px;"></span></div>
+        <div style="background:var(--sage-light);border-radius:var(--r-sm);padding:10px 12px;font-size:12.5px;color:var(--sage);margin-bottom:14px;">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> A IA vai ler o documento atual, aplicar sua instrucao e salvar uma nova versao no Drive.
+        </div>
+        <div class="form-group">
+          <label class="form-label">O que voce quer alterar?</label>
+          <textarea class="form-input" id="edit-instruction" rows="4" placeholder="Ex: Adicione no final: reuniao agendada para dia 5 as 14h&#10;Ex: Corrija erros de portugues&#10;Ex: Adicione um resumo executivo no inicio&#10;Ex: Inclua o item X na lista de pendencias"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nome do arquivo salvo (no Drive)</label>
+          <input type="text" class="form-input" id="edit-save-name" placeholder="Nome do novo arquivo...">
+        </div>
+        <div class="modal-footer">
+          <button class="btn" onclick="closeModal('modal-edit-doc')">Cancelar</button>
+          <button class="btn btn-rose" id="edit-doc-btn" onclick="editDocWithAI()"><i class="fa-solid fa-wand-magic-sparkles"></i> Aplicar e Salvar no Drive</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- NOTES -->
+    <div class="panel" id="panel-notes">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+        <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Anotações</h2>
+        <button class="btn btn-rose" onclick="openAddNote()"><i class="fa-solid fa-plus"></i> Nova Nota</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;" id="notes-grid"></div>
+    </div>
+
+    <!-- FOCUS -->
+    <div class="panel" id="panel-focus">
+      <div style="max-width:380px;margin:36px auto;text-align:center;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:10px;" id="focus-lbl">MODO FOCO</div>
+        <div style="position:relative;display:inline-block;margin-bottom:8px;">
+          <svg width="180" height="180" style="transform:rotate(-90deg);">
+            <circle cx="90" cy="90" r="80" fill="none" stroke="var(--bg4)" stroke-width="8"/>
+            <circle cx="90" cy="90" r="80" fill="none" stroke="var(--rose)" stroke-width="8" stroke-dasharray="502" id="ring" stroke-dashoffset="502" stroke-linecap="round" style="transition:stroke-dashoffset 1s linear;"/>
+          </svg>
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:44px;font-weight:700;" id="timer-disp">25:00</div>
+        </div>
+        <div style="font-size:13px;color:var(--text3);margin-bottom:24px;" id="focus-sub">Sessão Pomodoro</div>
+        <div style="display:flex;gap:8px;justify-content:center;margin-bottom:18px;">
+          <button class="btn btn-sm" onclick="setTimer(25,'Sessão Pomodoro')">25 min</button>
+          <button class="btn btn-sm" onclick="setTimer(15,'Sessão Curta')">15 min</button>
+          <button class="btn btn-sm" onclick="setTimer(50,'Sessão Longa')">50 min</button>
+          <button class="btn btn-sm" onclick="setTimer(5,'Pausa')">5 min</button>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:center;">
+          <button class="btn btn-rose" id="focus-btn" onclick="toggleTimer()" style="padding:9px 22px;font-size:14px;"><i class="fa-solid fa-play"></i> Iniciar</button>
+          <button class="btn" onclick="resetTimer()"><i class="fa-solid fa-rotate-left"></i></button>
+        </div>
+        <div style="margin-top:20px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:14px;">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:6px;">Tarefa em foco</div>
+          <select class="form-select" id="focus-sel"></select>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODALS -->
+<div class="modal-overlay" id="modal-task">
+  <div class="modal">
+    <div class="modal-title">Nova Tarefa</div>
+    <div class="form-group"><label class="form-label">Título</label><input type="text" class="form-input" id="t-title" placeholder="Descreva a tarefa..."></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Categoria</label><select class="form-select" id="t-cat"><option value="work">Trabalho</option><option value="personal">Pessoal</option><option value="urgent">Urgente</option><option value="meeting">Reunião</option></select></div>
+      <div class="form-group"><label class="form-label">Prioridade</label><select class="form-select" id="t-prio"><option value="high">Alta</option><option value="med">Média</option><option value="low">Baixa</option></select></div>
+    </div>
+    <div class="form-group"><label class="form-label">Prazo</label><input type="date" class="form-input" id="t-date"></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-task')">Cancelar</button><button class="btn btn-rose" onclick="addTask()"><i class="fa-solid fa-plus"></i> Adicionar</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-demand">
+  <div class="modal">
+    <div class="modal-title">Nova Demanda</div>
+    <div class="form-group"><label class="form-label">Atendente</label>
+      <select class="form-select" id="d-att"><option value="patricia">Patrícia</option><option value="sara">Sara</option><option value="lisarb">Lisarb</option><option value="lais">Laís</option></select></div>
+    <div class="form-group"><label class="form-label">Descrição</label><textarea class="form-input" id="d-desc" rows="3" placeholder="Descreva a demanda..."></textarea></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Prazo</label><input type="date" class="form-input" id="d-date"></div>
+      <div class="form-group"><label class="form-label">Prioridade</label><select class="form-select" id="d-prio"><option value="high">Alta</option><option value="med">Média</option><option value="low">Baixa</option></select></div>
+    </div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-demand')">Cancelar</button><button class="btn btn-rose" onclick="addDemand()"><i class="fa-solid fa-plus"></i> Adicionar</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-note">
+  <div class="modal">
+    <div class="modal-title">Nova Anotação</div>
+    <div class="form-group"><label class="form-label">Título</label><input type="text" class="form-input" id="n-title" placeholder="Título..."></div>
+    <div class="form-group"><label class="form-label">Conteúdo</label><textarea class="form-input" id="n-content" rows="5" placeholder="Escreva aqui..."></textarea></div>
+    <div class="form-group"><label class="form-label">Cor</label>
+      <div style="display:flex;gap:8px;">
+        <div class="note-clr" data-c="rose" style="width:22px;height:22px;border-radius:50%;background:var(--rose);cursor:pointer;border:2px solid var(--rose);" onclick="selNoteClr(this)"></div>
+        <div class="note-clr" data-c="sage" style="width:22px;height:22px;border-radius:50%;background:var(--sage);cursor:pointer;border:2px solid transparent;" onclick="selNoteClr(this)"></div>
+        <div class="note-clr" data-c="lav" style="width:22px;height:22px;border-radius:50%;background:var(--lavender);cursor:pointer;border:2px solid transparent;" onclick="selNoteClr(this)"></div>
+        <div class="note-clr" data-c="peach" style="width:22px;height:22px;border-radius:50%;background:var(--peach);cursor:pointer;border:2px solid transparent;" onclick="selNoteClr(this)"></div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-note')">Cancelar</button><button class="btn btn-rose" onclick="addNote()">Salvar</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-settings">
+  <div class="modal">
+    <div class="modal-title">Configurações</div>
+    <div class="form-group"><label class="form-label">Seu nome</label><input type="text" class="form-input" id="s-name" placeholder="Nicole"></div>
+    <div class="form-group"><label class="form-label">Chave API Anthropic</label><input type="password" class="form-input" id="s-api" placeholder="sk-ant-..."><div style="font-size:11px;color:var(--text3);margin-top:3px;">Necessária para o Assistente Claire. Salva no navegador.</div></div>
+    <div style="background:var(--sky-light);border-radius:var(--r-sm);padding:10px 12px;font-size:12px;color:var(--sky);margin-bottom:12px;"><i class="fa-solid fa-circle-info"></i> Para Gmail e Google Agenda: acesse <strong>OAuth 2.0 Playground</strong> → autorize os escopos abaixo → copie o Access Token gerado.</div>
+    <div class="form-group"><label class="form-label">Google Drive — OAuth Token</label><input type="text" class="form-input" id="s-gdrive" placeholder="ya29.a0A..."><div style="font-size:11px;color:var(--text3);margin-top:3px;">Escopo: <code style="background:var(--bg4);padding:1px 4px;border-radius:3px;">https://www.googleapis.com/auth/drive</code></div></div>
+    <div class="form-group"><label class="form-label">Google Agenda — OAuth Token</label><input type="text" class="form-input" id="s-gcal" placeholder="ya29.a0A..."><div style="font-size:11px;color:var(--text3);margin-top:3px;">Escopo: <code style="background:var(--bg4);padding:1px 4px;border-radius:3px;">https://www.googleapis.com/auth/calendar.readonly</code></div></div>
+    <div class="form-group"><label class="form-label">Gmail — OAuth Token</label><input type="text" class="form-input" id="s-gmail" placeholder="ya29.a0A..."><div style="font-size:11px;color:var(--text3);margin-top:3px;">Escopo: <code style="background:var(--bg4);padding:1px 4px;border-radius:3px;">https://mail.google.com/</code></div></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-settings')">Cancelar</button><button class="btn btn-rose" onclick="saveSettings()"><i class="fa-solid fa-check"></i> Salvar</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-att">
+  <div class="modal" style="width:580px;">
+    <div class="modal-title" id="att-modal-title">Demandas</div>
+    <div id="att-modal-body"></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-att')">Fechar</button></div>
+  </div>
+</div>
+
+<style>
+.tag-work{background:var(--sky-light);color:var(--sky);}
+.tag-personal{background:var(--lav-light);color:var(--lavender);}
+.tag-urgent{background:var(--vermelha-bg);color:var(--vermelha);}
+.tag-meeting{background:var(--peach-light);color:var(--peach);}
+input[type=number]{-moz-appearance:textfield;}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
+</style>

@@ -2096,22 +2096,76 @@ let ITENS_OBRIGATORIOS={
 };
 
 let PRECOS_ITENS = {
-  // Cama (enxoval) — valores base (Solteiro/Bicama); ajustáveis em Configurações
-  'Jogo de Cama Basic Percalle': 259,
-  'Cobertor Aspen II': 98,
-  'Edredom Premier Hotel': 429,
-  'Capa p/ Edredom Hotel': 259,
   'Fronha Basic Percalle': 43,
-  'Protetor de Colchão': 188,
   'Travesseiro Sanomed': 285,
   'Travesseiro Toque de Pluma': 99,
   'Protetor de Travesseiro': 52,
-  // Banheiro
   'Toalha de Banho Lory Hotel': 64,
   'Toalha de Rosto Lory Hotel': 30,
   'Piso Luxor Hotel': 42,
-  // Demais itens começam em 0 (editáveis)
+  'Lixeira de Banheiro': 38.99,
+  'Dispenser de Sabonete': 23.90,
+  'Secador de Cabelo': 102.00,
+  'Ferro de Passar': 58.99,
+  'Tábua de Passar': 53.89,
+  'Xícaras': 62.40,
+  'Copos': 27.90,
+  'Pratos Tradicionais': 54.89,
+  'Pratos de Sobremesa': 44.07,
+  'Taças': 64.89,
+  'Talheres (24 peças)': 72.99,
+  'Abridor de Vinho e Cerveja': 34.76,
+  'Balde para Gelo': 47.90,
+  'Panelas (kit completo)': 425.90,
+  'Colheres para Cozinhar': 37.54,
+  'Escorredor de Pratos': 67.18,
+  'Baixelas': 130.00,
+  'Potes com Tampa': 78.90,
+  'Facas para Cozinha': 89.90,
+  'Liquidificador': 96.90,
+  'Sanduicheira': 109.90,
+  'Cafeteira Nespresso': 539.00,
+  'Microondas': 509.55,
+  'Purificador de Água': 132.05,
+  'Chaleira Elétrica': 122.00,
+  'Air Fryer': 537.52,
+  'Panos de Prato': 30.89,
+  'Lixeira de Pia': 23.90,
+  'Berço Portátil': 398.90,
+  'Banheira Portátil': 182.92,
+  'Persianas Blackout': 0,
+  'Pano de Chão': 35.90,
+  'Escada': 119.65,
+  'Balde': 37.29,
+  'Vassoura': 78.89,
+  'Rodo': 0,
+  'Pá de Lixo': 0,
+  'Pano Multiuso': 59.00,
+  'Detector de Fumaça': 59.90,
 };
+
+let PRECOS_ENXOVAL = {
+  'Jogo de Cama Basic Percalle': {solteiro:259, casal:309, queen:319, king:379},
+  'Cobertor Aspen II':           {solteiro:98,  casal:144, queen:158, king:192},
+  'Edredom Premier Hotel':       {solteiro:429, casal:499, queen:779, king:899},
+  'Capa p/ Edredom Hotel':       {solteiro:259, casal:305, queen:345, king:409},
+  'Protetor de Colchão':         {solteiro:188, casal:238, queen:148, king:178},
+};
+function tierEnxoval(tipoCama){
+  if(['Solteiro','Bicama','Sofá-cama Solteiro','Beliche'].includes(tipoCama)) return 'solteiro';
+  if(['Casal','Viúva','Sofá-cama Casal'].includes(tipoCama)) return 'casal';
+  if(tipoCama==='Queen') return 'queen';
+  if(tipoCama==='King') return 'king';
+  return 'solteiro';
+}
+const TIER_LABELS = {solteiro:'Solteiro', casal:'Casal/Viúva', queen:'Queen', king:'King'};
+function colchoesDaCama(c){
+  const q=parseInt(c.qtd)||1;
+  if(c.tipo==='Beliche'||c.tipo==='Bicama') return q*2;
+  return q;
+}
+const ITENS_ENXOVAL_VARIAVEL = ['Jogo de Cama Basic Percalle','Cobertor Aspen II','Edredom Premier Hotel','Capa p/ Edredom Hotel','Protetor de Colchão'];
+const QTD_POR_COLCHAO = {'Jogo de Cama Basic Percalle':3,'Cobertor Aspen II':2,'Edredom Premier Hotel':1,'Capa p/ Edredom Hotel':2,'Protetor de Colchão':1};
 
 let obAbaAtiva='dados';
 
@@ -2393,9 +2447,42 @@ function obAbaCompras(im){
       '<div style="font-size:10px;font-weight:700;color:var(--text3);text-align:center;">Falta</div>' +
       '<div style="font-size:10px;font-weight:700;color:var(--text3);text-align:center;">R$/un</div>' +
       '</div>';
+    let camasPorTier = {};
+    if (cat === 'Cama') {
+      (im.camas||[]).forEach(c=>{const t=tierEnxoval(c.tipo);camasPorTier[t]=(camasPorTier[t]||0)+colchoesDaCama(c);});
+    }
     itens.forEach(item => {
-      const key = cat + '__' + item;
       if (!im.compras) im.compras = {};
+      if (cat === 'Cama' && ITENS_ENXOVAL_VARIAVEL.includes(item)) {
+        if (Object.keys(camasPorTier).length === 0) {
+          html += '<div style="display:grid;grid-template-columns:1fr 70px 70px 80px 80px;gap:4px;padding:5px 0;border-bottom:1px solid var(--border);align-items:center;">' +
+            '<div style="font-size:12.5px;">' + esc(item) + '</div>' +
+            '<div style="grid-column:2 / 6;font-size:11.5px;color:var(--text3);font-style:italic;">Cadastre as camas na aba Dados para calcular.</div>' +
+            '</div>';
+          return;
+        }
+        Object.keys(camasPorTier).forEach(tier => {
+          const key = 'Cama__' + item + '__' + tier;
+          const label = item + ' (' + TIER_LABELS[tier] + ')';
+          const necessario = QTD_POR_COLCHAO[item] * camasPorTier[tier];
+          if (!im.compras[key] || typeof im.compras[key] !== 'object') {
+            im.compras[key] = { tem: 0, valorUnit: (PRECOS_ENXOVAL[item][tier]||0) };
+          }
+          const data = im.compras[key];
+          const tem = parseInt(data.tem) || 0;
+          const falta = Math.max(0, necessario - tem);
+          const faltaColor = falta > 0 ? 'color:var(--vermelha);font-weight:700;' : 'color:var(--sage);font-weight:700;';
+          html += '<div style="display:grid;grid-template-columns:1fr 70px 70px 80px 80px;gap:4px;padding:5px 0;border-bottom:1px solid var(--border);align-items:center;">' +
+            '<div style="font-size:12.5px;">' + esc(label) + '</div>' +
+            '<div style="text-align:center;font-size:12.5px;color:var(--text2);">' + necessario + '</div>' +
+            '<input type="number" min="0" class="form-input" style="padding:3px;text-align:center;font-size:12px;" value="' + tem + '" oninput="obSalvarCompra('+im.id+',\''+key.replace(/'/g,"\\'")+ '\',\'tem\',this.value)">' +
+            '<div style="text-align:center;font-size:13px;' + faltaColor + '">' + (falta > 0 ? falta : '&#10003;') + '</div>' +
+            '<input type="number" min="0" step="0.01" class="form-input" style="padding:3px;text-align:center;font-size:12px;" placeholder="0,00" value="' + (data.valorUnit || PRECOS_ENXOVAL[item][tier] || '') + '" oninput="obSalvarCompra('+im.id+',\''+key.replace(/'/g,"\\'")+ '\',\'valorUnit\',this.value)">' +
+            '</div>';
+        });
+        return;
+      }
+      const key = cat + '__' + item;
       if (!im.compras[key] || typeof im.compras[key] !== 'object') {
         im.compras[key] = { tem: 0, valorUnit: (PRECOS_ITENS[item]||0) };
       }
@@ -2659,7 +2746,25 @@ function obGerarOrcamentoPDF(id){
   Object.entries(ITENS_OBRIGATORIOS).forEach(([cat,itens])=>{
     if(ENXOVAL_CATS.includes(cat)&&tipoEnxoval!=='comprado')return;
     const linhas=[];
+    let camasPorTier={};
+    if(cat==='Cama'){
+      (im.camas||[]).forEach(c=>{const t=tierEnxoval(c.tipo);camasPorTier[t]=(camasPorTier[t]||0)+colchoesDaCama(c);});
+    }
     itens.forEach(item=>{
+      if(cat==='Cama'&&ITENS_ENXOVAL_VARIAVEL.includes(item)){
+        Object.keys(camasPorTier).forEach(tier=>{
+          const key='Cama__'+item+'__'+tier;
+          const data=compras[key]||{tem:0,valorUnit:0};
+          const necessario=QTD_POR_COLCHAO[item]*camasPorTier[tier];
+          const tem=parseInt(data.tem)||0;
+          const falta=Math.max(0,necessario-tem);
+          if(falta>0){
+            const valorUnit=parseFloat(data.valorUnit)||0;
+            linhas.push({item:item+' ('+TIER_LABELS[tier]+')',qtd:falta,valorUnit,total:falta*valorUnit});
+          }
+        });
+        return;
+      }
       const key=cat+'__'+item;
       const data=compras[key]||{tem:0,valorUnit:0};
       const necessario=calcQtdNecessaria(item,cat,im);
@@ -2844,6 +2949,7 @@ function renderObConfigBody(){
   Object.entries(ITENS_OBRIGATORIOS).forEach(([cat,itens])=>{
     html += '<div style="font-size:10.5px;font-weight:700;color:var(--text3);margin:8px 0 4px;">'+cat+'</div>';
     itens.forEach(item=>{
+      if(ITENS_ENXOVAL_VARIAVEL.includes(item))return;
       const preco = PRECOS_ITENS[item]||'';
       html += '<div style="display:flex;align-items:center;gap:8px;padding:3px 0;">'+
         '<span style="flex:1;font-size:12px;">'+esc(item)+'</span>'+
@@ -2852,12 +2958,27 @@ function renderObConfigBody(){
         '</div>';
     });
   });
+  html += '<div style="margin-top:16px;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:8px;">🛏️ Enxoval por tipo de cama (R$)</div>';
+  html += '<div style="display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr 1fr;gap:4px;font-size:9.5px;font-weight:700;color:var(--text3);text-transform:uppercase;padding:4px 0;"><div>Item</div><div style="text-align:center;">Solteiro</div><div style="text-align:center;">Casal</div><div style="text-align:center;">Queen</div><div style="text-align:center;">King</div></div>';
+  Object.keys(PRECOS_ENXOVAL).forEach(item=>{
+    const p=PRECOS_ENXOVAL[item];
+    html += '<div style="display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr 1fr;gap:4px;padding:3px 0;align-items:center;border-bottom:1px solid var(--border);">'+
+      '<div style="font-size:11px;">'+esc(item)+'</div>'+
+      ['solteiro','casal','queen','king'].map(tier=>'<input type="number" step="0.01" class="form-input" style="padding:3px;font-size:11px;text-align:center;" value="'+(p[tier]||'')+'" oninput="setPrecoEnxoval(\''+item.replace(/'/g,"\\'")+'\',\''+tier+'\',this.value)">').join('')+
+      '</div>';
+  });
+  html += '</div>';
   html += '</div>';
   el.innerHTML=html;
 }
 
 function setPrecoItem(item, valor){
   PRECOS_ITENS[item] = parseFloat(valor)||0;
+}
+
+function setPrecoEnxoval(item, tier, valor){
+  if(!PRECOS_ENXOVAL[item]) PRECOS_ENXOVAL[item]={};
+  PRECOS_ENXOVAL[item][tier]=parseFloat(valor)||0;
 }
 
 function obAdicionarItem(cat){

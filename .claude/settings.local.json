@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(node --check \"C:\\\\Users\\\\nicol\\\\Downloads\\\\claire-project\\\\js\\\\app.js\")"
+      "Bash(node --check \"C:\\\\Users\\\\nicol\\\\Downloads\\\\claire-project\\\\js\\\\app.js\")",
+      "PowerShell($n = \\(Get-Command node -ErrorAction SilentlyContinue\\); if\\($n\\){ node --check \"C:\\\\Users\\\\nicol\\\\Downloads\\\\claire-project\\\\js\\\\app.js\"; if\\($?\\){\"OK\"} } else { \"node-missing\" })",
+      "Bash(node --check js/app.js)"
     ]
   }
 }

@@ -88,6 +88,7 @@ function verificarLogin(){
     <button class="nav-item" onclick="showPanel('gmail',this)"><i class="fa-regular fa-envelope"></i> Gmail <span class="nav-badge" id="gmail-badge" style="display:none;">0</span></button>
     <div class="nav-section">Projetos</div>
     <button class="nav-item" onclick="showPanel('projetos',this)"><i class="fa-solid fa-folder-open"></i> Projetos</button>
+    <button class="nav-item" onclick="showPanel('reunioes',this)"><i class="fa-solid fa-microphone-lines"></i> Reuniões</button>
     <button class="nav-item" onclick="showPanel('notes',this)"><i class="fa-regular fa-note-sticky"></i> Anotações</button>
     <button class="nav-item" onclick="showPanel('focus',this)"><i class="fa-regular fa-clock"></i> Foco</button>
   </div>
@@ -135,16 +136,10 @@ function verificarLogin(){
           <div class="metric-delta up">atualize suas tarefas</div>
         </div>
         <div class="metric-card peach">
-          <div class="metric-icon peach"><i class="fa-solid fa-users"></i></div>
-          <div class="metric-value">4</div>
-          <div class="metric-label">Atendentes Ativas</div>
-          <div class="metric-delta neutral">equipe completa</div>
-        </div>
-        <div class="metric-card lav">
-          <div class="metric-icon lav"><i class="fa-solid fa-circle-dollar-to-slot"></i></div>
-          <div class="metric-value" id="ov-salary">R$ —</div>
-          <div class="metric-label">Salário Estimado</div>
-          <div class="metric-delta neutral" id="ov-nivel-lbl">Selecione seu nível</div>
+          <div class="metric-icon peach"><i class="fa-solid fa-triangle-exclamation"></i></div>
+          <div class="metric-value" id="ov-demandas-atrasadas">0</div>
+          <div class="metric-label">Demandas Atrasadas</div>
+          <div class="metric-delta neutral">das atendentes</div>
         </div>
       </div>
       <div class="two-col" style="margin-bottom:18px;">
@@ -241,6 +236,13 @@ function verificarLogin(){
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
         <div class="tab-bar"><button class="tab-btn active" onclick="switchView('list',this)">Lista</button><button class="tab-btn" onclick="switchView('kanban',this)">Kanban</button></div>
         <select class="form-select" style="width:auto;padding:6px 10px;font-size:12.5px;" id="task-filter-sel" onchange="filterTasks(this.value)"></select>
+        <select class="form-select" style="width:auto;padding:6px 10px;font-size:12.5px;" id="task-sort-prazo" onchange="renderTasks();renderKanban();">
+          <option value="">Sem ordenar</option>
+          <option value="prazo-asc">Prazo: mais próximo</option>
+          <option value="prazo-desc">Prazo: mais distante</option>
+          <option value="hoje">Só de hoje</option>
+          <option value="atrasadas">Só atrasadas</option>
+        </select>
         <button class="btn btn-sm" onclick="abrirGerenciarCats()" title="Gerenciar categorias" style="padding:6px 10px;"><i class="fa-solid fa-tags"></i></button>
         <button class="btn btn-rose" style="margin-left:auto;" onclick="openAddTask()"><i class="fa-solid fa-plus"></i> Nova Tarefa</button>
       </div>
@@ -254,11 +256,18 @@ function verificarLogin(){
         <div>
           <div class="card" style="margin-bottom:14px;">
             <div class="card-body">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-                <div style="font-family:var(--font-display);font-size:16px;font-weight:600;" id="cal-label">Maio 2026</div>
-                <div style="display:flex;gap:6px;"><button class="btn btn-sm" onclick="changeMonth(-1)"><i class="fa-solid fa-chevron-left"></i></button><button class="btn btn-sm" onclick="changeMonth(1)"><i class="fa-solid fa-chevron-right"></i></button></div>
+              <div style="display:flex;gap:6px;margin-bottom:10px;">
+                <button class="tab-btn active" id="calview-mes" onclick="setCalView('mes',this)">Mês</button>
+                <button class="tab-btn" id="calview-semana" onclick="setCalView('semana',this)">Semana</button>
               </div>
-              <div class="cal-grid" id="cal-grid"></div>
+              <div id="cal-mes-view">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+                  <div style="font-family:var(--font-display);font-size:16px;font-weight:600;" id="cal-label">Maio 2026</div>
+                  <div style="display:flex;gap:6px;"><button class="btn btn-sm" onclick="changeMonth(-1)"><i class="fa-solid fa-chevron-left"></i></button><button class="btn btn-sm" onclick="changeMonth(1)"><i class="fa-solid fa-chevron-right"></i></button></div>
+                </div>
+                <div class="cal-grid" id="cal-grid"></div>
+              </div>
+              <div id="cal-semana-view" style="display:none;"></div>
             </div>
           </div>
           <div class="card">
@@ -485,7 +494,7 @@ function verificarLogin(){
           <button class="btn btn-rose" onclick="abrirNovoImovel()"><i class="fa-solid fa-plus"></i> Novo Imóvel</button>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;overflow-x:auto;" id="onboarding-kanban"></div>
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;overflow-x:auto;" id="onboarding-kanban"></div>
     </div>
 
     <!-- ── PROJETOS ── -->
@@ -498,6 +507,18 @@ function verificarLogin(){
         <button class="btn btn-rose" onclick="abrirNovoProjeto()"><i class="fa-solid fa-plus"></i> Novo Projeto</button>
       </div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;" id="projetos-kanban"></div>
+    </div>
+
+    <!-- ── REUNIÕES ── -->
+    <div class="panel" id="panel-reunioes">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+        <div>
+          <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Reuniões e Transcrições</h2>
+          <p style="color:var(--text3);font-size:13px;margin-top:2px;">Transcrições, atas e resumos com IA</p>
+        </div>
+        <button class="btn btn-rose" onclick="abrirNovaReuniao()"><i class="fa-solid fa-plus"></i> Nova Reunião</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;" id="reunioes-grid"></div>
     </div>
 
     <!-- ── ANOTAÇÕES ── -->
@@ -787,6 +808,7 @@ function verificarLogin(){
       <div style="flex:1;">
         <div style="font-family:var(--font-display);font-size:17px;font-weight:700;margin-bottom:6px;" id="td-titulo"></div>
         <div id="td-meta" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;"></div>
+        <div id="td-editar" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;"></div>
       </div>
       <button onclick="closeModal('modal-task-detalhe')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;flex-shrink:0;"><i class="fa-solid fa-xmark"></i></button>
     </div>
@@ -892,6 +914,52 @@ function verificarLogin(){
   </div>
 </div>
 
-<script src="js/app.js?v=4"></script>
+<!-- Modal Reunião -->
+<div class="modal-overlay" id="modal-reuniao">
+  <div class="modal" style="width:720px;max-height:92vh;overflow-y:auto;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+      <input id="r-titulo" class="form-input" style="font-size:17px;font-weight:600;font-family:var(--font-display);flex:1;" placeholder="Título da reunião...">
+      <button onclick="closeModal('modal-reuniao')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Data</label><input type="date" class="form-input" id="r-data"></div>
+      <div class="form-group"><label class="form-label">Link do arquivo (Drive)</label><input type="text" class="form-input" id="r-link" placeholder="https://drive.google.com/..."></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Transcrição / Anotações</label>
+      <div style="display:flex;gap:8px;margin-bottom:6px;">
+        <input type="file" id="r-file" accept=".txt,.md,.vtt,.srt,text/*" style="font-size:12px;" onchange="lerArquivoTranscricao(event)">
+        <span style="font-size:11px;color:var(--text3);align-self:center;">(ou cole o texto abaixo)</span>
+      </div>
+      <textarea class="form-input" id="r-texto" rows="8" placeholder="Cole aqui a transcrição ou suas anotações..."></textarea>
+    </div>
+    <div class="form-group">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+        <label class="form-label" style="margin:0;">Resumo</label>
+        <button class="btn btn-sm btn-rose" onclick="gerarResumoReuniao()"><i class="fa-solid fa-wand-magic-sparkles"></i> Gerar resumo com IA</button>
+      </div>
+      <textarea class="form-input" id="r-resumo" rows="5" placeholder="Resumo da reunião (ou gere com IA)..."></textarea>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Vincular a Projeto</label><select class="form-select" id="r-projeto"></select></div>
+      <div class="form-group"><label class="form-label">Vincular a Tarefa</label><select class="form-select" id="r-tarefa"></select></div>
+    </div>
+    <div id="r-updates-section" style="border-top:1px solid var(--border);padding-top:12px;margin-top:6px;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:8px;">Atualizações</div>
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <input type="text" id="r-nova-update" class="form-input" style="flex:1;" placeholder="Adicionar atualização..." onkeydown="if(event.key==='Enter')adicionarUpdateReuniao()">
+        <button class="btn btn-sm" onclick="adicionarUpdateReuniao()"><i class="fa-solid fa-plus"></i></button>
+      </div>
+      <div id="r-updates-list"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="apagarReuniao()" style="color:var(--vermelha);border-color:var(--vermelha);margin-right:auto;"><i class="fa-solid fa-trash"></i> Apagar</button>
+      <button class="btn" onclick="closeModal('modal-reuniao')">Fechar</button>
+      <button class="btn btn-rose" onclick="salvarReuniao()"><i class="fa-solid fa-check"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/app.js?v=5"></script>
 </body>
 </html>

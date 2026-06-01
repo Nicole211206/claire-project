@@ -3,7 +3,10 @@
     "allow": [
       "Bash(node --check \"C:\\\\Users\\\\nicol\\\\Downloads\\\\claire-project\\\\js\\\\app.js\")",
       "PowerShell($n = \\(Get-Command node -ErrorAction SilentlyContinue\\); if\\($n\\){ node --check \"C:\\\\Users\\\\nicol\\\\Downloads\\\\claire-project\\\\js\\\\app.js\"; if\\($?\\){\"OK\"} } else { \"node-missing\" })",
-      "Bash(node --check js/app.js)"
+      "Bash(node --check js/app.js)",
+      "Bash(awk 'NR>=2098 && /^};/{print NR\": \"$0; exit}' \"C:\\\\Users\\\\nicol\\\\Downloads\\\\claire-project\\\\js\\\\app.js\")",
+      "PowerShell(node --check \"C:\\\\Users\\\\nicol\\\\Downloads\\\\claire-project\\\\js\\\\app.js\")",
+      "PowerShell(if \\($?\\) { \"SYNTAX OK\" })"
     ]
   }
 }

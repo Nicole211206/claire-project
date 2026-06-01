@@ -102,9 +102,12 @@ let nextAttId = 5;
 let workDaysP1={patricia:8,sara:8,lisarb:8,lais:8};  // turnos dias 01-15
 let workDaysP2={patricia:7,sara:7,lisarb:7,lais:7};  // turnos dias 16-31
 let projetos=[];
+let transcricoes=[];
+let transcricaoAtiva=null;
 let projetoAtivo=null;
 let projetoAbaAtiva='info';
 let headFixo={gabriela:6000,felipe:6000};
+let headFotos={};
 let nicoleComissaoOverride=null; // null = usa KPI; número = valor manual
 let headComissao={gabriela:0,felipe:0};
 let notes=[
@@ -117,9 +120,12 @@ let tLeft=25*60,tTotal=25*60,tRun=false,tInt=null;
 let pomodoroSessions=0;
 let chatHist=[];
 let _gcalEventosHoje=[]; // eventos do Google Calendar carregados
+let calViewMode='mes';
+let _gcalTodosEventos=[]; // todos os eventos carregados do Google
 
 // ═══════════════════ INIT ═══════════════════
 document.addEventListener('DOMContentLoaded',()=>{
+  loadAll();
   ATTS.forEach(a=>{if(!a.respWeekly)a.respWeekly=[null,null,null,null];if(a.respMes===undefined)a.respMes=null;});
   greet();
   renderOvAgenda();
@@ -139,6 +145,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   loadSettings();
   renderOnboardingKanban();
   renderProjetosKanban();
+  renderReunioes();
   renderCompras();
   renderFocusInsights();
   const recEl=document.getElementById('d-recorrente');
@@ -146,20 +153,28 @@ document.addEventListener('DOMContentLoaded',()=>{
 });
 
 // ═══════════════════ NAV ═══════════════════
-const PT={overview:'Visão Geral',kpis:'Meus KPIs',tasks:'Tarefas',calendar:'Calendário',ai:'Assistente IA',team:'Equipe',salary:'Salários',drive:'Google Drive',onboarding:'Onboarding de Imóveis',gmail:'Gmail',notes:'Anotações',focus:'Foco',projetos:'Projetos',compras:'Registro de Compras'};
+const PT={overview:'Visão Geral',kpis:'Meus KPIs',tasks:'Tarefas',calendar:'Calendário',ai:'Assistente IA',team:'Equipe',salary:'Salários',drive:'Google Drive',onboarding:'Onboarding de Imóveis',gmail:'Gmail',notes:'Anotações',focus:'Foco',projetos:'Projetos',compras:'Registro de Compras',reunioes:'Reuniões e Transcrições'};
 function showPanel(id,btn){
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('panel-'+id).classList.add('active');
   if(btn)btn.classList.add('active');
   document.getElementById('panel-title').textContent=PT[id]||id;
-  if(id==='overview'){renderOvAgenda();if(ls('nx_gdrive'))loadCalendarEvents();}
+  if(id==='overview'){renderOvAgenda();var elDA=document.getElementById('ov-demandas-atrasadas');if(elDA)elDA.textContent=contarDemandasAtrasadas();if(ls('nx_gdrive'))loadCalendarEvents();}
   if(id==='calendar'){loadCalendarEvents();}
   if(id==='gmail'){checkGmailConfig();if(ls('nx_gmail'))loadEmails();}
   if(id==='onboarding'){renderOnboardingKanban();}
   if(id==='projetos'){renderProjetosKanban();}
+  if(id==='reunioes'){renderReunioes();}
   if(id==='compras'){renderCompras();}
   if(id==='focus'){renderFocusInsights();}
+}
+
+function contarDemandasAtrasadas(){
+  const hoje=new Date().toISOString().split('T')[0];
+  let n=0;
+  ATTS.forEach(a=>{(a.demands||[]).forEach(d=>{ if(d.due && d.due<hoje && d.s!=='done' && d.s!=='concluida') n++; });});
+  return n;
 }
 
 function greet(){
@@ -287,8 +302,9 @@ function renderKPIs(){
   // overview
   document.getElementById('ov-kpi').textContent=g+'%';
   document.getElementById('ov-band').innerHTML='Bandeira '+bandHTML(band.name);
-  document.getElementById('ov-salary').textContent=brl(nv.fixo+vp);
-  document.getElementById('ov-nivel-lbl').textContent=nv.n+' — OTE '+brl(nv.fixo+nv.variavel);
+  var _elSal=document.getElementById('ov-salary'); if(_elSal) _elSal.textContent=brl(nv.fixo+vp);
+  var _elNiv=document.getElementById('ov-nivel-lbl'); if(_elNiv) _elNiv.textContent=nv.n+' — OTE '+brl(nv.fixo+nv.variavel);
+  var elD=document.getElementById('ov-demandas-atrasadas'); if(elD) elD.textContent=contarDemandasAtrasadas();
   // overview mini list
   document.getElementById('ov-kpi-list').innerHTML=KPI_DEFS.map(k=>{
     const p=k.calc(kpiVals[k.id]),ps=p!==null?Math.round(p):null;
@@ -485,11 +501,37 @@ let taskCats=[
 function getCatInfo(id){return taskCats.find(c=>c.id===id)||{id,label:id,color:'#94a3b8'};}
 const PC={high:'var(--vermelha)',med:'var(--amarela)',low:'var(--sage)'};
 
-function renderTasks(f='all'){
-  const list=f==='all'?tasks:tasks.filter(t=>t.cat===f);
+function aplicarFiltroPrazo(lista){
+  const sel=document.getElementById('task-sort-prazo');
+  const modo=sel?sel.value:'';
+  const hoje=new Date().toISOString().split('T')[0];
+  let r=lista.slice();
+  if(modo==='hoje') r=r.filter(t=>t.due===hoje);
+  else if(modo==='atrasadas') r=r.filter(t=>!t.done&&t.due&&t.due<hoje);
+  else if(modo==='prazo-asc') r.sort((a,b)=>(a.due||'9999').localeCompare(b.due||'9999'));
+  else if(modo==='prazo-desc') r.sort((a,b)=>(b.due||'').localeCompare(a.due||''));
+  return r;
+}
+
+function filtrarSequenciaProjetos(lista){
+  const ocultar=new Set();
+  const porProj={};
+  lista.forEach(t=>{ if(t.projetoId){ (porProj[t.projetoId]=porProj[t.projetoId]||[]).push(t); } });
+  Object.values(porProj).forEach(arr=>{
+    const pend=arr.filter(t=>!t.done).sort((a,b)=>a.id-b.id);
+    pend.slice(1).forEach(t=>ocultar.add(t.id));
+  });
+  return lista.filter(t=>!ocultar.has(t.id));
+}
+
+function renderTasks(f){
+  if(f===undefined){const cs=document.getElementById('task-filter-sel');f=cs&&cs.value?cs.value:'all';}
+  let list=f==='all'?tasks:tasks.filter(t=>t.cat===f);
+  list=filtrarSequenciaProjetos(list);
+  list=aplicarFiltroPrazo(list);
   document.getElementById('all-tasks-list').innerHTML=list.map(t=>{
     const cat=getCatInfo(t.cat);
-    return '<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);">'+
+    return '<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);'+(t.done?'opacity:0.5;':'')+'">'+
       '<div style="width:3px;height:36px;border-radius:2px;background:'+(PC[t.prio]||'var(--text3)')+';flex-shrink:0;margin-top:2px;"></div>'+
       '<div onclick="toggleTask('+t.id+')" style="width:18px;height:18px;border-radius:50%;border:1.5px solid '+(t.done?'var(--sage)':'var(--border2)')+';background:'+(t.done?'var(--sage)':'transparent')+';cursor:pointer;flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;font-size:9px;color:'+(t.done?'#fff':'transparent')+';transition:all 0.15s;">'+(t.done?'<i class="fa-solid fa-check"></i>':'')+
       '</div>'+
@@ -572,9 +614,24 @@ function abrirDetalheTask(id){
     ' <span style="font-size:12px;color:var(--text3);">·</span> '+
     '<span style="font-size:12px;color:'+(t.prio==='high'?'var(--vermelha)':t.prio==='med'?'var(--amarela)':'var(--sage)')+';">'+
     (t.prio==='high'?'Alta':t.prio==='med'?'Média':'Baixa')+'</span>';
+  document.getElementById('td-editar').innerHTML=
+    '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:3px;">Prazo</label><input type="date" class="form-input" style="padding:5px 8px;font-size:12.5px;" value="'+(t.due||'')+'" onchange="editarTaskCampo('+t.id+',\'due\',this.value)"></div>'+
+    '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:3px;">Prioridade</label><select class="form-select" style="padding:5px 8px;font-size:12.5px;" onchange="editarTaskCampo('+t.id+',\'prio\',this.value)"><option value="high"'+(t.prio==='high'?' selected':'')+'>Alta</option><option value="med"'+(t.prio==='med'?' selected':'')+'>Média</option><option value="low"'+(t.prio==='low'?' selected':'')+'>Baixa</option></select></div>'+
+    '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:3px;">Categoria</label><select class="form-select" style="padding:5px 8px;font-size:12.5px;" onchange="editarTaskCampo('+t.id+',\'cat\',this.value)">'+taskCats.map(c=>'<option value="'+c.id+'"'+(t.cat===c.id?' selected':'')+'>'+c.label+'</option>').join('')+'</select></div>';
   renderTaskUpdates();
   document.getElementById('modal-task-detalhe').classList.add('open');
   setTimeout(()=>document.getElementById('td-nova-update').focus(),150);
+}
+
+function editarTaskCampo(id,campo,valor){
+  const t=tasks.find(x=>x.id===id);if(!t)return;
+  t[campo]=valor;
+  renderTasks();renderKanban();
+  document.getElementById('td-meta').innerHTML=
+    '<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:'+getCatInfo(t.cat).color+'22;color:'+getCatInfo(t.cat).color+';border:1px solid '+getCatInfo(t.cat).color+'44;">'+getCatInfo(t.cat).label+'</span> '+
+    (t.due?'<span style="font-size:12px;color:var(--text3);"><i class="fa-regular fa-calendar fa-xs"></i> '+fd(t.due)+'</span>':'')+
+    ' <span style="font-size:12px;color:var(--text3);">·</span> '+
+    '<span style="font-size:12px;color:'+(t.prio==='high'?'var(--vermelha)':t.prio==='med'?'var(--amarela)':'var(--sage)')+';">'+(t.prio==='high'?'Alta':t.prio==='med'?'Média':'Baixa')+'</span>';
 }
 
 function renderTaskUpdates(){
@@ -686,8 +743,13 @@ function renderKanban(){
     {id:'doing',  label:'Em Progresso',c:'var(--peach)'},
     {id:'done',   label:'Concluído',   c:'var(--sage)'}
   ];
+  let base=tasks;
+  const cs=document.getElementById('task-filter-sel');
+  if(cs&&cs.value&&cs.value!=='all')base=base.filter(t=>t.cat===cs.value);
+  base=filtrarSequenciaProjetos(base);
+  base=aplicarFiltroPrazo(base);
   document.getElementById('kanban-board').innerHTML=cols.map(col=>{
-    const cards=tasks.filter(t=>t.status===col.id);
+    const cards=base.filter(t=>t.status===col.id);
     return '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:12px;min-height:220px;transition:background 0.15s,border-style 0.15s;" '+
       'ondragover="kanbanDragOver(event)" ondragleave="kanbanDragLeave(event)" ondrop="kanbanDrop(event,\''+col.id+'\')">'+
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'+
@@ -699,7 +761,8 @@ function renderKanban(){
           'ondragstart="kanbanDragStart(event,'+t.id+')" '+
           'ondragend="kanbanDragEnd(event)" '+
           'onclick="abrirDetalheTask('+t.id+')" '+
-          'style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px;margin-bottom:7px;cursor:grab;user-select:none;transition:opacity 0.15s;">'+
+          'style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px;margin-bottom:7px;cursor:grab;user-select:none;transition:opacity 0.15s;'+((col.id==='done'||t.done)?'opacity:0.6;':'')+'">'+
+          '<button onclick="event.stopPropagation();delTask('+t.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;float:right;" title="Apagar"><i class="fa-solid fa-xmark"></i></button>'+
           '<div style="font-size:13px;font-weight:500;margin-bottom:5px;">'+esc(t.text)+'</div>'+
           '<div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;">'+
           '<span style="font-size:9.5px;padding:1px 6px;border-radius:10px;font-weight:600;background:'+cat.color+'22;color:'+cat.color+';">'+cat.label+'</span>'+
@@ -783,11 +846,12 @@ function renderTeam(){
     const media=a.respMes!==null&&a.respMes!==undefined?a.respMes.toFixed(1):null;
     return '<div class="card">'+
       '<div class="card-header">'+
-      '<div class="avatar '+a.av+'" style="width:32px;height:32px;font-size:13px;">'+a.ini+'</div>'+
+      (a.foto ? '<img src="'+esc(a.foto)+'" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;">' : '<div class="avatar '+a.av+'" style="width:32px;height:32px;font-size:13px;">'+a.ini+'</div>')+
       '<div style="flex:1;"><input class="editable" style="font-size:14px;font-weight:600;width:140px;" value="'+esc(a.name)+'" oninput="setAttNome(\''+a.id+'\',this.value)"></div>'+
       '<button onclick="removerMembro(\''+a.id+'\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;" title="Remover"><i class="fa-solid fa-trash"></i></button>'+
       '</div>'+
       '<div class="card-body" style="padding:12px 16px;">'+
+      '<input type="text" class="form-input" style="font-size:11px;padding:4px 6px;margin-bottom:10px;" placeholder="URL da foto..." value="'+esc(a.foto||'')+'" oninput="setAttFoto(\''+a.id+'\',this.value)">'+
       '<div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;">'+
       '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;">R$/hora</label><input type="number" class="editable" style="width:72px;" value="'+a.rate+'" oninput="setAttRate(\''+a.id+'\',this.value)"></div>'+
       '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;">Escala</label><input class="editable" style="width:80px;" value="'+esc(a.escala||'12×36')+'" oninput="setAttEscala(\''+a.id+'\',this.value)"></div>'+
@@ -810,6 +874,7 @@ function renderTeam(){
 }
 
 
+function setAttFoto(id,v){const a=ATTS.find(x=>x.id===id);if(a){a.foto=v;renderTeam();renderTeamOv();}}
 function setResp(id,v){const a=ATTS.find(x=>x.id===id);if(a){a.resp=v;renderTeam();renderTeamOv();}}
 function setNote(id,v){const a=ATTS.find(x=>x.id===id);if(a)a.note=v;}
 
@@ -874,7 +939,8 @@ function renderSalary(){
     {id:'felipe',  name:'Felipe',  cargo:'Head de AI',     av:'av-sky',  ini:'F', fixo:headFixo.felipe||6000,   comissao:headComissao.felipe||0,   isNicole:false},
   ].map(h=>`
     <div class="salary-block">
-      <div class="salary-name"><div class="avatar ${h.av}" style="width:26px;height:26px;font-size:10px;">${h.ini}</div><div><div style="font-size:13px;font-weight:600;">${h.name}</div><div style="font-size:10.5px;color:var(--text3);">${h.cargo}</div></div></div>
+      <div class="salary-name">${headFotos[h.id]?'<img src="'+esc(headFotos[h.id])+'" style="width:26px;height:26px;border-radius:50%;object-fit:cover;">':'<div class="avatar '+h.av+'" style="width:26px;height:26px;font-size:10px;">'+h.ini+'</div>'}<div><div style="font-size:13px;font-weight:600;">${h.name}</div><div style="font-size:10.5px;color:var(--text3);">${h.cargo}</div></div></div>
+      <div class="salary-row"><span class="salary-label">Foto (URL)</span><span class="salary-val"><input type="text" class="editable" style="width:140px;" value="${esc(headFotos[h.id]||'')}" oninput="setHeadFoto('${h.id}',this.value)" placeholder="URL..."></span></div>
       <div class="salary-row"><span class="salary-label">Fixo — 1ª parcela (50%)</span><span class="salary-val">${h.isNicole?brl(Math.round(h.fixo/2)):`<input type="number" class="editable editable-wide" value="${h.fixo}" oninput="setHF('${h.id}',this.value)"> ÷2 = ${brl(Math.round(h.fixo/2))}`}</span></div>
       <div class="salary-row"><span class="salary-label">Fixo — 2ª parcela (50%)</span><span class="salary-val">${brl(Math.round(h.fixo/2))}</span></div>
       ${h.isNicole?'<div class="salary-row"><span class="salary-label">Comissão '+(nicoleComissaoOverride!==null?'(manual)':'(auto KPI)')+'</span><span class="salary-val" style="color:var(--rose);"><input type="number" class="editable editable-wide" value="'+(nicoleComissaoOverride!==null?nicoleComissaoOverride:h.comissao)+'" oninput="setNicoleComissao(this.value)"> '+(nicoleComissaoOverride!==null?'<button onclick="resetNicoleComissao()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:10px;" title="Voltar ao cálculo automático"><i class=\'fa-solid fa-rotate-left\'></i></button>':'')+'</span></div>':`<div class="salary-row"><span class="salary-label">Comissão</span><span class="salary-val" style="color:var(--rose);"><input type="number" class="editable editable-wide" value="${h.comissao}" oninput="setHC('${h.id}',this.value)"></span></div>`}
@@ -897,6 +963,7 @@ function renderSalary(){
 function setWD1(id,v){workDaysP1[id]=parseInt(v)||0;renderSalary();}
 function setWD2(id,v){workDaysP2[id]=parseInt(v)||0;renderSalary();}
 function setHF(id,v){headFixo[id]=parseFloat(v)||0;renderSalary();}
+function setHeadFoto(id,v){headFotos[id]=v;renderSalary();}
 function setHC(id,v){headComissao[id]=parseFloat(v)||0;renderSalary();}
 function setNicoleComissao(v){nicoleComissaoOverride=v===''?null:(parseFloat(v)||0);renderSalary();}
 function resetNicoleComissao(){nicoleComissaoOverride=null;renderSalary();}
@@ -1392,7 +1459,41 @@ async function loadCalendarEvents() {
   }
 }
 
+function setCalView(mode,btn){
+  calViewMode=mode;
+  document.querySelectorAll('#calview-mes,#calview-semana').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  document.getElementById('cal-mes-view').style.display=mode==='mes'?'':'none';
+  document.getElementById('cal-semana-view').style.display=mode==='semana'?'':'none';
+  if(mode==='semana')renderSemana();
+}
+
+function renderSemana(){
+  const el=document.getElementById('cal-semana-view');if(!el)return;
+  const hoje=new Date();
+  const diaSemana=hoje.getDay();
+  const inicio=new Date(hoje); inicio.setDate(hoje.getDate()-diaSemana); // domingo
+  const dias=[];
+  for(let i=0;i<7;i++){const d=new Date(inicio);d.setDate(inicio.getDate()+i);dias.push(d);}
+  const nomes=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  const cores=['var(--sky)','var(--sage)','var(--rose)','var(--lavender)','var(--peach)','var(--gold)','var(--sky)'];
+  el.innerHTML='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;">'+dias.map((d,idx)=>{
+    const ds=d.toISOString().split('T')[0];
+    const ehHoje=ds===hoje.toISOString().split('T')[0];
+    const evs=(_gcalTodosEventos||[]).filter(ev=>{const s=ev.start&&(ev.start.dateTime||ev.start.date);return s&&s.startsWith(ds);});
+    const tks=tasks.filter(t=>!t.done&&t.due===ds);
+    return '<div style="background:var(--bg2);border:1px solid '+(ehHoje?'var(--rose)':'var(--border)')+';border-radius:var(--r-sm);padding:8px;min-height:160px;">'+
+      '<div style="font-size:10px;color:var(--text3);text-transform:uppercase;">'+nomes[idx]+'</div>'+
+      '<div style="font-size:16px;font-weight:700;margin-bottom:6px;'+(ehHoje?'color:var(--rose);':'')+'">'+d.getDate()+'</div>'+
+      evs.map(ev=>{const s=ev.start&&(ev.start.dateTime||ev.start.date);const h=s&&ev.start.dateTime?new Date(s).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'';return '<div style="background:'+cores[idx]+'22;border-left:2px solid '+cores[idx]+';border-radius:3px;padding:3px 5px;margin-bottom:3px;font-size:10.5px;">'+(h?'<b>'+h+'</b> ':'')+esc(ev.summary||'Evento')+'</div>';}).join('')+
+      tks.map(t=>'<div style="background:var(--bg3);border-left:2px solid var(--text3);border-radius:3px;padding:3px 5px;margin-bottom:3px;font-size:10.5px;">✓ '+esc(t.text)+'</div>').join('')+
+      '</div>';
+  }).join('')+'</div>';
+}
+
 function renderCalendarEvents(events) {
+  _gcalTodosEventos = events || [];
+  if (calViewMode === 'semana') renderSemana();
   const evList = document.getElementById('gcal-events-list');
   if (!evList) return;
   if (!events || events.length === 0) {
@@ -2144,6 +2245,54 @@ let PRECOS_ITENS = {
   'Detector de Fumaça': 59.90,
 };
 
+// ═══════════════════ PERSISTÊNCIA ═══════════════════
+const _PERSIST_KEYS = {
+  nx_tasks:()=>tasks, nx_imoveis:()=>imoveis, nx_notes:()=>notes,
+  nx_compras:()=>comprasList, nx_projetos:()=>projetos, nx_atts:()=>ATTS,
+  nx_workP1:()=>workDaysP1, nx_workP2:()=>workDaysP2,
+  nx_headfixo:()=>headFixo, nx_headcom:()=>headComissao, nx_headfotos:()=>headFotos,
+  nx_kpivals:()=>kpiVals, nx_kpisub:()=>kpiSubVals,
+  nx_taskcats:()=>taskCats, nx_catalog:()=>imovelsCatalog,
+  nx_precos:()=>PRECOS_ITENS, nx_niveldx:()=>selNivelIdx,
+  nx_nicolecom:()=>nicoleComissaoOverride, nx_nextatt:()=>nextAttId,
+  nx_transcricoes:()=>transcricoes
+};
+
+function saveAll(){
+  try{
+    for(const k in _PERSIST_KEYS){
+      localStorage.setItem(k, JSON.stringify(_PERSIST_KEYS[k]()));
+    }
+  }catch(e){ console.warn('saveAll falhou', e); }
+}
+
+function loadAll(){
+  try{
+    const g=(k)=>{ const v=localStorage.getItem(k); return v===null?undefined:JSON.parse(v); };
+    let v;
+    v=g('nx_tasks');      if(Array.isArray(v)) tasks=v;
+    v=g('nx_imoveis');    if(Array.isArray(v)) imoveis=v;
+    v=g('nx_notes');      if(Array.isArray(v)) notes=v;
+    v=g('nx_compras');    if(Array.isArray(v)) comprasList=v;
+    v=g('nx_projetos');   if(Array.isArray(v)) projetos=v;
+    v=g('nx_atts');       if(Array.isArray(v)&&v.length) ATTS=v;
+    v=g('nx_workP1');     if(v&&typeof v==='object') workDaysP1=v;
+    v=g('nx_workP2');     if(v&&typeof v==='object') workDaysP2=v;
+    v=g('nx_headfixo');   if(v&&typeof v==='object') headFixo=v;
+    v=g('nx_headcom');    if(v&&typeof v==='object') headComissao=v;
+    v=g('nx_headfotos');  if(v&&typeof v==='object') headFotos=v;
+    v=g('nx_kpivals');    if(v&&typeof v==='object') kpiVals=v;
+    v=g('nx_kpisub');     if(v&&typeof v==='object') kpiSubVals=v;
+    v=g('nx_taskcats');   if(Array.isArray(v)&&v.length) taskCats=v;
+    v=g('nx_catalog');    if(Array.isArray(v)&&v.length) imovelsCatalog=v;
+    v=g('nx_precos');     if(v&&typeof v==='object') PRECOS_ITENS=v;
+    v=g('nx_niveldx');    if(typeof v==='number') selNivelIdx=v;
+    v=g('nx_nicolecom');  if(v!==undefined) nicoleComissaoOverride=v;
+    v=g('nx_nextatt');    if(typeof v==='number') nextAttId=v;
+    v=g('nx_transcricoes'); if(Array.isArray(v)) transcricoes=v;
+  }catch(e){ console.warn('loadAll falhou', e); }
+}
+
 let PRECOS_ENXOVAL = {
   'Jogo de Cama Basic Percalle': {solteiro:259, casal:309, queen:319, king:379},
   'Cobertor Aspen II':           {solteiro:98,  casal:144, queen:158, king:192},
@@ -2177,7 +2326,7 @@ const OB_STATUS_COLORS={
 function abrirNovoImovel(){
   const im={
     id:Date.now(),nome:'',endereco:'',status:'contrato',dataCriacao:new Date().toISOString(),
-    proprietarioNome:'',proprietarioTel:'',comissaoWecare:20,plataformas:[],
+    proprietarioNome:'',proprietarioTel:'',comissaoWecare:20,comissaoBase:'liquida',linkRelatorio:'',plataformas:[],
     quartos:'',banheiros:'',camas:[],
     seguroEasyCover:false,kitAmenities:false,internetClaro:false,ecohost:false,fechaduraEletronica:false,
     ops:{fotos:{data:'',responsavel:'',hora:''},limpeza:{data:'',responsavel:'',hora:''},vistoria:{data:'',responsavel:'',hora:''}},
@@ -2279,7 +2428,7 @@ function obAbaDados(im){
     '<div class="form-group"><label class="form-label">Endereço</label><input type="text" class="form-input" value="'+esc(im.endereco)+'" placeholder="Endereço completo..." oninput="salvarCampoImovel('+im.id+',\'endereco\',this.value)"></div>'+
     '<div class="form-row"><div class="form-group"><label class="form-label">Nome do Proprietário</label><input type="text" class="form-input" value="'+esc(im.proprietarioNome)+'" placeholder="Nome..." oninput="salvarCampoImovel('+im.id+',\'proprietarioNome\',this.value)"></div>'+
     '<div class="form-group"><label class="form-label">Telefone</label><input type="text" class="form-input" value="'+esc(im.proprietarioTel)+'" placeholder="(00) 00000-0000" oninput="salvarCampoImovel('+im.id+',\'proprietarioTel\',this.value)"></div></div>'+
-    '<div class="form-group"><label class="form-label">Comissão WeCare (%)</label><input type="number" class="form-input" style="width:120px;" value="'+(im.comissaoWecare||20)+'" oninput="salvarCampoImovel('+im.id+',\'comissaoWecare\',this.value)"></div>'+
+    '<div class="form-group"><label class="form-label">Comissão WeCare</label><div style="display:flex;align-items:center;gap:8px;"><input type="number" class="form-input" style="width:90px;" value="'+(im.comissaoWecare||20)+'" oninput="salvarCampoImovel('+im.id+',\'comissaoWecare\',this.value)"><span style="font-size:13px;color:var(--text3);">%</span><select class="form-select" style="width:auto;" onchange="salvarCampoImovel('+im.id+',\'comissaoBase\',this.value)"><option value="liquida"'+((im.comissaoBase||'liquida')==='liquida'?' selected':'')+'>da Receita Líquida</option><option value="bruta"'+(im.comissaoBase==='bruta'?' selected':'')+'>da Receita Bruta</option></select></div></div>'+
     '<div class="form-group"><label class="form-label">Plataformas</label><div style="display:flex;gap:10px;flex-wrap:wrap;">'+
     plats.map(p=>'<label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;"><input type="checkbox" '+(im.plataformas&&im.plataformas.includes(p)?'checked':'')+' onchange="obTogglePlat('+im.id+',\''+p+'\',this.checked)"> '+platLabels[p]+'</label>').join('')+
     '</div></div>'+
@@ -2551,6 +2700,7 @@ function obAbaFinal(im){
     )+
     '</div>'+
     '<div class="form-group"><label class="form-label">Link Fotos Drive</label><input type="text" class="form-input" value="'+esc(im.linkFotos||'')+'" placeholder="https://drive.google.com/..." oninput="salvarCampoImovel('+im.id+',\'linkFotos\',this.value)"></div>'+
+    '<div class="form-group"><label class="form-label">Link do Relatório (Drive)</label><input type="text" class="form-input" value="'+esc(im.linkRelatorio||'')+'" placeholder="https://drive.google.com/..." oninput="salvarCampoImovel('+im.id+',\'linkRelatorio\',this.value)"></div>'+
     '<div class="form-group"><label class="form-label">Formulário do Imóvel</label><div style="font-size:13px;color:var(--text3);padding:8px 12px;background:var(--bg3);border-radius:var(--r-sm);border:1px solid var(--border);">Subir manualmente no Drive</div></div>'+
     '<div class="form-row">'+
     '<div class="form-row">'+
@@ -3038,7 +3188,7 @@ function renderOnboardingKanban(){
   const ativos=imoveis.filter(im=>im.status!=='perdido');
   el.innerHTML=OB_COLS.map(col=>{
     const cards=ativos.filter(im=>im.status===col.id);
-    return '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:10px;min-height:180px;">'+
+    return '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:8px;min-height:140px;">'+
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'+
       '<div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:'+col.color+';">'+col.label+'</div>'+
       '<div style="font-size:11px;background:var(--bg3);padding:1px 6px;border-radius:10px;color:var(--text3);">'+cards.length+'</div></div>'+
@@ -3060,7 +3210,8 @@ function renderOnboardingKanban(){
           }
         }
         const borderColor=im.dataEnvioParaCriacao&&im.status!=='ativo'&&(new Date(im.dataEnvioParaCriacao).getTime()+(im.prazoAtivacaoHoras||24)*3600*1000)<Date.now()?'2px solid var(--vermelha)':'1px solid var(--border)';
-        return '<div onclick="abrirImovelModal('+im.id+')" style="background:var(--bg3);border:'+borderColor+';border-radius:var(--r-sm);padding:12px;cursor:pointer;margin-bottom:8px;transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'var(--bg3)\'">'+
+        const cardOpacity=im.status==='ativo'?'opacity:0.6;':'';
+        return '<div onclick="abrirImovelModal('+im.id+')" style="background:var(--bg3);border:'+borderColor+';border-radius:var(--r-sm);padding:9px;margin-bottom:6px;cursor:pointer;'+cardOpacity+'transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'var(--bg3)\'">'+
           badgePrazo+
           '<div style="font-size:13px;font-weight:600;margin-bottom:3px;">'+esc(im.nome||'(sem nome)')+'</div>'+
           '<div style="font-size:11px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:5px;">'+esc(im.endereco||'Endereço não informado')+'</div>'+
@@ -3143,6 +3294,12 @@ function projMudarAba(aba,btn){
       '</div>'+
       '<div class="form-group"><label class="form-label">Colaboradores</label><input class="form-input" value="'+esc(p.colaboradores||'')+'" placeholder="Ex: Gabriela, Felipe, Nicole" onchange="const pr=projetos.find(x=>x.id===projetoAtivo);if(pr)pr.colaboradores=this.value;"></div>'+
       '<div class="form-group"><label class="form-label">Objetivos</label><textarea class="form-input" rows="5" placeholder="Descreva os objetivos do projeto..." onchange="const pr=projetos.find(x=>x.id===projetoAtivo);if(pr)pr.objetivos=this.value;">'+esc(p.objetivos||'')+'</textarea></div>';
+    const reuVinc=transcricoes.filter(r=>String(r.projetoId)===String(p.id));
+    if(reuVinc.length){
+      el.innerHTML+='<div class="form-group" style="border-top:1px solid var(--border);padding-top:12px;"><label class="form-label">Reuniões vinculadas</label>'+
+        reuVinc.map(r=>'<div onclick="closeModal(\'modal-projeto\');abrirReuniaoModal('+r.id+')" style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);cursor:pointer;font-size:13px;"><i class="fa-solid fa-microphone-lines" style="color:var(--rose);"></i>'+esc(r.titulo||'(sem título)')+(r.data?'<span style="font-size:11px;color:var(--text3);margin-left:auto;">'+fd(r.data)+'</span>':'')+'</div>').join('')+
+        '</div>';
+    }
   } else if(aba==='notas'){
     el.innerHTML='<div class="form-group"><label class="form-label" style="font-size:11px;color:var(--text3);">Espaço livre para anotações — funciona como um documento</label>'+
       '<textarea class="form-input" rows="18" style="font-size:13.5px;line-height:1.8;font-family:var(--font-body);resize:vertical;" placeholder="Escreva aqui suas anotações, ideias, atas de reunião..." oninput="const pr=projetos.find(x=>x.id===projetoAtivo);if(pr)pr.notas=this.value;">'+esc(p.notas||'')+'</textarea></div>';
@@ -3171,6 +3328,119 @@ function salvarProjeto(){
   renderProjetosKanban();
   showToast('Projeto salvo!','sage');
   closeModal('modal-projeto');
+}
+
+// ═══════════════════ REUNIÕES ═══════════════════
+function abrirNovaReuniao(){
+  const r={id:Date.now(),titulo:'',data:new Date().toISOString().split('T')[0],link:'',texto:'',resumo:'',projetoId:'',taskId:'',updates:[]};
+  transcricoes.unshift(r);
+  transcricaoAtiva=r.id;
+  abrirReuniaoModal(r.id);
+  renderReunioes();
+}
+
+function abrirReuniaoModal(id){
+  const r=transcricoes.find(x=>x.id===id);if(!r)return;
+  transcricaoAtiva=id;
+  document.getElementById('r-titulo').value=r.titulo||'';
+  document.getElementById('r-data').value=r.data||'';
+  document.getElementById('r-link').value=r.link||'';
+  document.getElementById('r-texto').value=r.texto||'';
+  document.getElementById('r-resumo').value=r.resumo||'';
+  const selP=document.getElementById('r-projeto');
+  selP.innerHTML='<option value="">— Nenhum —</option>'+projetos.map(p=>'<option value="'+p.id+'"'+(String(r.projetoId)===String(p.id)?' selected':'')+'>'+esc(p.nome||'Projeto')+'</option>').join('');
+  const selT=document.getElementById('r-tarefa');
+  selT.innerHTML='<option value="">— Nenhuma —</option>'+tasks.filter(t=>!t.done).map(t=>'<option value="'+t.id+'"'+(String(r.taskId)===String(t.id)?' selected':'')+'>'+esc(t.text)+'</option>').join('');
+  renderReuniaoUpdates();
+  document.getElementById('modal-reuniao').classList.add('open');
+}
+
+function lerArquivoTranscricao(event){
+  const file=event.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(e){ document.getElementById('r-texto').value=e.target.result; };
+  reader.readAsText(file);
+}
+
+async function gerarResumoReuniao(){
+  const texto=document.getElementById('r-texto').value.trim();
+  if(!texto){showToast('Cole a transcrição ou anotações primeiro.','peach');return;}
+  showToast('Gerando resumo...','sage');
+  try{
+    const resumo=await callAI(
+      'Você é um assistente que resume reuniões de forma clara e objetiva em português. Produza: 1) um resumo breve, 2) principais decisões, 3) próximos passos/tarefas. Use markdown simples.',
+      [{role:'user',content:'Resuma esta reunião:\n\n'+texto.substring(0,12000)}],
+      1500
+    );
+    document.getElementById('r-resumo').value=resumo;
+    showToast('Resumo gerado!','sage');
+  }catch(e){
+    showToast('Erro ao gerar resumo: configure a chave de IA nas configurações.','vermelha');
+  }
+}
+
+function salvarReuniao(){
+  const r=transcricoes.find(x=>x.id===transcricaoAtiva);if(!r)return;
+  r.titulo=document.getElementById('r-titulo').value.trim();
+  r.data=document.getElementById('r-data').value;
+  r.link=document.getElementById('r-link').value.trim();
+  r.texto=document.getElementById('r-texto').value;
+  r.resumo=document.getElementById('r-resumo').value;
+  r.projetoId=document.getElementById('r-projeto').value;
+  r.taskId=document.getElementById('r-tarefa').value;
+  renderReunioes();
+  showToast('Reunião salva!','sage');
+  closeModal('modal-reuniao');
+}
+
+function apagarReuniao(){
+  const r=transcricoes.find(x=>x.id===transcricaoAtiva);if(!r)return;
+  if(!confirm('Apagar "'+(r.titulo||'esta reunião')+'"?'))return;
+  transcricoes=transcricoes.filter(x=>x.id!==transcricaoAtiva);
+  closeModal('modal-reuniao');
+  renderReunioes();
+  showToast('Reunião apagada.','peach');
+}
+
+function adicionarUpdateReuniao(){
+  const r=transcricoes.find(x=>x.id===transcricaoAtiva);if(!r)return;
+  const txt=document.getElementById('r-nova-update').value.trim();if(!txt)return;
+  if(!r.updates)r.updates=[];
+  r.updates.push({texto:txt,data:new Date().toISOString()});
+  document.getElementById('r-nova-update').value='';
+  renderReuniaoUpdates();
+}
+
+function renderReuniaoUpdates(){
+  const r=transcricoes.find(x=>x.id===transcricaoAtiva);if(!r)return;
+  const ups=r.updates||[];
+  document.getElementById('r-updates-list').innerHTML=ups.length===0
+    ?'<div style="font-size:12px;color:var(--text3);text-align:center;padding:8px;">Nenhuma atualização.</div>'
+    :ups.map((u,i)=>'<div style="padding:7px 0;border-bottom:1px solid var(--border);"><div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:var(--text3);">'+new Date(u.data).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</span><button onclick="removerUpdateReuniao('+i+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;"><i class="fa-solid fa-xmark"></i></button></div><div style="font-size:12.5px;white-space:pre-wrap;">'+esc(u.texto)+'</div></div>').reverse().join('');
+}
+
+function removerUpdateReuniao(idx){
+  const r=transcricoes.find(x=>x.id===transcricaoAtiva);if(!r||!r.updates)return;
+  r.updates.splice(idx,1);renderReuniaoUpdates();
+}
+
+function renderReunioes(){
+  const el=document.getElementById('reunioes-grid');if(!el)return;
+  if(transcricoes.length===0){el.innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--text3);font-size:13px;padding:30px;">Nenhuma reunião registrada. Clique em "Nova Reunião".</div>';return;}
+  el.innerHTML=transcricoes.map(r=>{
+    const proj=r.projetoId?projetos.find(p=>String(p.id)===String(r.projetoId)):null;
+    const tk=r.taskId?tasks.find(t=>String(t.id)===String(r.taskId)):null;
+    return '<div onclick="abrirReuniaoModal('+r.id+')" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:14px;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\'var(--bg2)\'">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><i class="fa-solid fa-microphone-lines" style="color:var(--rose);"></i><div style="font-size:14px;font-weight:600;flex:1;">'+esc(r.titulo||'(sem título)')+'</div></div>'+
+      (r.data?'<div style="font-size:11px;color:var(--text3);margin-bottom:6px;"><i class="fa-regular fa-calendar"></i> '+fd(r.data)+'</div>':'')+
+      (r.resumo?'<div style="font-size:12px;color:var(--text2);max-height:60px;overflow:hidden;margin-bottom:8px;">'+esc(r.resumo.substring(0,140))+'...</div>':'<div style="font-size:12px;color:var(--text3);margin-bottom:8px;">Sem resumo ainda.</div>')+
+      '<div style="display:flex;gap:5px;flex-wrap:wrap;">'+
+      (r.link?'<span style="font-size:9.5px;background:var(--sky-light);color:var(--sky);padding:1px 6px;border-radius:8px;"><i class="fa-solid fa-paperclip"></i> arquivo</span>':'')+
+      (proj?'<span style="font-size:9.5px;background:var(--lav-light);color:var(--lavender);padding:1px 6px;border-radius:8px;">'+esc(proj.nome||'projeto')+'</span>':'')+
+      (tk?'<span style="font-size:9.5px;background:var(--sage-light);color:var(--sage);padding:1px 6px;border-radius:8px;">✓ tarefa</span>':'')+
+      ((r.updates&&r.updates.length)?'<span style="font-size:9.5px;color:var(--text3);"><i class="fa-solid fa-message"></i> '+r.updates.length+'</span>':'')+
+      '</div></div>';
+  }).join('');
 }
 
 function renderProjetosKanban(){
@@ -3473,3 +3743,8 @@ function escQ(s) { return String(s).replace(/'/g,"\'").replace(/"/g,'&quot;'); }
 const toastStyle = document.createElement('style');
 toastStyle.textContent = '@keyframes toastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}';
 document.head.appendChild(toastStyle);
+
+// ═══════════════════ AUTOSAVE ═══════════════════
+setInterval(saveAll, 4000);
+window.addEventListener('beforeunload', saveAll);
+window.addEventListener('visibilitychange', function(){ if(document.visibilityState==='hidden') saveAll(); });

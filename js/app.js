@@ -851,7 +851,7 @@ function renderTeam(){
       '<button onclick="removerMembro(\''+a.id+'\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;" title="Remover"><i class="fa-solid fa-trash"></i></button>'+
       '</div>'+
       '<div class="card-body" style="padding:12px 16px;">'+
-      '<input type="text" class="form-input" style="font-size:11px;padding:4px 6px;margin-bottom:10px;" placeholder="URL da foto..." value="'+esc(a.foto||'')+'" oninput="setAttFoto(\''+a.id+'\',this.value)">'+
+      '<label style="font-size:11px;color:var(--rose);cursor:pointer;display:inline-block;margin-bottom:10px;"><i class="fa-solid fa-camera"></i> '+(a.foto?'Trocar foto':'Adicionar foto')+'<input type="file" accept="image/*" style="display:none;" onchange="uploadAttFoto(\''+a.id+'\',event)"></label>'+
       '<div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;">'+
       '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;">R$/hora</label><input type="number" class="editable" style="width:72px;" value="'+a.rate+'" oninput="setAttRate(\''+a.id+'\',this.value)"></div>'+
       '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;">Escala</label><input class="editable" style="width:80px;" value="'+esc(a.escala||'12×36')+'" oninput="setAttEscala(\''+a.id+'\',this.value)"></div>'+
@@ -875,6 +875,32 @@ function renderTeam(){
 
 
 function setAttFoto(id,v){const a=ATTS.find(x=>x.id===id);if(a){a.foto=v;renderTeam();renderTeamOv();}}
+function _lerImagemReduzida(file, cb){
+  const reader=new FileReader();
+  reader.onload=function(e){
+    const img=new Image();
+    img.onload=function(){
+      const max=200; let w=img.width,h=img.height;
+      if(w>h){ if(w>max){h=h*max/w;w=max;} } else { if(h>max){w=w*max/h;h=max;} }
+      const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      cb(canvas.toDataURL('image/jpeg',0.8));
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+function uploadAttFoto(id,event){
+  const file=event.target.files[0];if(!file)return;
+  _lerImagemReduzida(file,function(dataUrl){
+    const a=ATTS.find(x=>x.id===id);
+    if(a){a.foto=dataUrl;renderTeam();renderTeamOv();if(typeof saveAll==='function')saveAll();}
+  });
+}
+function uploadHeadFoto(id,event){
+  const file=event.target.files[0];if(!file)return;
+  _lerImagemReduzida(file,function(dataUrl){headFotos[id]=dataUrl;renderSalary();if(typeof saveAll==='function')saveAll();});
+}
 function setResp(id,v){const a=ATTS.find(x=>x.id===id);if(a){a.resp=v;renderTeam();renderTeamOv();}}
 function setNote(id,v){const a=ATTS.find(x=>x.id===id);if(a)a.note=v;}
 
@@ -940,7 +966,7 @@ function renderSalary(){
   ].map(h=>`
     <div class="salary-block">
       <div class="salary-name">${headFotos[h.id]?'<img src="'+esc(headFotos[h.id])+'" style="width:26px;height:26px;border-radius:50%;object-fit:cover;">':'<div class="avatar '+h.av+'" style="width:26px;height:26px;font-size:10px;">'+h.ini+'</div>'}<div><div style="font-size:13px;font-weight:600;">${h.name}</div><div style="font-size:10.5px;color:var(--text3);">${h.cargo}</div></div></div>
-      <div class="salary-row"><span class="salary-label">Foto (URL)</span><span class="salary-val"><input type="text" class="editable" style="width:140px;" value="${esc(headFotos[h.id]||'')}" oninput="setHeadFoto('${h.id}',this.value)" placeholder="URL..."></span></div>
+      <div class="salary-row"><span class="salary-label">Foto</span><span class="salary-val"><label style="font-size:11px;color:var(--rose);cursor:pointer;"><i class="fa-solid fa-camera"></i> ${headFotos[h.id]?'Trocar foto':'Adicionar foto'}<input type="file" accept="image/*" style="display:none;" onchange="uploadHeadFoto('${h.id}',event)"></label></span></div>
       <div class="salary-row"><span class="salary-label">Fixo — 1ª parcela (50%)</span><span class="salary-val">${h.isNicole?brl(Math.round(h.fixo/2)):`<input type="number" class="editable editable-wide" value="${h.fixo}" oninput="setHF('${h.id}',this.value)"> ÷2 = ${brl(Math.round(h.fixo/2))}`}</span></div>
       <div class="salary-row"><span class="salary-label">Fixo — 2ª parcela (50%)</span><span class="salary-val">${brl(Math.round(h.fixo/2))}</span></div>
       ${h.isNicole?'<div class="salary-row"><span class="salary-label">Comissão '+(nicoleComissaoOverride!==null?'(manual)':'(auto KPI)')+'</span><span class="salary-val" style="color:var(--rose);"><input type="number" class="editable editable-wide" value="'+(nicoleComissaoOverride!==null?nicoleComissaoOverride:h.comissao)+'" oninput="setNicoleComissao(this.value)"> '+(nicoleComissaoOverride!==null?'<button onclick="resetNicoleComissao()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:10px;" title="Voltar ao cálculo automático"><i class=\'fa-solid fa-rotate-left\'></i></button>':'')+'</span></div>':`<div class="salary-row"><span class="salary-label">Comissão</span><span class="salary-val" style="color:var(--rose);"><input type="number" class="editable editable-wide" value="${h.comissao}" oninput="setHC('${h.id}',this.value)"></span></div>`}

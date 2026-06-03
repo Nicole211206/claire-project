@@ -77,6 +77,7 @@ function verificarLogin(){
     <button class="nav-item active" onclick="showPanel('overview',this)"><i class="fa-solid fa-gauge-simple-high"></i> Visão Geral</button>
     <button class="nav-item" onclick="showPanel('kpis',this)"><i class="fa-solid fa-chart-line"></i> Meus KPIs</button>
     <button class="nav-item" onclick="showPanel('performance',this)"><i class="fa-solid fa-chart-column"></i> Performance</button>
+    <button class="nav-item" onclick="showPanel('avaliacoes',this)"><i class="fa-solid fa-star"></i> Avaliações</button>
     <button class="nav-item" onclick="showPanel('tasks',this)"><i class="fa-solid fa-list-check"></i> Tarefas <span class="nav-badge" id="tasks-badge">0</span></button>
     <button class="nav-item" onclick="showPanel('calendar',this)"><i class="fa-regular fa-calendar-days"></i> Calendário</button>
     <button class="nav-item" onclick="showPanel('ai',this)"><i class="fa-solid fa-wand-magic-sparkles"></i> Assistente IA</button>
@@ -239,6 +240,30 @@ function verificarLogin(){
         <p style="color:var(--text3);font-size:13px;margin-top:2px;">Visão geral de KPIs e projetos</p>
       </div>
       <div id="performance-body"></div>
+    </div>
+
+    <!-- ── AVALIAÇÕES (HOSTAWAY) ── -->
+    <div class="panel" id="panel-avaliacoes">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
+        <div>
+          <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Avaliações de Hóspedes</h2>
+          <p style="color:var(--text3);font-size:13px;margin-top:2px;">Sincronizado com o Hostaway · alimenta o KPI de avaliações</p>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn" onclick="sincronizarAvaliacoes()"><i class="fa-solid fa-rotate"></i> Sincronizar</button>
+          <button class="btn btn-rose" onclick="aplicarAvaliacoesNoKPI()"><i class="fa-solid fa-chart-line"></i> Atualizar KPI</button>
+        </div>
+      </div>
+      <div id="avaliacoes-resumo" class="metrics-grid" style="margin-bottom:16px;"></div>
+      <div class="card" style="margin-bottom:14px;"><div class="card-body" style="padding:12px 16px;">
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+          <div><label style="font-size:10.5px;color:var(--text3);text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px;">Canal</label><select class="form-select" id="av-f-canal" style="font-size:12.5px;padding:5px 8px;" onchange="avFiltroCanal=this.value;renderAvaliacoes();"><option value="">Todos</option></select></div>
+          <div><label style="font-size:10.5px;color:var(--text3);text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px;">Mín. estrelas</label><select class="form-select" id="av-f-min" style="font-size:12.5px;padding:5px 8px;" onchange="avFiltroMinEstrelas=parseFloat(this.value)||0;renderAvaliacoes();"><option value="0">Todas</option><option value="5">5★</option><option value="4">4★+</option><option value="3">3★+</option><option value="2">2★+</option><option value="1">1★+</option></select></div>
+          <div><label style="font-size:10.5px;color:var(--text3);text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px;">Ordenar</label><select class="form-select" id="av-f-ord" style="font-size:12.5px;padding:5px 8px;" onchange="avOrdenar=this.value;renderAvaliacoes();"><option value="recentes">Mais recentes</option><option value="estrelas-desc">Mais estrelas</option><option value="estrelas-asc">Menos estrelas</option></select></div>
+          <label style="font-size:12.5px;display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="av-f-wecare" onchange="avSoWecare=this.checked;renderAvaliacoes();"> ⭐ Só elogios à WeCare</label>
+        </div>
+      </div></div>
+      <div id="avaliacoes-lista"></div>
     </div>
 
     <!-- ── TAREFAS ── -->
@@ -699,6 +724,13 @@ function verificarLogin(){
       O token Google expira em ~1h. Clique em <strong>Conectar Google</strong> novamente quando precisar renovar. Certifique-se de adicionar sua URL do Netlify como origem autorizada no Google Cloud.
     </div>
 
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin:14px 0 8px;">Hostaway (Avaliações)</div>
+    <div class="form-group">
+      <label class="form-label">URL do Worker (proxy)</label>
+      <input type="text" class="form-input" id="s-hostaway-url" placeholder="https://claire-hostaway.xxx.workers.dev">
+      <div style="font-size:11px;color:var(--text3);margin-top:4px;">Endereço do Cloudflare Worker que o TI vai publicar (veja o arquivo hostaway-worker.js). Conecta as avaliações ao KPI.</div>
+    </div>
+
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-settings')">Cancelar</button>
       <button class="btn btn-rose" onclick="saveSettings()"><i class="fa-solid fa-check"></i> Salvar</button>
@@ -970,6 +1002,6 @@ function verificarLogin(){
   </div>
 </div>
 
-<script src="js/app.js?v=7"></script>
+<script src="js/app.js?v=8"></script>
 </body>
 </html>

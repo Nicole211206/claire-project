@@ -122,6 +122,8 @@ let chatHist=[];
 let _gcalEventosHoje=[]; // eventos do Google Calendar carregados
 let calViewMode='mes';
 let _gcalTodosEventos=[]; // todos os eventos carregados do Google
+let avaliacoes=[]; // avaliações carregadas do Hostaway
+let avFiltroCanal='', avFiltroMinEstrelas=0, avOrdenar='recentes', avSoWecare=false;
 
 // ═══════════════════ INIT ═══════════════════
 document.addEventListener('DOMContentLoaded',()=>{
@@ -149,12 +151,13 @@ document.addEventListener('DOMContentLoaded',()=>{
   renderCompras();
   renderFocusInsights();
   renderPerformance();
+  renderAvaliacoes();
   const recEl=document.getElementById('d-recorrente');
   if(recEl)recEl.addEventListener('change',function(){document.getElementById('d-recorrencia').style.display=this.checked?'':'none';});
 });
 
 // ═══════════════════ NAV ═══════════════════
-const PT={overview:'Visão Geral',kpis:'Meus KPIs',performance:'Acompanhamento de Performance',tasks:'Tarefas',calendar:'Calendário',ai:'Assistente IA',team:'Equipe',salary:'Salários',drive:'Google Drive',onboarding:'Onboarding de Imóveis',gmail:'Gmail',notes:'Anotações',focus:'Foco',projetos:'Projetos',compras:'Registro de Compras',reunioes:'Reuniões e Transcrições'};
+const PT={overview:'Visão Geral',kpis:'Meus KPIs',performance:'Acompanhamento de Performance',tasks:'Tarefas',calendar:'Calendário',ai:'Assistente IA',team:'Equipe',salary:'Salários',drive:'Google Drive',onboarding:'Onboarding de Imóveis',gmail:'Gmail',notes:'Anotações',focus:'Foco',projetos:'Projetos',compras:'Registro de Compras',reunioes:'Reuniões e Transcrições',avaliacoes:'Avaliações de Hóspedes'};
 function showPanel(id,btn){
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
@@ -170,6 +173,7 @@ function showPanel(id,btn){
   if(id==='compras'){renderCompras();}
   if(id==='focus'){renderFocusInsights();}
   if(id==='performance'){renderPerformance();}
+  if(id==='avaliacoes'){renderAvaliacoes();}
 }
 
 function contarDemandasAtrasadas(){
@@ -1296,6 +1300,7 @@ function openSettings(){
   document.getElementById('s-gemini-key').value=ls('nx_gemini_key')||'';
   toggleAIProvider(ls('nx_ai_provider')||'gemini');
   document.getElementById('s-gclientid').value=ls('nx_gclientid')||'';
+  document.getElementById('s-hostaway-url').value=ls('nx_hostaway_url')||'';
   refreshGoogleStatus();
   document.getElementById('modal-settings').classList.add('open');
 }
@@ -1306,6 +1311,7 @@ function saveSettings(){
   localStorage.setItem('nx_ai_provider',document.getElementById('s-ai-provider').value);
   localStorage.setItem('nx_gemini_key',document.getElementById('s-gemini-key').value.trim());
   localStorage.setItem('nx_gclientid',document.getElementById('s-gclientid').value.trim());
+  localStorage.setItem('nx_hostaway_url',document.getElementById('s-hostaway-url').value.trim());
   document.getElementById('sidebar-name').textContent=name;
   document.getElementById('sidebar-avatar').textContent=name.charAt(0).toUpperCase();
   _applyGoogleStatus();
@@ -2329,7 +2335,8 @@ const _PERSIST_KEYS = {
   nx_taskcats:()=>taskCats, nx_catalog:()=>imovelsCatalog,
   nx_precos:()=>PRECOS_ITENS, nx_niveldx:()=>selNivelIdx,
   nx_nicolecom:()=>nicoleComissaoOverride, nx_nextatt:()=>nextAttId,
-  nx_transcricoes:()=>transcricoes
+  nx_transcricoes:()=>transcricoes, nx_precoenx:()=>PRECOS_ENXOVAL,
+  nx_avaliacoes:()=>avaliacoes
 };
 
 function saveAll(){
@@ -2360,11 +2367,118 @@ function loadAll(){
     v=g('nx_taskcats');   if(Array.isArray(v)&&v.length) taskCats=v;
     v=g('nx_catalog');    if(Array.isArray(v)&&v.length) imovelsCatalog=v;
     v=g('nx_precos');     if(v&&typeof v==='object') PRECOS_ITENS=v;
+    v=g('nx_precoenx');   if(v&&typeof v==='object') PRECOS_ENXOVAL=v;
     v=g('nx_niveldx');    if(typeof v==='number') selNivelIdx=v;
     v=g('nx_nicolecom');  if(v!==undefined) nicoleComissaoOverride=v;
     v=g('nx_nextatt');    if(typeof v==='number') nextAttId=v;
     v=g('nx_transcricoes'); if(Array.isArray(v)) transcricoes=v;
+    v=g('nx_avaliacoes'); if(Array.isArray(v)) avaliacoes=v;
   }catch(e){ console.warn('loadAll falhou', e); }
+}
+
+// ═══════════════════ AVALIAÇÕES (HOSTAWAY) ═══════════════════
+// Palavras que indicam elogio à WeCare / equipe / atendimento
+const WECARE_KEYWORDS = ['wecare','we care','we-care','atendimento','equipe','suporte','anfitri','host','resposta rápida','super atencioso','muito atencioso','prestativ','solícit','solicit'];
+
+function mencionaWecare(texto){
+  if(!texto) return false;
+  const t=texto.toLowerCase();
+  return WECARE_KEYWORDS.some(k=>t.includes(k));
+}
+
+async function sincronizarAvaliacoes(){
+  const url=ls('nx_hostaway_url');
+  if(!url){ showToast('Configure a URL do Worker do Hostaway nas Configurações.','peach'); return; }
+  showToast('Sincronizando avaliações...','sage');
+  try{
+    const resp=await fetch(url.replace(/\/$/,'')+'/reviews');
+    const data=await resp.json();
+    if(data.error){ showToast('Erro do Worker: '+data.error,'vermelha'); return; }
+    avaliacoes=(data.reviews||[]).map(r=>({...r, wecare:mencionaWecare(r.texto)}));
+    renderAvaliacoes();
+    showToast('✅ '+avaliacoes.length+' avaliações carregadas!','sage');
+  }catch(e){
+    showToast('Não foi possível conectar ao Worker. Verifique a URL e se o TI publicou.','vermelha');
+  }
+}
+
+function _avFiltradas(){
+  let r=avaliacoes.slice();
+  if(avFiltroCanal) r=r.filter(a=>a.canal===avFiltroCanal);
+  if(avFiltroMinEstrelas>0) r=r.filter(a=>(a.rating||0)>=avFiltroMinEstrelas);
+  if(avSoWecare) r=r.filter(a=>a.wecare);
+  if(avOrdenar==='estrelas-desc') r.sort((a,b)=>(b.rating||0)-(a.rating||0));
+  else if(avOrdenar==='estrelas-asc') r.sort((a,b)=>(a.rating||0)-(b.rating||0));
+  else r.sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
+  return r;
+}
+
+function renderAvaliacoes(){
+  // popular filtro de canais
+  const selC=document.getElementById('av-f-canal');
+  if(selC){ const canais=[...new Set(avaliacoes.map(a=>a.canal).filter(Boolean))]; const val=avFiltroCanal; selC.innerHTML='<option value="">Todos</option>'+canais.map(c=>'<option value="'+esc(c)+'"'+(c===val?' selected':'')+'>'+esc(c)+'</option>').join(''); }
+  // resumo
+  const resumoEl=document.getElementById('avaliacoes-resumo');
+  if(resumoEl){
+    const comNota=avaliacoes.filter(a=>a.rating!=null);
+    const media=comNota.length?(comNota.reduce((s,a)=>s+a.rating,0)/comNota.length).toFixed(2):'—';
+    const wecareCount=avaliacoes.filter(a=>a.wecare).length;
+    resumoEl.innerHTML=[
+      {l:'Total de Avaliações',v:avaliacoes.length,c:'sky',i:'fa-star'},
+      {l:'Média Geral',v:media+(media!=='—'?'★':''),c:'gold',i:'fa-star-half-stroke'},
+      {l:'Elogios à WeCare',v:wecareCount,c:'rose',i:'fa-heart'},
+    ].map(x=>'<div class="metric-card '+x.c+'"><div class="metric-icon '+x.c+'"><i class="fa-solid '+x.i+'"></i></div><div class="metric-value" style="font-size:24px;">'+x.v+'</div><div class="metric-label">'+x.l+'</div></div>').join('');
+  }
+  // lista
+  const el=document.getElementById('avaliacoes-lista');if(!el)return;
+  const lista=_avFiltradas();
+  if(avaliacoes.length===0){ el.innerHTML='<div class="card"><div class="card-body" style="text-align:center;padding:40px;color:var(--text3);"><i class="fa-solid fa-star" style="font-size:32px;opacity:0.35;margin-bottom:10px;display:block;"></i><div style="font-size:13px;margin-bottom:10px;">Nenhuma avaliação carregada.</div><button class="btn btn-sm btn-rose" onclick="sincronizarAvaliacoes()"><i class="fa-solid fa-rotate"></i> Sincronizar com Hostaway</button><div style="font-size:11px;color:var(--text3);margin-top:10px;">Requer a URL do Worker configurada (veja Configurações).</div></div></div>'; return; }
+  el.innerHTML=lista.map(a=>{
+    const estrelas=a.rating!=null?'★'.repeat(Math.round(a.rating))+'☆'.repeat(Math.max(0,5-Math.round(a.rating))):'';
+    return '<div class="card" style="margin-bottom:8px;'+(a.wecare?'border-left:3px solid var(--rose);':'')+'"><div class="card-body" style="padding:12px 16px;">'+
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:5px;flex-wrap:wrap;">'+
+      '<span style="color:var(--gold);font-size:14px;letter-spacing:1px;">'+estrelas+'</span>'+
+      (a.rating!=null?'<span style="font-size:12px;font-weight:700;">'+a.rating+'</span>':'')+
+      '<span style="font-size:10.5px;background:var(--bg3);padding:1px 7px;border-radius:8px;">'+esc(a.canal||'—')+'</span>'+
+      (a.wecare?'<span style="font-size:10px;background:var(--rose-light);color:var(--rose);padding:1px 7px;border-radius:8px;font-weight:700;"><i class="fa-solid fa-heart"></i> Elogio WeCare</span>':'')+
+      '<span style="margin-left:auto;font-size:11px;color:var(--text3);">'+(a.data?new Date(a.data).toLocaleDateString('pt-BR'):'')+'</span>'+
+      '</div>'+
+      '<div style="font-size:13px;color:var(--text);line-height:1.6;'+(a.wecare?'background:var(--rose-light);border-radius:6px;padding:8px 10px;':'')+'">'+_destacarWecare(esc(a.texto||'(sem comentário)'))+'</div>'+
+      '<div style="font-size:11px;color:var(--text3);margin-top:5px;">'+esc(a.hospede||'')+(a.imovel?' · '+esc(a.imovel):'')+'</div>'+
+      '</div></div>';
+  }).join('');
+}
+
+function _destacarWecare(textoEscapado){
+  let t=textoEscapado;
+  WECARE_KEYWORDS.forEach(k=>{
+    try{ const re=new RegExp('('+k.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'); t=t.replace(re,'<mark style="background:var(--gold);color:#3a2e00;padding:0 2px;border-radius:3px;">$1</mark>'); }catch(e){}
+  });
+  return t;
+}
+
+// Calcula média por canal e joga no KPI de avaliações (av)
+function aplicarAvaliacoesNoKPI(){
+  if(avaliacoes.length===0){ showToast('Sincronize as avaliações primeiro.','peach'); return; }
+  const med=(canalNomes)=>{
+    const arr=avaliacoes.filter(a=>a.rating!=null && canalNomes.includes(a.canal));
+    return arr.length?(arr.reduce((s,a)=>s+a.rating,0)/arr.length):null;
+  };
+  const mAir=med(['Airbnb']);
+  const mBook=med(['Booking.com','Booking']);
+  if(!kpiSubVals.av) kpiSubVals.av={};
+  if(mAir!=null) kpiSubVals.av.airbnb=mAir.toFixed(2);
+  if(mBook!=null) kpiSubVals.av.booking=mBook.toFixed(2);
+  // média geral se não houver separação por canal
+  if(mAir==null && mBook==null){
+    const todas=avaliacoes.filter(a=>a.rating!=null);
+    if(todas.length){ const g=(todas.reduce((s,a)=>s+a.rating,0)/todas.length); kpiSubVals.av.airbnb=g.toFixed(2); }
+  }
+  // recalcular kpiVals.av (média das sub-notas preenchidas)
+  const subs=[kpiSubVals.av.airbnb,kpiSubVals.av.booking].map(x=>parseFloat(x)).filter(x=>!isNaN(x));
+  kpiVals.av=subs.length?(subs.reduce((a,b)=>a+b,0)/subs.length).toFixed(2):null;
+  if(typeof renderKPIs==='function') renderKPIs();
+  showToast('KPI de avaliações atualizado a partir do Hostaway!','sage');
 }
 
 let PRECOS_ENXOVAL = {

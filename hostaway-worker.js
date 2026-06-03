@@ -1,0 +1,102 @@
+/*
+ * ════════════════════════════════════════════════════════════
+ *  CLAIRE × HOSTAWAY — Cloudflare Worker (proxy de avaliações)
+ * ════════════════════════════════════════════════════════════
+ *
+ *  PARA O TIME DE TI:
+ *  Este Worker fica entre a Claire e a API do Hostaway. Ele:
+ *   - Guarda as credenciais do Hostaway em segurança (Secrets do Worker)
+ *   - Resolve o problema de CORS
+ *   - Busca o token e as avaliações, e devolve um JSON limpo pra Claire
+ *
+ *  COMO PUBLICAR (resumo):
+ *  1. Cloudflare Dashboard → Workers & Pages → Create → Worker
+ *  2. Cole este código e faça Deploy
+ *  3. Em Settings → Variables and Secrets, adicione 2 SECRETS:
+ *        HOSTAWAY_ACCOUNT_ID  = (Account ID do Hostaway)
+ *        HOSTAWAY_API_KEY     = (API Key do Hostaway)
+ *  4. (Opcional) Em Settings, restrinja o CORS trocando "*" pela URL da Claire
+ *  5. Copie a URL do Worker (ex: https://claire-hostaway.SEU-SUBDOMINIO.workers.dev)
+ *     e cole nas Configurações da Claire → Hostaway → "URL do Worker"
+ *
+ *  Endpoints expostos:
+ *    GET <worker>/reviews   → lista de avaliações normalizadas
+ *    GET <worker>/health    → teste de conexão
+ */
+
+const HOSTAWAY_BASE = 'https://api.hostaway.com/v1';
+
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    const cors = {
+      'Access-Control-Allow-Origin': '*', // troque por sua URL da Claire para restringir
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    };
+    if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
+
+    try {
+      if (url.pathname.endsWith('/health')) {
+        return json({ ok: true }, cors);
+      }
+      if (url.pathname.endsWith('/reviews')) {
+        const token = await getToken(env);
+        // Hostaway retorna até 'limit' avaliações; ajuste se precisar paginar
+        const r = await fetch(HOSTAWAY_BASE + '/reviews?limit=500&sortOrder=desc', {
+          headers: { 'Authorization': 'Bearer ' + token, 'Cache-control': 'no-cache' },
+        });
+        const data = await r.json();
+        const list = (data.result || []).map(normalizeReview);
+        return json({ reviews: list }, cors);
+      }
+      return json({ error: 'rota não encontrada' }, cors, 404);
+    } catch (e) {
+      return json({ error: String(e && e.message || e) }, cors, 500);
+    }
+  },
+};
+
+async function getToken(env) {
+  const body = new URLSearchParams({
+    grant_type: 'client_credentials',
+    client_id: env.HOSTAWAY_ACCOUNT_ID,
+    client_secret: env.HOSTAWAY_API_KEY,
+    scope: 'general',
+  });
+  const r = await fetch(HOSTAWAY_BASE + '/accessTokens', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Cache-control': 'no-cache' },
+    body: body.toString(),
+  });
+  const d = await r.json();
+  if (!d.access_token) throw new Error('Falha ao obter token do Hostaway: ' + JSON.stringify(d));
+  return d.access_token;
+}
+
+// Mapa de canais do Hostaway (channelId → nome)
+const CANAIS = {
+  2000: 'Direct', 2002: 'HomeAway', 2005: 'Airbnb', 2007: 'Booking.com',
+  2009: 'Expedia', 2010: 'Booking.com', 2013: 'Vrbo', 2015: 'Site Próprio',
+};
+
+function normalizeReview(rv) {
+  return {
+    id: rv.id,
+    rating: rv.rating != null ? rv.rating : (rv.accountId, null),
+    texto: rv.publicReview || rv.privateFeedback || '',
+    hospede: rv.guestName || '',
+    imovel: rv.listingName || '',
+    canalId: rv.channelId || null,
+    canal: CANAIS[rv.channelId] || (rv.channelName || 'Outro'),
+    data: rv.submittedAt || rv.insertedOn || rv.departureDate || '',
+    tipo: rv.type || '',
+  };
+}
+
+function json(obj, cors, status) {
+  return new Response(JSON.stringify(obj), {
+    status: status || 200,
+    headers: { 'Content-Type': 'application/json', ...cors },
+  });
+}

@@ -101,6 +101,8 @@ let nextAttId = 5;
 
 let workDaysP1={patricia:8,sara:8,lisarb:8,lais:8};  // turnos dias 01-15
 let workDaysP2={patricia:7,sara:7,lisarb:7,lais:7};  // turnos dias 16-31
+let turnos=[]; // {id, data:'YYYY-MM-DD', turno:'dia'|'noite', attId, confirmado:false}
+let turnosMesSel=''; // mês selecionado no admin (YYYY-MM)
 let projetos=[];
 let transcricoes=[];
 let transcricaoAtiva=null;
@@ -134,8 +136,10 @@ const MODULOS_LISTA=[
   {id:'ai',label:'Assistente IA'},{id:'team',label:'Equipe'},{id:'salary',label:'Salários'},
   {id:'drive',label:'Google Drive'},{id:'onboarding',label:'Onboarding'},{id:'compras',label:'Compras'},
   {id:'gmail',label:'Gmail'},{id:'projetos',label:'Projetos'},{id:'reunioes',label:'Reuniões'},
-  {id:'notes',label:'Anotações'},{id:'focus',label:'Foco'}
+  {id:'notes',label:'Anotações'},{id:'focus',label:'Foco'},
+  {id:'turnos',label:'Turnos'}
 ];
+function getMinhaAtt(){ const u=getCurrentUser(); if(!u||!u.attId) return null; return ATTS.find(a=>a.id===u.attId)||null; }
 function getCurrentUser(){ try{ return JSON.parse(sessionStorage.getItem('nx_currentuser')||'null'); }catch(e){ return null; } }
 function isAdmin(){ const u=getCurrentUser(); return u && u.perfil==='admin'; }
 function podeAcessar(modId){ const u=getCurrentUser(); if(!u) return false; if(u.perfil==='admin') return true; return (u.modulos||[]).includes(modId); }
@@ -180,6 +184,7 @@ function aplicarPermissoes(){
     const primeiro=MODULOS_LISTA.find(m=>u.perfil==='admin'||podeAcessar(m.id));
     if(primeiro){ const btn=document.querySelector('#sidebar .nav-item[onclick*="showPanel(\''+primeiro.id+'\'"]'); showPanel(primeiro.id, btn||null); }
   }
+  if(typeof renderOverview==='function') renderOverview();
 }
 
 function logout(){
@@ -223,11 +228,15 @@ function _renderModulosChecks(modulosSelecionados){
 
 function aplicarPresetPerfil(perfil){
   const grp=document.getElementById('u-modulos-group');
+  const attGrp=document.getElementById('u-att-group');
+  if(attGrp) attGrp.style.display = perfil==='atendente'?'':'none';
+  const attSel=document.getElementById('u-att');
+  if(attSel) attSel.innerHTML = ATTS.map(a=>'<option value="'+a.id+'">'+esc(a.name)+'</option>').join('');
   if(perfil==='admin'){ grp.style.opacity='0.5'; _renderModulosChecks(MODULOS_LISTA.map(m=>m.id)); return; }
   grp.style.opacity='1';
   let preset=[];
   if(perfil==='coordenacao') preset=['team','onboarding','compras','overview'];
-  else if(perfil==='atendente') preset=['team'];
+  else if(perfil==='atendente') preset=['team','turnos','overview'];
   _renderModulosChecks(preset);
 }
 
@@ -250,6 +259,10 @@ function abrirEditarUsuario(email){
   document.getElementById('u-email').value=u.email||'';
   document.getElementById('u-senha').value=u.senha||'';
   document.getElementById('u-perfil').value=u.perfil||'atendente';
+  const attGrp=document.getElementById('u-att-group');
+  if(attGrp) attGrp.style.display = u.perfil==='atendente'?'':'none';
+  const attSel=document.getElementById('u-att');
+  if(attSel){ attSel.innerHTML = ATTS.map(a=>'<option value="'+a.id+'">'+esc(a.name)+'</option>').join(''); if(u.attId) attSel.value=u.attId; }
   if(u.perfil==='admin'){ document.getElementById('u-modulos-group').style.opacity='0.5'; _renderModulosChecks(MODULOS_LISTA.map(m=>m.id)); }
   else { document.getElementById('u-modulos-group').style.opacity='1'; _renderModulosChecks(u.modulos||[]); }
   document.getElementById('modal-usuario').classList.add('open');
@@ -262,14 +275,15 @@ function salvarUsuario(){
   const perfil=document.getElementById('u-perfil').value;
   if(!nome||!email||!senha){ showToast('Preencha nome, e-mail e senha.','peach'); return; }
   const modulos=Array.from(document.querySelectorAll('.u-mod-check:checked')).map(c=>c.value);
+  const attId = perfil==='atendente' ? document.getElementById('u-att').value : '';
   // email duplicado?
   const jaExiste=usuarios.find(u=>u.email===email);
   if(jaExiste && email!==_usuarioEditEmail){ showToast('Já existe um usuário com este e-mail.','vermelha'); return; }
   if(_usuarioEditEmail){
     const idx=usuarios.findIndex(u=>u.email===_usuarioEditEmail);
-    if(idx>=0) usuarios[idx]={email,nome,senha,perfil,modulos};
+    if(idx>=0) usuarios[idx]={email,nome,senha,perfil,modulos,attId};
   } else {
-    usuarios.push({email,nome,senha,perfil,modulos});
+    usuarios.push({email,nome,senha,perfil,modulos,attId});
   }
   salvarUsuarios();
   renderUsuarios();
@@ -315,14 +329,16 @@ document.addEventListener('DOMContentLoaded',()=>{
   renderFocusInsights();
   renderPerformance();
   renderAvaliacoes();
+  renderTurnos();
   const recEl=document.getElementById('d-recorrente');
   if(recEl)recEl.addEventListener('change',function(){document.getElementById('d-recorrencia').style.display=this.checked?'':'none';});
   carregarUsuarios();
   aplicarPermissoes();
+  renderOverview();
 });
 
 // ═══════════════════ NAV ═══════════════════
-const PT={overview:'Visão Geral',kpis:'Meus KPIs',performance:'Acompanhamento de Performance',tasks:'Tarefas',calendar:'Calendário',ai:'Assistente IA',team:'Equipe',salary:'Salários',drive:'Google Drive',onboarding:'Onboarding de Imóveis',gmail:'Gmail',notes:'Anotações',focus:'Foco',projetos:'Projetos',compras:'Registro de Compras',reunioes:'Reuniões e Transcrições',avaliacoes:'Avaliações de Hóspedes',usuarios:'Usuários e Acessos'};
+const PT={overview:'Visão Geral',kpis:'Meus KPIs',performance:'Acompanhamento de Performance',tasks:'Tarefas',calendar:'Calendário',ai:'Assistente IA',team:'Equipe',salary:'Salários',drive:'Google Drive',onboarding:'Onboarding de Imóveis',gmail:'Gmail',notes:'Anotações',focus:'Foco',projetos:'Projetos',compras:'Registro de Compras',reunioes:'Reuniões e Transcrições',avaliacoes:'Avaliações de Hóspedes',usuarios:'Usuários e Acessos',turnos:'Escala de Turnos'};
 function showPanel(id,btn){
   if(typeof podeAcessar==='function' && id!=='usuarios'){ const u=getCurrentUser(); if(u && u.perfil!=='admin' && !podeAcessar(id)){ return; } }
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
@@ -330,7 +346,7 @@ function showPanel(id,btn){
   document.getElementById('panel-'+id).classList.add('active');
   if(btn)btn.classList.add('active');
   document.getElementById('panel-title').textContent=PT[id]||id;
-  if(id==='overview'){renderOvAgenda();var elDA=document.getElementById('ov-demandas-atrasadas');if(elDA)elDA.textContent=contarDemandasAtrasadas();if(ls('nx_gdrive'))loadCalendarEvents();}
+  if(id==='overview'){renderOverview();renderOvAgenda();var elDA=document.getElementById('ov-demandas-atrasadas');if(elDA)elDA.textContent=contarDemandasAtrasadas();if(ls('nx_gdrive'))loadCalendarEvents();}
   if(id==='calendar'){loadCalendarEvents();}
   if(id==='gmail'){checkGmailConfig();if(ls('nx_gmail'))loadEmails();}
   if(id==='onboarding'){renderOnboardingKanban();}
@@ -340,6 +356,7 @@ function showPanel(id,btn){
   if(id==='focus'){renderFocusInsights();}
   if(id==='performance'){renderPerformance();}
   if(id==='avaliacoes'){renderAvaliacoes();}
+  if(id==='turnos'){renderTurnos();}
 }
 
 function contarDemandasAtrasadas(){
@@ -1018,6 +1035,32 @@ function addTask(){
 function getRespBand(v){v=parseFloat(v);if(v<=3)return{l:'Elite',c:'elite'};if(v<=4)return{l:'Azul',c:'azul'};if(v<=5)return{l:'Verde',c:'verde'};if(v<=6)return{l:'Amarela',c:'amarela'};return{l:'Vermelha',c:'vermelha'};}
 
 function renderTeam(){
+  const cu=(typeof getCurrentUser==='function')?getCurrentUser():null;
+  const ehAtendente = cu && cu.perfil==='atendente';
+  const btnNovo=document.querySelector('#panel-team button[onclick*="adicionarMembro"]'); if(btnNovo) btnNovo.style.display=ehAtendente?'none':'';
+  if(ehAtendente){
+    const a=(typeof getMinhaAtt==='function')?getMinhaAtt():null;
+    const grid=document.getElementById('team-grid');
+    if(!a){ grid.innerHTML='<div class="card"><div class="card-body" style="text-align:center;padding:30px;color:var(--text3);">Seu login não está vinculado a um membro da equipe. Fale com o admin.</div></div>'; return; }
+    const PC2={high:'var(--vermelha)',med:'var(--amarela)',low:'var(--sage)'};
+    const PL={high:'Alta',med:'Média',low:'Baixa'};
+    const media=a.respMes!=null?a.respMes.toFixed(1):'—';
+    const pend=a.demands.filter(d=>d.s!=='done');
+    grid.innerHTML='<div class="card" style="max-width:560px;">'+
+      '<div class="card-header">'+(a.foto?'<img src="'+esc(a.foto)+'" style="width:34px;height:34px;border-radius:50%;object-fit:cover;">':'<div class="avatar '+a.av+'" style="width:34px;height:34px;font-size:14px;">'+a.ini+'</div>')+'<div class="card-title">'+esc(a.name)+'</div></div>'+
+      '<div class="card-body" style="padding:14px 16px;">'+
+      '<div style="display:flex;gap:18px;margin-bottom:12px;flex-wrap:wrap;font-size:12.5px;">'+
+      '<div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;">R$/hora</span>R$ '+a.rate+'</div>'+
+      '<div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;">Escala</span>'+esc(a.escala||'12×36')+'</div>'+
+      '<div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;">Tempo médio resp.</span>'+media+(media!=='—'?' min':'')+'</div>'+
+      '</div>'+
+      '<div style="font-size:10.5px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:6px;">Minhas Demandas ('+pend.length+')</div>'+
+      '<button class="btn btn-sm btn-rose" style="margin-bottom:8px;font-size:11px;" onclick="openAttModal(\''+a.id+'\')"><i class="fa-solid fa-plus"></i> Nova / Dar baixa</button>'+
+      (pend.length===0?'<div style="font-size:12px;color:var(--text3);padding:6px 0;">Nenhuma demanda pendente. 🎉</div>':
+      pend.map(d=>'<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-top:1px solid var(--border);"><div style="width:3px;height:20px;border-radius:2px;background:'+(PC2[d.prio]||'var(--text3)')+';"></div><span style="font-size:11px;color:var(--text3);min-width:40px;">'+(PL[d.prio]||'')+'</span><span style="font-size:12.5px;flex:1;">'+esc(d.desc)+'</span>'+(d.due?'<span style="font-size:11px;color:var(--text3);">'+fd(d.due)+'</span>':'')+'</div>').join(''))+
+      '</div></div>';
+    return;
+  }
   const PC2={high:'var(--vermelha)',med:'var(--amarela)',low:'var(--sage)'};
   const PL={high:'Alta',med:'Média',low:'Baixa'};
   document.getElementById('team-grid').innerHTML=ATTS.map(a=>{
@@ -1091,6 +1134,45 @@ function renderTeamOv(){
       <td>${a.demands.filter(d=>d.s==='done').length}</td>
       <td>${a.respMes!==null&&a.respMes!==undefined?bandHTML(getRespBand(a.respMes).l.toUpperCase()):'<span style="color:var(--text3);font-size:12px;">—</span>'}</td>
     </tr>`).join('');
+}
+
+function renderOverview(){
+  const cu=(typeof getCurrentUser==='function')?getCurrentUser():null;
+  const admin=document.getElementById('overview-admin');
+  const aten=document.getElementById('overview-atendente');
+  if(!admin||!aten) return;
+  if(cu && cu.perfil==='atendente'){
+    admin.style.display='none';
+    aten.style.display='';
+    const a=(typeof getMinhaAtt==='function')?getMinhaAtt():null;
+    const hoje=new Date().toISOString().split('T')[0];
+    const mes=hoje.substring(0,7);
+    const nome=(cu.nome||'').split(' ')[0];
+    let html='<div style="margin-bottom:22px;"><h1 style="font-family:var(--font-display);font-size:24px;font-weight:700;">Olá, '+esc(nome||'você')+'! 🌸</h1><p style="color:var(--text3);font-size:13.5px;margin-top:3px;">Aqui estão as suas tarefas e turnos.</p></div>';
+    if(!a){ html+='<div class="card"><div class="card-body" style="text-align:center;padding:30px;color:var(--text3);">Seu login ainda não está vinculado a um membro. Fale com o admin.</div></div>'; aten.innerHTML=html; return; }
+    const pend=a.demands.filter(d=>d.s!=='done');
+    const atrasadas=pend.filter(d=>d.due && d.due<hoje);
+    html+='<div class="metrics-grid" style="margin-bottom:18px;">'+
+      '<div class="metric-card rose"><div class="metric-icon rose"><i class="fa-solid fa-list-check"></i></div><div class="metric-value">'+pend.length+'</div><div class="metric-label">Demandas Pendentes</div></div>'+
+      '<div class="metric-card peach"><div class="metric-icon peach"><i class="fa-solid fa-triangle-exclamation"></i></div><div class="metric-value">'+atrasadas.length+'</div><div class="metric-label">Atrasadas</div></div>'+
+      '</div>';
+    const PC2={high:'var(--vermelha)',med:'var(--amarela)',low:'var(--sage)'};
+    html+='<div class="card" style="margin-bottom:18px;"><div class="card-header"><div class="card-title">Minhas Demandas</div><button class="card-action" onclick="openAttModal(\''+a.id+'\')">Gerenciar →</button></div><div class="card-body">'+
+      (pend.length===0?'<div style="text-align:center;color:var(--text3);font-size:13px;padding:10px;">Tudo em dia! 🎉</div>':
+      pend.map(d=>'<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);"><div style="width:3px;height:20px;border-radius:2px;background:'+(PC2[d.prio]||'var(--text3)')+';"></div><span style="flex:1;font-size:13px;">'+esc(d.desc)+'</span>'+(d.due?'<span style="font-size:11px;color:'+(d.due<hoje?'var(--vermelha)':'var(--text3)')+';">'+fd(d.due)+'</span>':'')+'</div>').join(''))+
+      '</div></div>';
+    if(typeof turnos!=='undefined'){
+      const meusTurnos=turnos.filter(t=>t.attId===a.id && t.data.startsWith(mes)).sort((x,y)=>x.data.localeCompare(y.data));
+      html+='<div class="card"><div class="card-header"><div class="card-title">Meus Turnos do Mês</div><button class="card-action" onclick="showPanel(\'turnos\',document.querySelector(\'#sidebar .nav-item[onclick*=turnos]\'))">Ver / Confirmar →</button></div><div class="card-body">'+
+        (meusTurnos.length===0?'<div style="text-align:center;color:var(--text3);font-size:13px;padding:10px;">Nenhum turno lançado ainda.</div>':
+        meusTurnos.slice(0,10).map(t=>'<div style="display:flex;gap:10px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12.5px;"><span style="width:54px;color:var(--text3);">'+t.data.substring(8,10)+'/'+t.data.substring(5,7)+'</span><span style="flex:1;">'+(t.turno==='dia'?'☀️ Dia (07-19h)':'🌙 Noite (19-07h)')+'</span>'+(t.confirmado?'<span style="color:var(--sage);"><i class="fa-solid fa-check"></i> ok</span>':'<span style="color:var(--peach);">a confirmar</span>')+'</div>').join(''))+
+        '</div></div>';
+    }
+    aten.innerHTML=html;
+  } else {
+    admin.style.display='';
+    aten.style.display='none';
+  }
 }
 
 let mostrarDemandasConcluidas=false;
@@ -2508,7 +2590,7 @@ const _PERSIST_KEYS = {
   nx_precos:()=>PRECOS_ITENS, nx_niveldx:()=>selNivelIdx,
   nx_nicolecom:()=>nicoleComissaoOverride, nx_nextatt:()=>nextAttId,
   nx_transcricoes:()=>transcricoes, nx_precoenx:()=>PRECOS_ENXOVAL,
-  nx_avaliacoes:()=>avaliacoes
+  nx_avaliacoes:()=>avaliacoes, nx_turnos:()=>turnos
 };
 
 function saveAll(){
@@ -2545,7 +2627,76 @@ function loadAll(){
     v=g('nx_nextatt');    if(typeof v==='number') nextAttId=v;
     v=g('nx_transcricoes'); if(Array.isArray(v)) transcricoes=v;
     v=g('nx_avaliacoes'); if(Array.isArray(v)) avaliacoes=v;
+    v=g('nx_turnos');     if(Array.isArray(v)) turnos=v;
   }catch(e){ console.warn('loadAll falhou', e); }
+}
+
+// ═══════════════════ TURNOS (ESCALA 12×36) ═══════════════════
+function parcelaDoDia(dataStr){ const d=parseInt((dataStr||'').substring(8,10))||1; return d<=15?'P1':'P2'; }
+function recalcularDiasDosTurnos(){
+  const mes = turnosMesSel || new Date().toISOString().substring(0,7);
+  ATTS.forEach(a=>{
+    const p1=turnos.filter(t=>t.attId===a.id && t.confirmado && t.data.startsWith(mes) && parcelaDoDia(t.data)==='P1').length;
+    const p2=turnos.filter(t=>t.attId===a.id && t.confirmado && t.data.startsWith(mes) && parcelaDoDia(t.data)==='P2').length;
+    if(p1>0) workDaysP1[a.id]=p1;
+    if(p2>0) workDaysP2[a.id]=p2;
+  });
+  if(typeof renderSalary==='function') renderSalary();
+}
+function abrirAddTurno(){
+  document.getElementById('t-turno-data').value=new Date().toISOString().split('T')[0];
+  document.getElementById('t-turno-tipo').value='dia';
+  document.getElementById('t-turno-att').innerHTML=ATTS.map(a=>'<option value="'+a.id+'">'+esc(a.name)+'</option>').join('');
+  document.getElementById('modal-turno').classList.add('open');
+}
+function salvarTurno(){
+  const data=document.getElementById('t-turno-data').value;
+  if(!data){ showToast('Escolha a data.','peach'); return; }
+  const turno=document.getElementById('t-turno-tipo').value;
+  const attId=document.getElementById('t-turno-att').value;
+  turnos.push({id:Date.now(),data,turno,attId,confirmado:false});
+  closeModal('modal-turno');
+  renderTurnos();
+  showToast('Turno lançado!','sage');
+}
+function removerTurno(id){
+  turnos=turnos.filter(t=>t.id!==id);
+  recalcularDiasDosTurnos();
+  renderTurnos();
+}
+function confirmarQuinzena(attId, parcela){
+  const mes = turnosMesSel || new Date().toISOString().substring(0,7);
+  turnos.forEach(t=>{ if(t.attId===attId && t.data.startsWith(mes) && parcelaDoDia(t.data)===parcela){ t.confirmado=true; } });
+  recalcularDiasDosTurnos();
+  renderTurnos();
+  showToast('Turnos confirmados! Já refletido nos salários.','sage');
+}
+function renderTurnos(){
+  const el=document.getElementById('turnos-body'); if(!el) return;
+  const mesInput=document.getElementById('turnos-mes');
+  if(mesInput && !mesInput.value){ mesInput.value=new Date().toISOString().substring(0,7); turnosMesSel=mesInput.value; }
+  const mes=turnosMesSel||new Date().toISOString().substring(0,7);
+  const minhaAtt=(typeof getMinhaAtt==='function')?getMinhaAtt():null;
+  const ehAtendente=(typeof getCurrentUser==='function') && getCurrentUser() && getCurrentUser().perfil==='atendente';
+  const attsVisiveis = ehAtendente && minhaAtt ? [minhaAtt] : ATTS;
+  const addBtn=document.getElementById('turnos-add-btn'); if(addBtn) addBtn.style.display=ehAtendente?'none':'';
+  el.innerHTML=attsVisiveis.map(a=>{
+    const tDia=['P1','P2'].map(parc=>{
+      const lista=turnos.filter(t=>t.attId===a.id && t.data.startsWith(mes) && parcelaDoDia(t.data)===parc).sort((x,y)=>x.data.localeCompare(y.data));
+      const confirmados=lista.filter(t=>t.confirmado).length;
+      const todosConf=lista.length>0 && confirmados===lista.length;
+      return '<div style="background:var(--bg3);border-radius:var(--r-sm);padding:12px;flex:1;">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);">'+(parc==='P1'?'1ª Quinzena (1-15)':'2ª Quinzena (16-31)')+'</div>'+
+        (todosConf?'<span style="font-size:10px;background:var(--sage-light);color:var(--sage);padding:1px 7px;border-radius:8px;font-weight:700;"><i class="fa-solid fa-check"></i> Confirmada</span>':(lista.length?'<span style="font-size:10px;background:var(--peach-light);color:var(--peach);padding:1px 7px;border-radius:8px;">'+confirmados+'/'+lista.length+'</span>':''))+
+        '</div>'+
+        (lista.length===0?'<div style="font-size:12px;color:var(--text3);text-align:center;padding:8px;">Sem turnos.</div>':
+        lista.map(t=>'<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px;border-bottom:1px solid var(--border);"><span style="width:46px;">'+t.data.substring(8,10)+'/'+t.data.substring(5,7)+'</span><span style="flex:1;">'+(t.turno==='dia'?'☀️ Dia':'🌙 Noite')+'</span>'+(t.confirmado?'<i class="fa-solid fa-check" style="color:var(--sage);"></i>':'')+(ehAtendente?'':'<button onclick="removerTurno('+t.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;"><i class="fa-solid fa-xmark"></i></button>')+'</div>').join(''))+
+        (lista.length>0 && !todosConf ? '<button class="btn btn-sm btn-rose" style="margin-top:8px;width:100%;font-size:11px;" onclick="confirmarQuinzena(\''+a.id+'\',\''+parc+'\')"><i class="fa-solid fa-check"></i> Confirmar '+(ehAtendente?'meus turnos':'turnos')+'</button>':'')+
+        '</div>';
+    }).join('');
+    return '<div class="card" style="margin-bottom:14px;"><div class="card-header"><div class="avatar '+a.av+'" style="width:30px;height:30px;font-size:12px;">'+a.ini+'</div><div class="card-title">'+esc(a.name)+'</div><div style="margin-left:auto;font-size:11px;color:var(--text3);">'+mes+'</div></div><div class="card-body" style="padding:14px;display:flex;gap:12px;flex-wrap:wrap;">'+tDia+'</div></div>';
+  }).join('');
+  if(attsVisiveis.length===0) el.innerHTML='<div class="card"><div class="card-body" style="text-align:center;padding:30px;color:var(--text3);">Nenhum membro vinculado ao seu login. Fale com o admin.</div></div>';
 }
 
 // ═══════════════════ AVALIAÇÕES (HOSTAWAY) ═══════════════════

@@ -2807,13 +2807,14 @@ async function sincronizarAvaliacoes(){
     const resp=await fetch(url.replace(/\/$/,'')+'/reviews');
     const data=await resp.json();
     if(data.error){ showToast('Erro do Worker: '+data.error,'vermelha'); return; }
-    // Ignora registros vazios (hóspede não avaliou — status expirado, sem nota e sem texto)
+    // Só avaliações PUBLICADAS PELO HÓSPEDE: tipo guest-to-host COM nota ou texto.
+    // O resto são reservas onde o hóspede não avaliou (pendente/expirada) — ignoradas.
     const todas=(data.reviews||[]);
-    avaliacoes=todas.filter(r=>r.rating!=null||(r.texto&&r.texto.trim())||(r.comentarioInterno&&r.comentarioInterno.trim())).map(r=>({...r, wecare:mencionaWecare(r.texto)}));
+    avaliacoes=todas.filter(r=>r.tipo==='guest-to-host' && (r.rating!=null||(r.texto&&r.texto.trim()))).map(r=>({...r, wecare:mencionaWecare(r.texto)}));
     renderAvaliacoes();
     carregarReservasPeriodo();
     const vazias=todas.length-avaliacoes.length;
-    showToast('✅ '+avaliacoes.length+' avaliações reais carregadas'+(vazias>0?' ('+vazias+' reservas sem avaliação ignoradas)':'')+'.','sage');
+    showToast('✅ '+avaliacoes.length+' avaliações de hóspedes carregadas'+(vazias>0?' ('+vazias+' reservas sem avaliação ignoradas)':'')+'.','sage');
   }catch(e){
     showToast('Não foi possível conectar ao Worker. Verifique a URL e se o TI publicou.','vermelha');
   }

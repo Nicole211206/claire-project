@@ -2552,8 +2552,10 @@ function mencionaWecare(texto){
 }
 
 async function sincronizarAvaliacoes(){
-  const url=ls('nx_hostaway_url');
+  let url=ls('nx_hostaway_url');
   if(!url){ showToast('Configure a URL do Worker do Hostaway nas Configurações.','peach'); return; }
+  url=url.trim();
+  if(!/^https?:\/\//i.test(url)) url='https://'+url; // adiciona https:// se faltar
   showToast('Sincronizando avaliações...','sage');
   try{
     const resp=await fetch(url.replace(/\/$/,'')+'/reviews');

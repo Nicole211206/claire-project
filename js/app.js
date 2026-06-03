@@ -2850,7 +2850,8 @@ function renderAvaliacoes(){
   const resumoEl=document.getElementById('avaliacoes-resumo');
   if(resumoEl){
     const comNota=avaliacoes.filter(a=>a.rating!=null);
-    const media=comNota.length?(comNota.reduce((s,a)=>s+a.rating,0)/comNota.length).toFixed(2):'—';
+    // Hostaway entrega 0-10 → exibe em 0-5 (média geral de todas as avaliações)
+    const media=comNota.length?((comNota.reduce((s,a)=>s+a.rating,0)/comNota.length)/2).toFixed(2):'—';
     const wecareCount=avaliacoes.filter(a=>a.wecare).length;
     resumoEl.innerHTML=[
       {l:'Total de Avaliações',v:avaliacoes.length,c:'sky',i:'fa-star'},

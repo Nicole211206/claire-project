@@ -2959,8 +2959,8 @@ async function carregarReservasPeriodo(){
   }catch(e){}
 }
 
-// Calcula média por canal (período KPI, escalas corretas) e joga no KPI de avaliações (av)
-function aplicarAvaliacoesNoKPI(){
+// Calcula média por canal (período KPI, escalas corretas) e joga nos KPIs de avaliações (av) e conversão (cv)
+async function aplicarAvaliacoesNoKPI(){
   if(avaliacoes.length===0){ showToast('Sincronize as avaliações primeiro.','peach'); return; }
   const per=periodoKPIAvaliacoes();
   const refData=a=>(a.checkout||a.submittedAt||a.data||'').substring(0,10);
@@ -2978,8 +2978,29 @@ function aplicarAvaliacoesNoKPI(){
   if(mAir10!=null) partes.push(mAir10/2);
   if(mBook10!=null) partes.push(mBook10/2);
   kpiVals.av = partes.length ? (partes.reduce((a,b)=>a+b,0)/partes.length).toFixed(2) : null;
+
+  // ── KPI de Conversão (cv) = avaliações ÷ reservas (check-outs) no período ──
+  // Conta TODAS as avaliações de hóspede no período (com ou sem nota — qualquer review conta como "avaliou")
+  const avNoPeriodo=avaliacoes.filter(a=>a.tipo==='guest-to-host'&&refData(a)>=per.de&&refData(a)<=per.ate).length;
+  let reservas=null;
+  const url=ls('nx_hostaway_url');
+  if(url){
+    let u=url.trim(); if(!/^https?:\/\//i.test(u)) u='https://'+u;
+    try{
+      const resp=await fetch(u.replace(/\/$/,'')+'/reservations?from='+per.de+'&to='+per.ate);
+      const data=await resp.json();
+      reservas = data.total!=null ? data.total : null;
+    }catch(e){}
+  }
+  if(reservas!=null && reservas>0){
+    if(!kpiSubVals.cv) kpiSubVals.cv={};
+    kpiSubVals.cv.reviews=avNoPeriodo;
+    kpiSubVals.cv.checkouts=reservas;
+    kpiVals.cv=((avNoPeriodo/reservas)*100).toFixed(1);
+  }
+
   if(typeof renderKPIs==='function') renderKPIs();
-  showToast('KPI atualizado: Airbnb '+(mAir10!=null?(mAir10/2).toFixed(2)+'★':'—')+' · Booking '+(mBook10!=null?mBook10.toFixed(2)+'/10':'—')+' ('+noPeriodo.length+' avaliações de '+per.de+' a '+per.ate+').','sage');
+  showToast('KPIs atualizados: Aval. Airbnb '+(mAir10!=null?(mAir10/2).toFixed(2)+'★':'—')+' · Booking '+(mBook10!=null?mBook10.toFixed(2)+'/10':'—')+(reservas!=null?' · Conversão '+avNoPeriodo+'/'+reservas:'')+' ('+per.de+' a '+per.ate+').','sage');
 }
 
 let PRECOS_ENXOVAL = {

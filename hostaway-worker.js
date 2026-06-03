@@ -43,12 +43,27 @@ export default {
       if (url.pathname.endsWith('/reviews')) {
         const token = await getToken(env);
         // Hostaway retorna até 'limit' avaliações; ajuste se precisar paginar
-        const r = await fetch(HOSTAWAY_BASE + '/reviews?limit=500&sortOrder=desc', {
+        const r = await fetch(HOSTAWAY_BASE + '/reviews?limit=1000&sortOrder=desc', {
           headers: { 'Authorization': 'Bearer ' + token, 'Cache-control': 'no-cache' },
         });
         const data = await r.json();
         const list = (data.result || []).map(normalizeReview);
         return json({ reviews: list }, cors);
+      }
+      // Contagem de reservas por período de CHECK-OUT: /reservations?from=YYYY-MM-DD&to=YYYY-MM-DD
+      if (url.pathname.endsWith('/reservations')) {
+        const token = await getToken(env);
+        const from = url.searchParams.get('from') || '';
+        const to = url.searchParams.get('to') || '';
+        const qs = new URLSearchParams({ limit: '1', includeResources: '0' });
+        if (from) qs.set('departureStartDate', from);
+        if (to) qs.set('departureEndDate', to);
+        const r = await fetch(HOSTAWAY_BASE + '/reservations?' + qs.toString(), {
+          headers: { 'Authorization': 'Bearer ' + token, 'Cache-control': 'no-cache' },
+        });
+        const data = await r.json();
+        // Hostaway devolve 'count' com o total que casa com o filtro
+        return json({ total: (data.count != null ? data.count : (data.result ? data.result.length : 0)) }, cors);
       }
       return json({ error: 'rota não encontrada' }, cors, 404);
     } catch (e) {
@@ -81,16 +96,25 @@ const CANAIS = {
 };
 
 function normalizeReview(rv) {
+  const status = (rv.status || '').toLowerCase();
+  const publicada = rv.isPublished === true || rv.isPublished === 1 || status === 'published' || status === 'awaiting' ? (rv.isPublished === true || rv.isPublished === 1 || status === 'published') : false;
   return {
     id: rv.id,
-    rating: rv.rating != null ? rv.rating : (rv.accountId, null),
-    texto: rv.publicReview || rv.privateFeedback || '',
+    rating: rv.rating != null ? rv.rating : null,
+    texto: rv.publicReview || '',           // comentário externo (público)
+    comentarioInterno: rv.privateFeedback || '', // comentário interno (privado)
     hospede: rv.guestName || '',
     imovel: rv.listingName || '',
     canalId: rv.channelId || null,
     canal: CANAIS[rv.channelId] || (rv.channelName || 'Outro'),
     data: rv.submittedAt || rv.insertedOn || rv.departureDate || '',
-    tipo: rv.type || '',
+    checkout: rv.departureDate || '',       // data de check-out (se disponível)
+    checkin: rv.arrivalDate || '',
+    submittedAt: rv.submittedAt || '',
+    publicada: publicada,
+    status: rv.status || '',
+    tipo: rv.type || '',                    // guest-to-host | host-to-guest
+    reservaId: rv.reservationId || null,
   };
 }
 

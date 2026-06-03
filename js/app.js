@@ -124,6 +124,7 @@ let calViewMode='mes';
 let _gcalTodosEventos=[]; // todos os eventos carregados do Google
 let avaliacoes=[]; // avaliações carregadas do Hostaway
 let avFiltroCanal='', avFiltroMinEstrelas=0, avOrdenar='recentes', avSoWecare=false;
+let avFiltroPublicada='', avFiltroOrigem='', avBusca='', avDe='', avAte='';
 
 // ═══════════════════ LOGIN MULTIUSUÁRIO ═══════════════════
 let usuarios=[]; // gerenciados pelo admin (espelha localStorage nx_users)
@@ -493,11 +494,16 @@ function renderKPIs(){
     let inputHTML='';
     if(k.id==='av'){
       const sub=kpiSubVals.av||{};
-      const avg=sub.airbnb!==undefined&&sub.booking!==undefined?(((+sub.airbnb||0)+(+sub.booking||0))/2).toFixed(2):null;
+      const hasA=sub.airbnb!==undefined&&sub.airbnb!=='';
+      const hasB=sub.booking!==undefined&&sub.booking!=='';
+      const partesAvg=[];
+      if(hasA) partesAvg.push(+sub.airbnb||0);
+      if(hasB) partesAvg.push((+sub.booking||0)/2);
+      const avg=partesAvg.length?(partesAvg.reduce((a,b)=>a+b,0)/partesAvg.length).toFixed(2):null;
       inputHTML='<div style="display:grid;gap:6px;">'+
         '<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:90px;">Airbnb (0-5):</label><input type="number" step="0.01" min="0" max="5" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub.airbnb||'')+'" placeholder="—" oninput="setKPISub(\'av\',\'airbnb\',this.value)"></div>'+
-        '<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:90px;">Booking (0-5):</label><input type="number" step="0.01" min="0" max="5" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub.booking||'')+'" placeholder="—" oninput="setKPISub(\'av\',\'booking\',this.value)"></div>'+
-        (avg!==null?'<div style="font-size:12px;font-weight:700;color:var(--sage);margin-top:2px;">Média Total: '+avg+' estrelas</div>':'')+'</div>';
+        '<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:90px;">Booking (0-10):</label><input type="number" step="0.01" min="0" max="10" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub.booking||'')+'" placeholder="—" oninput="setKPISub(\'av\',\'booking\',this.value)"></div>'+
+        (avg!==null?'<div style="font-size:12px;font-weight:700;color:var(--sage);margin-top:2px;">Média Total: '+avg+' estrelas <span style="font-weight:400;color:var(--text3);">(Booking normalizado p/ 0-5)</span></div>':'')+'</div>';
     } else if(k.id==='cv'){
       const sub=kpiSubVals.cv||{};
       const pct2=(sub.reviews!==undefined&&sub.checkouts!==undefined&&+sub.checkouts>0?(((+sub.reviews||0)/(+sub.checkouts||1))*100).toFixed(1):null);
@@ -614,9 +620,10 @@ function setKPISub(id,subKey,value){
   kpiSubVals[id][subKey]=value;
   if(id==='av'){
     const s=kpiSubVals.av;
-    if(s.airbnb!==undefined&&s.airbnb!==''&&s.booking!==undefined&&s.booking!==''){
-      kpiVals.av=(((+s.airbnb||0)+(+s.booking||0))/2).toFixed(2);
-    }
+    const partes=[];
+    if(s.airbnb!==undefined&&s.airbnb!=='') partes.push(+s.airbnb||0);
+    if(s.booking!==undefined&&s.booking!=='') partes.push((+s.booking||0)/2);
+    kpiVals.av=partes.length?(partes.reduce((a,b)=>a+b,0)/partes.length).toFixed(2):null;
   } else if(id==='cv'){
     const s=kpiSubVals.cv;
     if(s.reviews!==undefined&&s.reviews!==''&&s.checkouts!==undefined&&s.checkouts!==''&&+s.checkouts>0){
@@ -2563,10 +2570,19 @@ async function sincronizarAvaliacoes(){
     if(data.error){ showToast('Erro do Worker: '+data.error,'vermelha'); return; }
     avaliacoes=(data.reviews||[]).map(r=>({...r, wecare:mencionaWecare(r.texto)}));
     renderAvaliacoes();
+    carregarReservasPeriodo();
     showToast('✅ '+avaliacoes.length+' avaliações carregadas!','sage');
   }catch(e){
     showToast('Não foi possível conectar ao Worker. Verifique a URL e se o TI publicou.','vermelha');
   }
+}
+
+function logoCanal(canal){
+  if(canal==='Airbnb') return '<i class="fa-brands fa-airbnb" style="color:#FF5A5F;"></i>';
+  if((canal||'').indexOf('Booking')>=0) return '<i class="fa-solid fa-b" style="color:#003580;background:#fff;border-radius:3px;padding:0 3px;"></i>';
+  if(canal==='Expedia') return '<i class="fa-solid fa-plane" style="color:#FFC72C;"></i>';
+  if(canal==='Vrbo') return '<i class="fa-solid fa-house" style="color:#1668e3;"></i>';
+  return '<i class="fa-solid fa-globe" style="color:var(--text3);"></i>';
 }
 
 function _avFiltradas(){
@@ -2574,6 +2590,13 @@ function _avFiltradas(){
   if(avFiltroCanal) r=r.filter(a=>a.canal===avFiltroCanal);
   if(avFiltroMinEstrelas>0) r=r.filter(a=>(a.rating||0)>=avFiltroMinEstrelas);
   if(avSoWecare) r=r.filter(a=>a.wecare);
+  if(avFiltroPublicada==='sim') r=r.filter(a=>a.publicada);
+  else if(avFiltroPublicada==='nao') r=r.filter(a=>!a.publicada);
+  if(avFiltroOrigem) r=r.filter(a=>a.tipo===avFiltroOrigem);
+  if(avBusca){ const b=avBusca.toLowerCase(); r=r.filter(a=>(a.hospede||'').toLowerCase().includes(b)); }
+  const refData=(a)=>(a.checkout||a.submittedAt||a.data||'').substring(0,10);
+  if(avDe) r=r.filter(a=>refData(a)>=avDe);
+  if(avAte) r=r.filter(a=>refData(a)<=avAte);
   if(avOrdenar==='estrelas-desc') r.sort((a,b)=>(b.rating||0)-(a.rating||0));
   else if(avOrdenar==='estrelas-asc') r.sort((a,b)=>(a.rating||0)-(b.rating||0));
   else r.sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
@@ -2594,19 +2617,21 @@ function renderAvaliacoes(){
       {l:'Total de Avaliações',v:avaliacoes.length,c:'sky',i:'fa-star'},
       {l:'Média Geral',v:media+(media!=='—'?'★':''),c:'gold',i:'fa-star-half-stroke'},
       {l:'Elogios à WeCare',v:wecareCount,c:'rose',i:'fa-heart'},
+      {l:'Reservas no período (KPI)',v:'<span id="av-reservas-num">—</span>',c:'sage',i:'fa-calendar-check'},
     ].map(x=>'<div class="metric-card '+x.c+'"><div class="metric-icon '+x.c+'"><i class="fa-solid '+x.i+'"></i></div><div class="metric-value" style="font-size:24px;">'+x.v+'</div><div class="metric-label">'+x.l+'</div></div>').join('');
   }
+  if(avaliacoes.length>0) carregarReservasPeriodo();
   // lista
   const el=document.getElementById('avaliacoes-lista');if(!el)return;
   const lista=_avFiltradas();
   if(avaliacoes.length===0){ el.innerHTML='<div class="card"><div class="card-body" style="text-align:center;padding:40px;color:var(--text3);"><i class="fa-solid fa-star" style="font-size:32px;opacity:0.35;margin-bottom:10px;display:block;"></i><div style="font-size:13px;margin-bottom:10px;">Nenhuma avaliação carregada.</div><button class="btn btn-sm btn-rose" onclick="sincronizarAvaliacoes()"><i class="fa-solid fa-rotate"></i> Sincronizar com Hostaway</button><div style="font-size:11px;color:var(--text3);margin-top:10px;">Requer a URL do Worker configurada (veja Configurações).</div></div></div>'; return; }
   el.innerHTML=lista.map(a=>{
     const estrelas=a.rating!=null?'★'.repeat(Math.round(a.rating))+'☆'.repeat(Math.max(0,5-Math.round(a.rating))):'';
-    return '<div class="card" style="margin-bottom:8px;'+(a.wecare?'border-left:3px solid var(--rose);':'')+'"><div class="card-body" style="padding:12px 16px;">'+
+    return '<div class="card" onclick="abrirAvaliacaoModal('+JSON.stringify(String(a.id))+')" style="margin-bottom:8px;cursor:pointer;'+(a.wecare?'border-left:3px solid var(--rose);':'')+'"><div class="card-body" style="padding:12px 16px;">'+
       '<div style="display:flex;align-items:center;gap:10px;margin-bottom:5px;flex-wrap:wrap;">'+
       '<span style="color:var(--gold);font-size:14px;letter-spacing:1px;">'+estrelas+'</span>'+
       (a.rating!=null?'<span style="font-size:12px;font-weight:700;">'+a.rating+'</span>':'')+
-      '<span style="font-size:10.5px;background:var(--bg3);padding:1px 7px;border-radius:8px;">'+esc(a.canal||'—')+'</span>'+
+      '<span style="font-size:10.5px;background:var(--bg3);padding:1px 7px;border-radius:8px;">'+logoCanal(a.canal)+' '+esc(a.canal||'—')+'</span>'+
       (a.wecare?'<span style="font-size:10px;background:var(--rose-light);color:var(--rose);padding:1px 7px;border-radius:8px;font-weight:700;"><i class="fa-solid fa-heart"></i> Elogio WeCare</span>':'')+
       '<span style="margin-left:auto;font-size:11px;color:var(--text3);">'+(a.data?new Date(a.data).toLocaleDateString('pt-BR'):'')+'</span>'+
       '</div>'+
@@ -2624,28 +2649,75 @@ function _destacarWecare(textoEscapado){
   return t;
 }
 
-// Calcula média por canal e joga no KPI de avaliações (av)
+// Abre modal de detalhe de uma avaliação
+function abrirAvaliacaoModal(id){
+  const a=avaliacoes.find(x=>String(x.id)===String(id));if(!a)return;
+  const estrelas=a.rating!=null?'★'.repeat(Math.round(a.rating))+'☆'.repeat(Math.max(0,5-Math.round(a.rating))):'—';
+  const origemLabel=a.tipo==='guest-to-host'?'Avaliação do hóspede':a.tipo==='host-to-guest'?'Avaliação do anfitrião':a.tipo;
+  document.getElementById('avaliacao-detalhe').innerHTML=
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">'+
+    '<span style="font-size:20px;">'+logoCanal(a.canal)+'</span>'+
+    '<span style="color:var(--gold);font-size:18px;letter-spacing:2px;">'+estrelas+'</span>'+
+    (a.rating!=null?'<span style="font-size:16px;font-weight:700;">'+a.rating+'</span>':'')+
+    (a.publicada?'<span style="font-size:10px;background:var(--sage-light);color:var(--sage);padding:2px 8px;border-radius:8px;font-weight:600;">Publicada</span>':'<span style="font-size:10px;background:var(--bg3);color:var(--text3);padding:2px 8px;border-radius:8px;">Não publicada</span>')+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;background:var(--bg3);border-radius:var(--r-sm);padding:12px;margin-bottom:14px;font-size:12.5px;">'+
+    '<div><span style="color:var(--text3);font-size:10px;text-transform:uppercase;display:block;">Hóspede</span>'+esc(a.hospede||'—')+'</div>'+
+    '<div><span style="color:var(--text3);font-size:10px;text-transform:uppercase;display:block;">Imóvel</span>'+esc(a.imovel||'—')+'</div>'+
+    '<div><span style="color:var(--text3);font-size:10px;text-transform:uppercase;display:block;">Canal</span>'+esc(a.canal||'—')+'</div>'+
+    '<div><span style="color:var(--text3);font-size:10px;text-transform:uppercase;display:block;">Origem</span>'+esc(origemLabel||'—')+'</div>'+
+    '<div><span style="color:var(--text3);font-size:10px;text-transform:uppercase;display:block;">Período da reserva</span>'+(a.checkin?new Date(a.checkin).toLocaleDateString('pt-BR'):'—')+' → '+(a.checkout?new Date(a.checkout).toLocaleDateString('pt-BR'):'—')+'</div>'+
+    '<div><span style="color:var(--text3);font-size:10px;text-transform:uppercase;display:block;">Enviada em</span>'+(a.submittedAt?new Date(a.submittedAt).toLocaleDateString('pt-BR'):'—')+'</div>'+
+    '</div>'+
+    '<div style="margin-bottom:12px;"><div style="font-size:10.5px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:5px;">Comentário externo (público)</div><div style="font-size:13px;line-height:1.6;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 12px;">'+_destacarWecare(esc(a.texto||'(sem comentário)'))+'</div></div>'+
+    '<div><div style="font-size:10.5px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:5px;">Comentário interno (privado)</div><div style="font-size:13px;line-height:1.6;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 12px;">'+esc(a.comentarioInterno||'(sem comentário interno)')+'</div></div>';
+  document.getElementById('modal-avaliacao').classList.add('open');
+}
+
+// Período do KPI: 26 de (mês-2) a 25 de (mês-1)
+function periodoKPIAvaliacoes(ref){
+  const base = ref ? new Date(ref) : new Date();
+  const ano=base.getFullYear(), mes=base.getMonth(); // 0-11
+  const ini=new Date(ano, mes-2, 26);
+  const fim=new Date(ano, mes-1, 25);
+  const fmt=d=>d.toISOString().split('T')[0];
+  return {de:fmt(ini), ate:fmt(fim)};
+}
+
+// Busca contagem de reservas do Worker para o período do KPI
+async function carregarReservasPeriodo(){
+  const url=ls('nx_hostaway_url'); if(!url) return;
+  let u=url.trim(); if(!/^https?:\/\//i.test(u)) u='https://'+u;
+  const per=periodoKPIAvaliacoes();
+  try{
+    const resp=await fetch(u.replace(/\/$/,'')+'/reservations?from='+per.de+'&to='+per.ate);
+    const data=await resp.json();
+    const el=document.getElementById('av-reservas-num');
+    if(el) el.textContent = data.total!=null ? data.total : '—';
+  }catch(e){}
+}
+
+// Calcula média por canal (período KPI, escalas corretas) e joga no KPI de avaliações (av)
 function aplicarAvaliacoesNoKPI(){
   if(avaliacoes.length===0){ showToast('Sincronize as avaliações primeiro.','peach'); return; }
-  const med=(canalNomes)=>{
-    const arr=avaliacoes.filter(a=>a.rating!=null && canalNomes.includes(a.canal));
-    return arr.length?(arr.reduce((s,a)=>s+a.rating,0)/arr.length):null;
-  };
-  const mAir=med(['Airbnb']);
-  const mBook=med(['Booking.com','Booking']);
+  const per=periodoKPIAvaliacoes();
+  const refData=a=>(a.checkout||a.submittedAt||a.data||'').substring(0,10);
+  const noPeriodo=avaliacoes.filter(a=>a.tipo==='guest-to-host'&&a.rating!=null&&refData(a)>=per.de&&refData(a)<=per.ate);
+  const medCanal=nomes=>{const arr=noPeriodo.filter(a=>nomes.includes(a.canal));return arr.length?arr.reduce((s,a)=>s+a.rating,0)/arr.length:null;};
+  const mAir=medCanal(['Airbnb']);
+  const mBook=medCanal(['Booking.com','Booking']);
   if(!kpiSubVals.av) kpiSubVals.av={};
   if(mAir!=null) kpiSubVals.av.airbnb=mAir.toFixed(2);
   if(mBook!=null) kpiSubVals.av.booking=mBook.toFixed(2);
-  // média geral se não houver separação por canal
-  if(mAir==null && mBook==null){
-    const todas=avaliacoes.filter(a=>a.rating!=null);
-    if(todas.length){ const g=(todas.reduce((s,a)=>s+a.rating,0)/todas.length); kpiSubVals.av.airbnb=g.toFixed(2); }
-  }
-  // recalcular kpiVals.av (média das sub-notas preenchidas)
-  const subs=[kpiSubVals.av.airbnb,kpiSubVals.av.booking].map(x=>parseFloat(x)).filter(x=>!isNaN(x));
-  kpiVals.av=subs.length?(subs.reduce((a,b)=>a+b,0)/subs.length).toFixed(2):null;
+  // combinar normalizando booking (0-10) para 0-5
+  const partes=[];
+  if(mAir!=null) partes.push(mAir);
+  if(mBook!=null) partes.push(mBook/2);
+  // se nenhum canal específico, usa média geral (assumindo escala 5)
+  if(partes.length===0){ const todas=noPeriodo; if(todas.length){ const g=todas.reduce((s,a)=>s+a.rating,0)/todas.length; partes.push(g); kpiSubVals.av.airbnb=g.toFixed(2);} }
+  kpiVals.av = partes.length ? (partes.reduce((a,b)=>a+b,0)/partes.length).toFixed(2) : null;
   if(typeof renderKPIs==='function') renderKPIs();
-  showToast('KPI de avaliações atualizado a partir do Hostaway!','sage');
+  showToast('KPI atualizado com avaliações de '+per.de+' a '+per.ate+' ('+noPeriodo.length+' avaliações).','sage');
 }
 
 let PRECOS_ENXOVAL = {

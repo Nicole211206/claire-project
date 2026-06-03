@@ -281,6 +281,11 @@ function verificarLogin(){
           <div><label style="font-size:10.5px;color:var(--text3);text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px;">Canal</label><select class="form-select" id="av-f-canal" style="font-size:12.5px;padding:5px 8px;" onchange="avFiltroCanal=this.value;renderAvaliacoes();"><option value="">Todos</option></select></div>
           <div><label style="font-size:10.5px;color:var(--text3);text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px;">Mín. estrelas</label><select class="form-select" id="av-f-min" style="font-size:12.5px;padding:5px 8px;" onchange="avFiltroMinEstrelas=parseFloat(this.value)||0;renderAvaliacoes();"><option value="0">Todas</option><option value="5">5★</option><option value="4">4★+</option><option value="3">3★+</option><option value="2">2★+</option><option value="1">1★+</option></select></div>
           <div><label style="font-size:10.5px;color:var(--text3);text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px;">Ordenar</label><select class="form-select" id="av-f-ord" style="font-size:12.5px;padding:5px 8px;" onchange="avOrdenar=this.value;renderAvaliacoes();"><option value="recentes">Mais recentes</option><option value="estrelas-desc">Mais estrelas</option><option value="estrelas-asc">Menos estrelas</option></select></div>
+          <div><label style="font-size:10.5px;color:var(--text3);text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px;">Publicada</label><select class="form-select" id="av-f-pub" style="font-size:12.5px;padding:5px 8px;" onchange="avFiltroPublicada=this.value;renderAvaliacoes();"><option value="">Todas</option><option value="sim">Publicadas</option><option value="nao">Não publicadas</option></select></div>
+          <div><label style="font-size:10.5px;color:var(--text3);text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px;">Origem</label><select class="form-select" id="av-f-origem" style="font-size:12.5px;padding:5px 8px;" onchange="avFiltroOrigem=this.value;renderAvaliacoes();"><option value="">Todas</option><option value="guest-to-host">Do hóspede</option><option value="host-to-guest">Do anfitrião</option></select></div>
+          <div><label style="font-size:10.5px;color:var(--text3);text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px;">Check-out de</label><input type="date" class="form-input" id="av-f-de" style="font-size:12.5px;padding:5px 8px;" onchange="avDe=document.getElementById('av-f-de').value;renderAvaliacoes();"></div>
+          <div><label style="font-size:10.5px;color:var(--text3);text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px;">Check-out até</label><input type="date" class="form-input" id="av-f-ate" style="font-size:12.5px;padding:5px 8px;" onchange="avAte=document.getElementById('av-f-ate').value;renderAvaliacoes();"></div>
+          <div><label style="font-size:10.5px;color:var(--text3);text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px;">Buscar</label><input type="text" class="form-input" id="av-f-busca" placeholder="Buscar hóspede..." style="font-size:12.5px;padding:5px 8px;" oninput="avBusca=this.value;renderAvaliacoes();"></div>
           <label style="font-size:12.5px;display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="av-f-wecare" onchange="avSoWecare=this.checked;renderAvaliacoes();"> ⭐ Só elogios à WeCare</label>
         </div>
       </div></div>
@@ -1065,6 +1070,15 @@ function verificarLogin(){
   </div>
 </div>
 
-<script src="js/app.js?v=10"></script>
+<div class="modal-overlay" id="modal-avaliacao">
+  <div class="modal" style="width:600px;max-height:92vh;overflow-y:auto;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div class="modal-title" style="margin:0;">Detalhe da Avaliação</div>
+      <button onclick="closeModal('modal-avaliacao')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div id="avaliacao-detalhe"></div>
+  </div>
+</div>
+<script src="js/app.js?v=11"></script>
 </body>
 </html>

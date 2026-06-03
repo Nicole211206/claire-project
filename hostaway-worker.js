@@ -143,7 +143,7 @@ async function getToken(env) {
 const CANAIS = {
   2000: 'Direct', 2002: 'HomeAway', 2005: 'Airbnb', 2007: 'Booking.com',
   2009: 'Expedia', 2010: 'Booking.com', 2013: 'Vrbo', 2015: 'Site Próprio',
-  2018: 'Booking.com',
+  2018: 'Airbnb', // canal majoritário de Airbnb na conta WeCare
 };
 
 // Quando o rating principal vem vazio, calcula a média das sub-notas por categoria (escala 0-10)

@@ -65,6 +65,15 @@ export default {
         // Hostaway devolve 'count' com o total que casa com o filtro
         return json({ total: (data.count != null ? data.count : (data.result ? data.result.length : 0)) }, cors);
       }
+      // Diagnóstico: retorna 2 avaliações cruas (sem normalizar) pra inspecionar os campos do Hostaway
+      if (url.pathname.endsWith('/debug')) {
+        const token = await getToken(env);
+        const r = await fetch(HOSTAWAY_BASE + '/reviews?limit=2&sortOrder=desc', {
+          headers: { 'Authorization': 'Bearer ' + token, 'Cache-control': 'no-cache' },
+        });
+        const data = await r.json();
+        return json({ raw: (data.result || []).slice(0, 2) }, cors);
+      }
       return json({ error: 'rota não encontrada' }, cors, 404);
     } catch (e) {
       return json({ error: String(e && e.message || e) }, cors, 500);
@@ -96,12 +105,22 @@ const CANAIS = {
   2018: 'Booking.com',
 };
 
+// Quando o rating principal vem vazio, calcula a média das sub-notas por categoria (escala 0-10)
+function ratingDeCategorias(rv) {
+  const cats = rv.reviewCategory || rv.reviewCategories || [];
+  if (!Array.isArray(cats) || cats.length === 0) return null;
+  const nums = cats.map(c => (c && (c.rating != null ? c.rating : c.value))).filter(x => x != null && !isNaN(x));
+  if (!nums.length) return null;
+  return nums.reduce((a, b) => a + Number(b), 0) / nums.length;
+}
+
 function normalizeReview(rv) {
   const status = (rv.status || '').toLowerCase();
+  const ratingFinal = rv.rating != null ? rv.rating : ratingDeCategorias(rv);
   const publicada = rv.isPublished === true || rv.isPublished === 1 || status === 'published' || status === 'awaiting' ? (rv.isPublished === true || rv.isPublished === 1 || status === 'published') : false;
   return {
     id: rv.id,
-    rating: rv.rating != null ? rv.rating : null,
+    rating: ratingFinal != null ? Math.round(ratingFinal * 100) / 100 : null,
     texto: rv.publicReview || '',           // comentário externo (público)
     comentarioInterno: rv.privateFeedback || '', // comentário interno (privado)
     hospede: rv.guestName || '',

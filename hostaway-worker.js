@@ -126,7 +126,7 @@ function ratingDeCategorias(rv) {
 function normalizeReview(rv) {
   const status = (rv.status || '').toLowerCase();
   const ratingFinal = rv.rating != null ? rv.rating : ratingDeCategorias(rv);
-  const publicada = rv.isPublished === true || rv.isPublished === 1 || status === 'published' || status === 'awaiting' ? (rv.isPublished === true || rv.isPublished === 1 || status === 'published') : false;
+  const publicada = (status === 'published') || rv.isPublished === true || rv.isPublished === 1;
   return {
     id: rv.id,
     rating: ratingFinal != null ? Math.round(ratingFinal * 100) / 100 : null,

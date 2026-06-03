@@ -2849,16 +2849,18 @@ function renderAvaliacoes(){
   // popular filtro de canais
   const selC=document.getElementById('av-f-canal');
   if(selC){ const canais=[...new Set(avaliacoes.map(a=>a.canal).filter(Boolean))]; const val=avFiltroCanal; selC.innerHTML='<option value="">Todos</option>'+canais.map(c=>'<option value="'+esc(c)+'"'+(c===val?' selected':'')+'>'+esc(c)+'</option>').join(''); }
-  // resumo
+  // resumo — reflete a lista FILTRADA (acompanha os filtros aplicados)
+  const filtradas=_avFiltradas();
   const resumoEl=document.getElementById('avaliacoes-resumo');
   if(resumoEl){
-    const comNota=avaliacoes.filter(a=>a.rating!=null);
-    // Hostaway entrega 0-10 → exibe em 0-5 (média geral de todas as avaliações)
+    const comNota=filtradas.filter(a=>a.rating!=null);
+    // Hostaway entrega 0-10 → exibe em 0-5
     const media=comNota.length?((comNota.reduce((s,a)=>s+a.rating,0)/comNota.length)/2).toFixed(2):'—';
-    const wecareCount=avaliacoes.filter(a=>a.wecare).length;
+    const wecareCount=filtradas.filter(a=>a.wecare).length;
+    const temFiltro=avFiltroCanal||avFiltroMinEstrelas>0||avSoWecare||avFiltroPublicada||avFiltroOrigem||avBusca||avDe||avAte;
     resumoEl.innerHTML=[
-      {l:'Total de Avaliações',v:avaliacoes.length,c:'sky',i:'fa-star'},
-      {l:'Média Geral',v:media+(media!=='—'?'★':''),c:'gold',i:'fa-star-half-stroke'},
+      {l:temFiltro?'Avaliações (filtro)':'Total de Avaliações',v:filtradas.length,c:'sky',i:'fa-star'},
+      {l:'Média (filtro)',v:media+(media!=='—'?'★':''),c:'gold',i:'fa-star-half-stroke'},
       {l:'Elogios à WeCare',v:wecareCount,c:'rose',i:'fa-heart'},
       {l:'Reservas no período (KPI)',v:'<span id="av-reservas-num">—</span>',c:'sage',i:'fa-calendar-check'},
     ].map(x=>'<div class="metric-card '+x.c+'"><div class="metric-icon '+x.c+'"><i class="fa-solid '+x.i+'"></i></div><div class="metric-value" style="font-size:24px;">'+x.v+'</div><div class="metric-label">'+x.l+'</div></div>').join('');

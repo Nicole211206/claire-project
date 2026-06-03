@@ -11,32 +11,45 @@
 <link rel="stylesheet" href="css/styles.css?v=2">
 <script src="https://accounts.google.com/gsi/client" async></script>
 <script>
-// LOGIN — independente do app.js
+// LOGIN MULTIUSUÁRIO — independente do app.js
+// Seed do admin padrão (só na primeira vez)
+(function(){
+  try{
+    var raw=localStorage.getItem('nx_users');
+    if(!raw){
+      var admin=[{email:'nicole@wecarehosting.com.br',senha:'Nick@2026',nome:'Nicole',perfil:'admin',modulos:[]}];
+      localStorage.setItem('nx_users', JSON.stringify(admin));
+    }
+  }catch(e){}
+})();
+
 function verificarLogin(){
-  var s=document.getElementById('login-senha');
-  var e=document.getElementById('login-erro');
-  // Nick@2026
-  if(s.value==='Nick@2026'){
-    sessionStorage.setItem('claire_ok','1');
+  var email=(document.getElementById('login-email').value||'').trim().toLowerCase();
+  var senha=document.getElementById('login-senha').value||'';
+  var erro=document.getElementById('login-erro');
+  var users=[];
+  try{ users=JSON.parse(localStorage.getItem('nx_users')||'[]'); }catch(e){ users=[]; }
+  var u=users.find(function(x){ return (x.email||'').toLowerCase()===email && x.senha===senha; });
+  if(u){
+    sessionStorage.setItem('nx_currentuser', JSON.stringify({email:u.email,nome:u.nome,perfil:u.perfil,modulos:u.modulos||[]}));
     document.getElementById('login-overlay').style.display='none';
-    s.value='';
-    e.textContent='';
+    document.getElementById('login-senha').value='';
+    erro.textContent='';
+    // aplicar permissões se o app já carregou
+    if(typeof aplicarPermissoes==='function') aplicarPermissoes();
   } else {
-    e.textContent='Senha incorreta. Tente novamente.';
-    s.value='';
-    s.focus();
+    erro.textContent='E-mail ou senha incorretos.';
+    document.getElementById('login-senha').value='';
   }
 }
-// Verificar sessão imediatamente
+
 (function(){
-  if(sessionStorage.getItem('claire_ok')==='1'){
-    // Já autenticado — esconder overlay quando DOM estiver pronto
+  // Se já há sessão ativa, esconder overlay quando DOM pronto
+  if(sessionStorage.getItem('nx_currentuser')){
     document.addEventListener('DOMContentLoaded',function(){
-      var ov=document.getElementById('login-overlay');
-      if(ov)ov.style.display='none';
+      var ov=document.getElementById('login-overlay'); if(ov) ov.style.display='none';
     });
   }
-  // Se não autenticado, o overlay fica visível (display:flex é o padrão)
 })();
 </script>
 </head>
@@ -47,11 +60,16 @@ function verificarLogin(){
   <div style="background:#fff;border:1px solid var(--border);border-radius:16px;padding:40px 36px;width:360px;box-shadow:0 20px 60px rgba(0,0,0,0.12);text-align:center;">
     <div style="font-family:'Fraunces',serif;font-size:32px;font-weight:700;color:#c0616a;margin-bottom:4px;">Claire<span style="color:#e0a0a5;">.</span></div>
     <div style="font-size:13px;color:#94a3b8;margin-bottom:28px;">Painel de Gestão WeCare</div>
+    <div style="text-align:left;margin-bottom:14px;">
+      <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;display:block;margin-bottom:6px;">E-mail</label>
+      <input type="email" id="login-email" placeholder="seu@email.com" autocomplete="username"
+        style="width:100%;padding:11px 14px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:'Plus Jakarta Sans',sans-serif;outline:none;box-sizing:border-box;"
+        onkeydown="if(event.key==='Enter')document.getElementById('login-senha').focus()">
+    </div>
     <div style="text-align:left;margin-bottom:16px;">
-      <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;display:block;margin-bottom:6px;">Senha de acesso</label>
-      <input type="password" id="login-senha" placeholder="Digite sua senha..."
-        style="width:100%;padding:11px 14px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:'Plus Jakarta Sans',sans-serif;outline:none;box-sizing:border-box;transition:border 0.15s;"
-        onfocus="this.style.borderColor='#c0616a'" onblur="this.style.borderColor='#e2e8f0'"
+      <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;display:block;margin-bottom:6px;">Senha</label>
+      <input type="password" id="login-senha" placeholder="Sua senha..." autocomplete="current-password"
+        style="width:100%;padding:11px 14px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:'Plus Jakarta Sans',sans-serif;outline:none;box-sizing:border-box;"
         onkeydown="if(event.key==='Enter')verificarLogin()">
     </div>
     <div id="login-erro" style="font-size:12px;color:#ef4444;min-height:18px;margin-bottom:10px;"></div>
@@ -93,6 +111,8 @@ function verificarLogin(){
     <button class="nav-item" onclick="showPanel('reunioes',this)"><i class="fa-solid fa-microphone-lines"></i> Reuniões</button>
     <button class="nav-item" onclick="showPanel('notes',this)"><i class="fa-regular fa-note-sticky"></i> Anotações</button>
     <button class="nav-item" onclick="showPanel('focus',this)"><i class="fa-regular fa-clock"></i> Foco</button>
+    <div class="nav-section" id="navsec-admin">Administração</div>
+    <button class="nav-item" id="nav-usuarios" onclick="showPanelUsuarios(this)"><i class="fa-solid fa-users-gear"></i> Usuários</button>
   </div>
   <div class="sidebar-user">
     <div class="avatar av-rose" id="sidebar-avatar">N</div>
@@ -100,6 +120,7 @@ function verificarLogin(){
       <div class="user-name" id="sidebar-name">Nicole</div>
       <div class="user-role">Gestão de Operações</div>
     </div>
+    <button onclick="logout()" title="Sair" style="margin-left:auto;background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;"><i class="fa-solid fa-right-from-bracket"></i></button>
   </div>
 </nav>
 
@@ -556,6 +577,18 @@ function verificarLogin(){
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;" id="reunioes-grid"></div>
     </div>
 
+    <!-- ── USUÁRIOS (ADMIN) ── -->
+    <div class="panel" id="panel-usuarios">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+        <div>
+          <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Usuários e Acessos</h2>
+          <p style="color:var(--text3);font-size:13px;margin-top:2px;">Crie usuários e defina o que cada um acessa</p>
+        </div>
+        <button class="btn btn-rose" onclick="abrirNovoUsuario()"><i class="fa-solid fa-user-plus"></i> Novo Usuário</button>
+      </div>
+      <div id="usuarios-lista"></div>
+    </div>
+
     <!-- ── ANOTAÇÕES ── -->
     <div class="panel" id="panel-notes">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
@@ -1002,6 +1035,36 @@ function verificarLogin(){
   </div>
 </div>
 
-<script src="js/app.js?v=8"></script>
+<!-- Modal Usuário -->
+<div class="modal-overlay" id="modal-usuario">
+  <div class="modal" style="width:560px;max-height:92vh;overflow-y:auto;">
+    <div class="modal-title" id="modal-usuario-title">Novo Usuário</div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Nome</label><input type="text" class="form-input" id="u-nome" placeholder="Nome..."></div>
+      <div class="form-group"><label class="form-label">E-mail</label><input type="email" class="form-input" id="u-email" placeholder="email@..."></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Senha</label><input type="text" class="form-input" id="u-senha" placeholder="Senha de acesso"></div>
+      <div class="form-group"><label class="form-label">Perfil</label>
+        <select class="form-select" id="u-perfil" onchange="aplicarPresetPerfil(this.value)">
+          <option value="admin">Admin (tudo)</option>
+          <option value="coordenacao">Coordenação</option>
+          <option value="atendente">Atendente</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group" id="u-modulos-group">
+      <label class="form-label">Módulos que pode acessar</label>
+      <div id="u-modulos-checks" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;background:var(--bg3);border-radius:var(--r-sm);padding:12px;"></div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px;">Admin acessa tudo automaticamente (estes checks são ignorados para admin).</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-usuario')">Cancelar</button>
+      <button class="btn btn-rose" onclick="salvarUsuario()"><i class="fa-solid fa-check"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/app.js?v=9"></script>
 </body>
 </html>

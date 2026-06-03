@@ -125,6 +125,168 @@ let _gcalTodosEventos=[]; // todos os eventos carregados do Google
 let avaliacoes=[]; // avaliações carregadas do Hostaway
 let avFiltroCanal='', avFiltroMinEstrelas=0, avOrdenar='recentes', avSoWecare=false;
 
+// ═══════════════════ LOGIN MULTIUSUÁRIO ═══════════════════
+let usuarios=[]; // gerenciados pelo admin (espelha localStorage nx_users)
+const MODULOS_LISTA=[
+  {id:'overview',label:'Visão Geral'},{id:'kpis',label:'Meus KPIs'},{id:'performance',label:'Performance'},
+  {id:'avaliacoes',label:'Avaliações'},{id:'tasks',label:'Tarefas'},{id:'calendar',label:'Calendário'},
+  {id:'ai',label:'Assistente IA'},{id:'team',label:'Equipe'},{id:'salary',label:'Salários'},
+  {id:'drive',label:'Google Drive'},{id:'onboarding',label:'Onboarding'},{id:'compras',label:'Compras'},
+  {id:'gmail',label:'Gmail'},{id:'projetos',label:'Projetos'},{id:'reunioes',label:'Reuniões'},
+  {id:'notes',label:'Anotações'},{id:'focus',label:'Foco'}
+];
+function getCurrentUser(){ try{ return JSON.parse(sessionStorage.getItem('nx_currentuser')||'null'); }catch(e){ return null; } }
+function isAdmin(){ const u=getCurrentUser(); return u && u.perfil==='admin'; }
+function podeAcessar(modId){ const u=getCurrentUser(); if(!u) return false; if(u.perfil==='admin') return true; return (u.modulos||[]).includes(modId); }
+function carregarUsuarios(){ try{ usuarios=JSON.parse(localStorage.getItem('nx_users')||'[]'); }catch(e){ usuarios=[]; } }
+function salvarUsuarios(){ localStorage.setItem('nx_users', JSON.stringify(usuarios)); }
+
+function aplicarPermissoes(){
+  const u=getCurrentUser();
+  if(!u) return;
+  // Atualizar rodapé com nome/perfil do usuário logado
+  const nameEl=document.getElementById('sidebar-name'); if(nameEl) nameEl.textContent=u.nome||u.email;
+  const roleEl=document.querySelector('.user-role'); if(roleEl) roleEl.textContent=({admin:'Administradora',coordenacao:'Coordenação',atendente:'Atendente'}[u.perfil]||u.perfil);
+  const avEl=document.getElementById('sidebar-avatar'); if(avEl) avEl.textContent=(u.nome||u.email||'?').charAt(0).toUpperCase();
+  // Mostrar/esconder cada nav-item conforme onclick showPanel('id')
+  document.querySelectorAll('#sidebar .nav-item').forEach(btn=>{
+    const oc=btn.getAttribute('onclick')||'';
+    const m=oc.match(/showPanel\('([^']+)'/);
+    if(m){
+      const modId=m[1];
+      btn.style.display = (u.perfil==='admin'||podeAcessar(modId)) ? '' : 'none';
+    }
+  });
+  // Botão de Usuários (admin) — exibir só pra admin
+  const btnUsuarios=document.getElementById('nav-usuarios');
+  if(btnUsuarios) btnUsuarios.style.display = isAdmin() ? '' : 'none';
+  // Esconder engrenagem de configurações pra não-admin
+  const gear=document.querySelector('.topbar-btn'); if(gear) gear.style.display = isAdmin() ? '' : 'none';
+  // Esconder seções (nav-section) que ficaram sem itens visíveis
+  document.querySelectorAll('#sidebar .nav-section').forEach(sec=>{
+    if(sec.id==='navsec-admin'){ sec.style.display=isAdmin()?'':'none'; return; }
+    let el=sec.nextElementSibling, algumVisivel=false;
+    while(el && !el.classList.contains('nav-section')){
+      if(el.classList.contains('nav-item') && el.style.display!=='none'){ algumVisivel=true; break; }
+      el=el.nextElementSibling;
+    }
+    sec.style.display=algumVisivel?'':'none';
+  });
+  // Se o painel atual não é permitido, ir para o primeiro permitido
+  const ativo=document.querySelector('.panel.active');
+  const ativoId=ativo?ativo.id.replace('panel-',''):null;
+  if(ativoId && ativoId!=='usuarios' && !(u.perfil==='admin'||podeAcessar(ativoId))){
+    const primeiro=MODULOS_LISTA.find(m=>u.perfil==='admin'||podeAcessar(m.id));
+    if(primeiro){ const btn=document.querySelector('#sidebar .nav-item[onclick*="showPanel(\''+primeiro.id+'\'"]'); showPanel(primeiro.id, btn||null); }
+  }
+}
+
+function logout(){
+  sessionStorage.removeItem('nx_currentuser');
+  location.reload();
+}
+
+let _usuarioEditEmail=null;
+
+function showPanelUsuarios(btn){
+  if(!isAdmin()){ showToast('Apenas o admin acessa esta área.','peach'); return; }
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('panel-usuarios').classList.add('active');
+  if(btn)btn.classList.add('active');
+  document.getElementById('panel-title').textContent='Usuários e Acessos';
+  carregarUsuarios();
+  renderUsuarios();
+}
+
+function renderUsuarios(){
+  const el=document.getElementById('usuarios-lista');if(!el)return;
+  const perfilLabel={admin:'Admin',coordenacao:'Coordenação',atendente:'Atendente'};
+  el.innerHTML='<div class="card"><div style="overflow-x:auto;"><table class="data-table"><thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Módulos</th><th></th></tr></thead><tbody>'+
+    usuarios.map(u=>'<tr>'+
+      '<td style="font-weight:500;">'+esc(u.nome||'')+'</td>'+
+      '<td style="font-size:12.5px;">'+esc(u.email||'')+'</td>'+
+      '<td>'+(perfilLabel[u.perfil]||u.perfil)+'</td>'+
+      '<td style="font-size:11px;color:var(--text3);">'+(u.perfil==='admin'?'Todos':(u.modulos||[]).length+' módulos')+'</td>'+
+      '<td style="white-space:nowrap;"><button onclick="abrirEditarUsuario(\''+esc(u.email)+'\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-pen"></i></button>'+
+      (usuarios.length>1?'<button onclick="apagarUsuario(\''+esc(u.email)+'\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;" onmouseover="this.style.color=\'var(--vermelha)\'" onmouseout="this.style.color=\'var(--text3)\'"><i class="fa-solid fa-trash"></i></button>':'')+
+      '</td></tr>').join('')+
+    '</tbody></table></div></div>';
+}
+
+function _renderModulosChecks(modulosSelecionados){
+  document.getElementById('u-modulos-checks').innerHTML=MODULOS_LISTA.map(m=>
+    '<label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer;"><input type="checkbox" class="u-mod-check" value="'+m.id+'"'+((modulosSelecionados||[]).includes(m.id)?' checked':'')+'> '+m.label+'</label>'
+  ).join('');
+}
+
+function aplicarPresetPerfil(perfil){
+  const grp=document.getElementById('u-modulos-group');
+  if(perfil==='admin'){ grp.style.opacity='0.5'; _renderModulosChecks(MODULOS_LISTA.map(m=>m.id)); return; }
+  grp.style.opacity='1';
+  let preset=[];
+  if(perfil==='coordenacao') preset=['team','onboarding','compras','overview'];
+  else if(perfil==='atendente') preset=['team'];
+  _renderModulosChecks(preset);
+}
+
+function abrirNovoUsuario(){
+  _usuarioEditEmail=null;
+  document.getElementById('modal-usuario-title').textContent='Novo Usuário';
+  document.getElementById('u-nome').value='';
+  document.getElementById('u-email').value='';
+  document.getElementById('u-senha').value='';
+  document.getElementById('u-perfil').value='atendente';
+  aplicarPresetPerfil('atendente');
+  document.getElementById('modal-usuario').classList.add('open');
+}
+
+function abrirEditarUsuario(email){
+  const u=usuarios.find(x=>x.email===email);if(!u)return;
+  _usuarioEditEmail=email;
+  document.getElementById('modal-usuario-title').textContent='Editar Usuário';
+  document.getElementById('u-nome').value=u.nome||'';
+  document.getElementById('u-email').value=u.email||'';
+  document.getElementById('u-senha').value=u.senha||'';
+  document.getElementById('u-perfil').value=u.perfil||'atendente';
+  if(u.perfil==='admin'){ document.getElementById('u-modulos-group').style.opacity='0.5'; _renderModulosChecks(MODULOS_LISTA.map(m=>m.id)); }
+  else { document.getElementById('u-modulos-group').style.opacity='1'; _renderModulosChecks(u.modulos||[]); }
+  document.getElementById('modal-usuario').classList.add('open');
+}
+
+function salvarUsuario(){
+  const nome=document.getElementById('u-nome').value.trim();
+  const email=document.getElementById('u-email').value.trim().toLowerCase();
+  const senha=document.getElementById('u-senha').value;
+  const perfil=document.getElementById('u-perfil').value;
+  if(!nome||!email||!senha){ showToast('Preencha nome, e-mail e senha.','peach'); return; }
+  const modulos=Array.from(document.querySelectorAll('.u-mod-check:checked')).map(c=>c.value);
+  // email duplicado?
+  const jaExiste=usuarios.find(u=>u.email===email);
+  if(jaExiste && email!==_usuarioEditEmail){ showToast('Já existe um usuário com este e-mail.','vermelha'); return; }
+  if(_usuarioEditEmail){
+    const idx=usuarios.findIndex(u=>u.email===_usuarioEditEmail);
+    if(idx>=0) usuarios[idx]={email,nome,senha,perfil,modulos};
+  } else {
+    usuarios.push({email,nome,senha,perfil,modulos});
+  }
+  salvarUsuarios();
+  renderUsuarios();
+  closeModal('modal-usuario');
+  showToast('Usuário salvo!','sage');
+}
+
+function apagarUsuario(email){
+  if(usuarios.length<=1){ showToast('Deve haver ao menos um usuário.','peach'); return; }
+  const cur=getCurrentUser();
+  if(cur && cur.email===email){ showToast('Você não pode apagar o próprio usuário logado.','peach'); return; }
+  if(!confirm('Apagar este usuário?'))return;
+  usuarios=usuarios.filter(u=>u.email!==email);
+  salvarUsuarios();
+  renderUsuarios();
+  showToast('Usuário apagado.','peach');
+}
+
 // ═══════════════════ INIT ═══════════════════
 document.addEventListener('DOMContentLoaded',()=>{
   loadAll();
@@ -154,11 +316,14 @@ document.addEventListener('DOMContentLoaded',()=>{
   renderAvaliacoes();
   const recEl=document.getElementById('d-recorrente');
   if(recEl)recEl.addEventListener('change',function(){document.getElementById('d-recorrencia').style.display=this.checked?'':'none';});
+  carregarUsuarios();
+  aplicarPermissoes();
 });
 
 // ═══════════════════ NAV ═══════════════════
-const PT={overview:'Visão Geral',kpis:'Meus KPIs',performance:'Acompanhamento de Performance',tasks:'Tarefas',calendar:'Calendário',ai:'Assistente IA',team:'Equipe',salary:'Salários',drive:'Google Drive',onboarding:'Onboarding de Imóveis',gmail:'Gmail',notes:'Anotações',focus:'Foco',projetos:'Projetos',compras:'Registro de Compras',reunioes:'Reuniões e Transcrições',avaliacoes:'Avaliações de Hóspedes'};
+const PT={overview:'Visão Geral',kpis:'Meus KPIs',performance:'Acompanhamento de Performance',tasks:'Tarefas',calendar:'Calendário',ai:'Assistente IA',team:'Equipe',salary:'Salários',drive:'Google Drive',onboarding:'Onboarding de Imóveis',gmail:'Gmail',notes:'Anotações',focus:'Foco',projetos:'Projetos',compras:'Registro de Compras',reunioes:'Reuniões e Transcrições',avaliacoes:'Avaliações de Hóspedes',usuarios:'Usuários e Acessos'};
 function showPanel(id,btn){
+  if(typeof podeAcessar==='function' && id!=='usuarios'){ const u=getCurrentUser(); if(u && u.perfil!=='admin' && !podeAcessar(id)){ return; } }
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('panel-'+id).classList.add('active');

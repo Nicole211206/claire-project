@@ -42,22 +42,28 @@ export default {
       }
       if (url.pathname.endsWith('/reviews')) {
         const token = await getToken(env);
-        // Pagina TODAS as avaliações (Hostaway limita por página). Busca em blocos até acabar.
-        const limit = 500;
+        // Paginação robusta: dedup por ID + usa o 'count' oficial do Hostaway pra saber quando parar.
+        const limit = 100;
         let offset = 0;
-        let todas = [];
-        for (let pagina = 0; pagina < 40; pagina++) { // teto de segurança: 40 páginas (20 mil)
-          const r = await fetch(HOSTAWAY_BASE + '/reviews?limit=' + limit + '&offset=' + offset + '&sortOrder=desc', {
+        let hostawayCount = null;
+        const porId = new Map();
+        for (let pagina = 0; pagina < 300; pagina++) { // teto de segurança
+          const r = await fetch(HOSTAWAY_BASE + '/reviews?limit=' + limit + '&offset=' + offset, {
             headers: { 'Authorization': 'Bearer ' + token, 'Cache-control': 'no-cache' },
           });
           const data = await r.json();
+          if (hostawayCount === null && data.count != null) hostawayCount = data.count;
           const lote = data.result || [];
-          todas = todas.concat(lote);
-          if (lote.length < limit) break; // última página
+          if (lote.length === 0) break;
+          lote.forEach(function (rv) { if (rv && rv.id != null) porId.set(rv.id, rv); });
           offset += limit;
+          if (hostawayCount !== null && offset >= hostawayCount) break;
         }
-        const list = todas.map(normalizeReview);
-        return json({ reviews: list, total: list.length }, cors);
+        const arr = Array.from(porId.values());
+        const list = arr.map(normalizeReview);
+        const comTexto = list.filter(function (x) { return x.texto && x.texto.trim(); }).length;
+        const comNota = list.filter(function (x) { return x.rating != null; }).length;
+        return json({ reviews: list, total: list.length, hostawayCount: hostawayCount, comTexto: comTexto, comNota: comNota }, cors);
       }
       // Contagem de reservas por período de CHECK-OUT: /reservations?from=YYYY-MM-DD&to=YYYY-MM-DD
       if (url.pathname.endsWith('/reservations')) {

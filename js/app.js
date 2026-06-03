@@ -2807,10 +2807,13 @@ async function sincronizarAvaliacoes(){
     const resp=await fetch(url.replace(/\/$/,'')+'/reviews');
     const data=await resp.json();
     if(data.error){ showToast('Erro do Worker: '+data.error,'vermelha'); return; }
-    avaliacoes=(data.reviews||[]).map(r=>({...r, wecare:mencionaWecare(r.texto)}));
+    // Ignora registros vazios (hóspede não avaliou — status expirado, sem nota e sem texto)
+    const todas=(data.reviews||[]);
+    avaliacoes=todas.filter(r=>r.rating!=null||(r.texto&&r.texto.trim())||(r.comentarioInterno&&r.comentarioInterno.trim())).map(r=>({...r, wecare:mencionaWecare(r.texto)}));
     renderAvaliacoes();
     carregarReservasPeriodo();
-    showToast('✅ '+avaliacoes.length+' avaliações carregadas!','sage');
+    const vazias=todas.length-avaliacoes.length;
+    showToast('✅ '+avaliacoes.length+' avaliações reais carregadas'+(vazias>0?' ('+vazias+' reservas sem avaliação ignoradas)':'')+'.','sage');
   }catch(e){
     showToast('Não foi possível conectar ao Worker. Verifique a URL e se o TI publicou.','vermelha');
   }

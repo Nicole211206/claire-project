@@ -42,13 +42,22 @@ export default {
       }
       if (url.pathname.endsWith('/reviews')) {
         const token = await getToken(env);
-        // Hostaway retorna até 'limit' avaliações; ajuste se precisar paginar
-        const r = await fetch(HOSTAWAY_BASE + '/reviews?limit=1000&sortOrder=desc', {
-          headers: { 'Authorization': 'Bearer ' + token, 'Cache-control': 'no-cache' },
-        });
-        const data = await r.json();
-        const list = (data.result || []).map(normalizeReview);
-        return json({ reviews: list }, cors);
+        // Pagina TODAS as avaliações (Hostaway limita por página). Busca em blocos até acabar.
+        const limit = 500;
+        let offset = 0;
+        let todas = [];
+        for (let pagina = 0; pagina < 40; pagina++) { // teto de segurança: 40 páginas (20 mil)
+          const r = await fetch(HOSTAWAY_BASE + '/reviews?limit=' + limit + '&offset=' + offset + '&sortOrder=desc', {
+            headers: { 'Authorization': 'Bearer ' + token, 'Cache-control': 'no-cache' },
+          });
+          const data = await r.json();
+          const lote = data.result || [];
+          todas = todas.concat(lote);
+          if (lote.length < limit) break; // última página
+          offset += limit;
+        }
+        const list = todas.map(normalizeReview);
+        return json({ reviews: list, total: list.length }, cors);
       }
       // Contagem de reservas por período de CHECK-OUT: /reservations?from=YYYY-MM-DD&to=YYYY-MM-DD
       if (url.pathname.endsWith('/reservations')) {

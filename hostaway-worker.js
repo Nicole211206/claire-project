@@ -80,6 +80,32 @@ export default {
         // Hostaway devolve 'count' com o total que casa com o filtro
         return json({ total: (data.count != null ? data.count : (data.result ? data.result.length : 0)) }, cors);
       }
+      // Estatísticas: números resumidos pra verificação rápida (resposta pequena)
+      if (url.pathname.endsWith('/stats')) {
+        const token = await getToken(env);
+        const limit = 100;
+        let offset = 0;
+        let hostawayCount = null;
+        const porId = new Map();
+        for (let pagina = 0; pagina < 300; pagina++) {
+          const r = await fetch(HOSTAWAY_BASE + '/reviews?limit=' + limit + '&offset=' + offset, {
+            headers: { 'Authorization': 'Bearer ' + token, 'Cache-control': 'no-cache' },
+          });
+          const data = await r.json();
+          if (hostawayCount === null && data.count != null) hostawayCount = data.count;
+          const lote = data.result || [];
+          if (lote.length === 0) break;
+          lote.forEach(function (rv) { if (rv && rv.id != null) porId.set(rv.id, rv); });
+          offset += limit;
+          if (hostawayCount !== null && offset >= hostawayCount) break;
+        }
+        const arr = Array.from(porId.values()).map(normalizeReview);
+        const comTexto = arr.filter(function (x) { return x.texto && x.texto.trim(); }).length;
+        const comNota = arr.filter(function (x) { return x.rating != null; }).length;
+        const porCanal = {};
+        arr.forEach(function (x) { porCanal[x.canal] = (porCanal[x.canal] || 0) + 1; });
+        return json({ totalBaixado: arr.length, hostawayCount: hostawayCount, comTexto: comTexto, comNota: comNota, porCanal: porCanal }, cors);
+      }
       // Diagnóstico: retorna 2 avaliações cruas (sem normalizar) pra inspecionar os campos do Hostaway
       if (url.pathname.endsWith('/debug')) {
         const token = await getToken(env);

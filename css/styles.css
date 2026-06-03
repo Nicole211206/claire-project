@@ -101,7 +101,7 @@ body {
   letter-spacing: 0.4px;
 }
 
-.sidebar-nav { padding: 14px 10px; flex: 1; }
+.sidebar-nav { padding: 14px 10px; flex: 1; overflow-y: auto; min-height: 0; }
 
 .nav-section {
   font-size: 10px;

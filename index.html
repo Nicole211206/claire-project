@@ -76,6 +76,7 @@ function verificarLogin(){
     <div class="nav-section">Principal</div>
     <button class="nav-item active" onclick="showPanel('overview',this)"><i class="fa-solid fa-gauge-simple-high"></i> Visão Geral</button>
     <button class="nav-item" onclick="showPanel('kpis',this)"><i class="fa-solid fa-chart-line"></i> Meus KPIs</button>
+    <button class="nav-item" onclick="showPanel('performance',this)"><i class="fa-solid fa-chart-column"></i> Performance</button>
     <button class="nav-item" onclick="showPanel('tasks',this)"><i class="fa-solid fa-list-check"></i> Tarefas <span class="nav-badge" id="tasks-badge">0</span></button>
     <button class="nav-item" onclick="showPanel('calendar',this)"><i class="fa-regular fa-calendar-days"></i> Calendário</button>
     <button class="nav-item" onclick="showPanel('ai',this)"><i class="fa-solid fa-wand-magic-sparkles"></i> Assistente IA</button>
@@ -229,6 +230,15 @@ function verificarLogin(){
         </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;" id="kpi-cards"></div>
+    </div>
+
+    <!-- ── PERFORMANCE ── -->
+    <div class="panel" id="panel-performance">
+      <div style="margin-bottom:18px;">
+        <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Acompanhamento de Performance</h2>
+        <p style="color:var(--text3);font-size:13px;margin-top:2px;">Visão geral de KPIs e projetos</p>
+      </div>
+      <div id="performance-body"></div>
     </div>
 
     <!-- ── TAREFAS ── -->
@@ -960,6 +970,6 @@ function verificarLogin(){
   </div>
 </div>
 
-<script src="js/app.js?v=6"></script>
+<script src="js/app.js?v=7"></script>
 </body>
 </html>

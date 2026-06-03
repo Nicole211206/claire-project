@@ -148,12 +148,13 @@ document.addEventListener('DOMContentLoaded',()=>{
   renderReunioes();
   renderCompras();
   renderFocusInsights();
+  renderPerformance();
   const recEl=document.getElementById('d-recorrente');
   if(recEl)recEl.addEventListener('change',function(){document.getElementById('d-recorrencia').style.display=this.checked?'':'none';});
 });
 
 // ═══════════════════ NAV ═══════════════════
-const PT={overview:'Visão Geral',kpis:'Meus KPIs',tasks:'Tarefas',calendar:'Calendário',ai:'Assistente IA',team:'Equipe',salary:'Salários',drive:'Google Drive',onboarding:'Onboarding de Imóveis',gmail:'Gmail',notes:'Anotações',focus:'Foco',projetos:'Projetos',compras:'Registro de Compras',reunioes:'Reuniões e Transcrições'};
+const PT={overview:'Visão Geral',kpis:'Meus KPIs',performance:'Acompanhamento de Performance',tasks:'Tarefas',calendar:'Calendário',ai:'Assistente IA',team:'Equipe',salary:'Salários',drive:'Google Drive',onboarding:'Onboarding de Imóveis',gmail:'Gmail',notes:'Anotações',focus:'Foco',projetos:'Projetos',compras:'Registro de Compras',reunioes:'Reuniões e Transcrições'};
 function showPanel(id,btn){
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
@@ -168,6 +169,7 @@ function showPanel(id,btn){
   if(id==='reunioes'){renderReunioes();}
   if(id==='compras'){renderCompras();}
   if(id==='focus'){renderFocusInsights();}
+  if(id==='performance'){renderPerformance();}
 }
 
 function contarDemandasAtrasadas(){
@@ -865,8 +867,8 @@ function renderTeam(){
       '<div style="font-size:12px;">Média mensal: <strong style="color:'+(media?getRespBand(media).c==='verde'?'var(--sage)':getRespBand(media).c==='amarela'?'var(--amarela)':'var(--vermelha)':'var(--text3)')+'">'+(media?media+' min':'—')+'</strong></div>'+
       '<button class="btn btn-sm" onclick="zerarRespMes(\''+a.id+'\')" style="font-size:10px;padding:3px 8px;"><i class="fa-solid fa-rotate-left"></i> Zerar Mês</button>'+
       '</div></div>'+
-      '<div style="margin-bottom:8px;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;"><div style="font-size:10.5px;font-weight:700;text-transform:uppercase;color:var(--text3);">Demandas ('+a.demands.length+')</div><button class="btn btn-sm btn-rose" onclick="openAttModal(\''+a.id+'\')" style="font-size:10px;padding:3px 8px;"><i class="fa-solid fa-list"></i> Ver</button></div>'+
-      a.demands.slice(0,3).map(d=>'<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-top:1px solid var(--border);"><div style="width:3px;height:20px;border-radius:2px;background:'+(PC2[d.prio]||'var(--text3)')+';flex-shrink:0;"></div><span style="font-size:11px;color:var(--text3);font-weight:600;min-width:36px;">'+(PL[d.prio]||'')+' </span><span style="font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(d.desc)+'</span>'+(d.recorrente?'<span style="font-size:10px;background:var(--lav-light);color:var(--lavender);padding:1px 5px;border-radius:8px;">🔁</span>':'')+'</div>').join('')+
+      '<div style="margin-bottom:8px;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;"><div style="font-size:10.5px;font-weight:700;text-transform:uppercase;color:var(--text3);">Demandas ('+a.demands.filter(d=>d.s!=='done').length+')</div><button class="btn btn-sm btn-rose" onclick="openAttModal(\''+a.id+'\')" style="font-size:10px;padding:3px 8px;"><i class="fa-solid fa-list"></i> Ver</button></div>'+
+      a.demands.filter(d=>d.s!=='done').slice(0,3).map(d=>'<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-top:1px solid var(--border);"><div style="width:3px;height:20px;border-radius:2px;background:'+(PC2[d.prio]||'var(--text3)')+';flex-shrink:0;"></div><span style="font-size:11px;color:var(--text3);font-weight:600;min-width:36px;">'+(PL[d.prio]||'')+' </span><span style="font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(d.desc)+'</span>'+(d.recorrente?'<span style="font-size:10px;background:var(--lav-light);color:var(--lavender);padding:1px 5px;border-radius:8px;">🔁</span>':'')+'</div>').join('')+
       '</div>'+
       '<textarea class="form-input" rows="2" style="font-size:12px;resize:none;" placeholder="Anotações..." oninput="setNote(\''+a.id+'\',this.value)">'+esc(a.note||'')+'</textarea>'+
       '</div></div>';
@@ -915,14 +917,18 @@ function renderTeamOv(){
     </tr>`).join('');
 }
 
+let mostrarDemandasConcluidas=false;
+function toggleDemandasConcluidas(id){mostrarDemandasConcluidas=!mostrarDemandasConcluidas;openAttModal(id);}
 function openAttModal(id){
   const a=ATTS.find(x=>x.id===id);
   document.getElementById('att-modal-title').textContent=a.name+' — Demandas';
+  const visiveis=a.demands.map((d,i)=>({d,i})).filter(x=>mostrarDemandasConcluidas||x.d.s!=='done');
   document.getElementById('att-modal-body').innerHTML=`
     <div style="margin-bottom:12px;"><button class="btn btn-rose btn-sm" onclick="addDemandTo('${id}')"><i class="fa-solid fa-plus"></i> Nova Demanda</button></div>
-    ${a.demands.length===0?'<p style="color:var(--text3);font-size:13px;text-align:center;padding:14px;">Nenhuma demanda.</p>':
+    `+'<label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:10px;"><input type="checkbox" '+(mostrarDemandasConcluidas?'checked':'')+' onchange="toggleDemandasConcluidas(\''+id+'\')"> Mostrar concluídas</label>'+`
+    ${visiveis.length===0?'<p style="color:var(--text3);font-size:13px;text-align:center;padding:14px;">Nenhuma demanda.</p>':
     '<table class="data-table"><thead><tr><th>Demanda</th><th>Prazo</th><th>Status</th><th></th></tr></thead><tbody>'+
-    a.demands.map((d,i)=>`<tr><td style="max-width:200px;">${d.desc}</td><td>${fd(d.due)}</td><td><select onchange="setDemandStatus('${id}',${i},this.value)" style="font-family:var(--font-body);font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg3);color:var(--text);outline:none;"><option value="pending" ${d.s==='pending'?'selected':''}>Pendente</option><option value="done" ${d.s==='done'?'selected':''}>Concluída</option><option value="late" ${d.s==='late'?'selected':''}>Atrasada</option></select></td><td><button onclick="delDemand('${id}',${i})" style="background:none;border:none;color:var(--vermelha);cursor:pointer;font-size:12px;"><i class="fa-solid fa-trash"></i></button></td></tr>`).join('')+
+    visiveis.map(({d,i})=>`<tr${d.s==='done'?' style="opacity:0.55;"':''}><td style="max-width:200px;${d.s==='done'?'text-decoration:line-through;':''}">${d.desc}</td><td>${fd(d.due)}</td><td><select onchange="setDemandStatus('${id}',${i},this.value)" style="font-family:var(--font-body);font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg3);color:var(--text);outline:none;"><option value="pending" ${d.s==='pending'?'selected':''}>Pendente</option><option value="done" ${d.s==='done'?'selected':''}>Concluída</option><option value="late" ${d.s==='late'?'selected':''}>Atrasada</option></select></td><td><button onclick="delDemand('${id}',${i})" style="background:none;border:none;color:var(--vermelha);cursor:pointer;font-size:12px;"><i class="fa-solid fa-trash"></i></button></td></tr>`).join('')+
     '</tbody></table>'}`;
   document.getElementById('modal-att').classList.add('open');
 }
@@ -939,6 +945,48 @@ function addDemand(){
 }
 function setDemandStatus(id,i,v){const a=ATTS.find(x=>x.id===id);if(a&&a.demands[i])a.demands[i].s=v;renderTeam();renderTeamOv();openAttModal(id);}
 function delDemand(id,i){const a=ATTS.find(x=>x.id===id);if(a){a.demands.splice(i,1);renderTeam();renderTeamOv();openAttModal(id);}}
+
+function renderPerformance(){
+  const el=document.getElementById('performance-body');if(!el)return;
+  const g=calcGlobal(), band=getBand(g);
+  let html='<div class="card" style="margin-bottom:16px;"><div class="card-body" style="padding:20px;display:flex;align-items:center;gap:30px;flex-wrap:wrap;">'+
+    '<div><div style="font-size:11px;color:var(--text3);text-transform:uppercase;">Atingimento Global</div><div style="font-family:var(--font-display);font-size:42px;font-weight:700;color:var(--rose);">'+g+'%</div></div>'+
+    '<div><div style="font-size:11px;color:var(--text3);text-transform:uppercase;margin-bottom:4px;">Bandeira</div><div style="font-size:18px;font-weight:700;">'+(band?bandHTML(band.name):'—')+'</div></div>'+
+    '</div></div>';
+  html+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);letter-spacing:0.5px;margin-bottom:10px;">KPIs do Mês</div>';
+  html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:24px;">';
+  KPI_DEFS.forEach(k=>{
+    const p=k.calc(kpiVals[k.id]); const ps=p!==null?Math.round(p):null;
+    const cor=ps===null?'var(--text3)':ps>=100?'var(--sage)':ps>=80?'var(--amarela)':'var(--vermelha)';
+    html+='<div class="card"><div class="card-body" style="padding:14px;">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><div class="metric-icon '+k.color+'" style="width:24px;height:24px;font-size:11px;margin:0;"><i class="fa-solid '+k.icon+'"></i></div><div style="font-size:12px;font-weight:600;flex:1;">'+k.label+'</div></div>'+
+      '<div style="font-family:var(--font-display);font-size:26px;font-weight:700;color:'+cor+';">'+(ps!==null?ps+'%':'—')+'</div>'+
+      '<div style="font-size:10.5px;color:var(--text3);">Peso '+Math.round(k.peso*100)+'% · Meta '+k.meta+' '+k.unit+'</div>'+
+      '<div class="kpi-track" style="margin-top:6px;"><div class="kpi-fill '+k.color+'" style="width:'+(p?Math.min(p,150)+'%':'0%')+'"></div></div>'+
+      '</div></div>';
+  });
+  html+='</div>';
+  const andamento=projetos.filter(p=>p.status==='andamento');
+  const planejamento=projetos.filter(p=>p.status==='planejamento');
+  const concluido=projetos.filter(p=>p.status==='concluido');
+  const projCard=(titulo,lista,cor)=>{
+    return '<div class="card"><div class="card-header"><div class="card-title" style="color:'+cor+';">'+titulo+' ('+lista.length+')</div></div><div class="card-body" style="padding:12px 16px;">'+
+      (lista.length===0?'<div style="font-size:12px;color:var(--text3);text-align:center;padding:8px;">Nenhum projeto.</div>':
+      lista.map(p=>'<div onclick="abrirProjetoModal('+p.id+')" style="padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;">'+
+        '<div style="font-size:13px;font-weight:600;">'+esc(p.nome||'(sem nome)')+'</div>'+
+        (p.colaboradores?'<div style="font-size:11px;color:var(--text3);">'+esc(p.colaboradores)+'</div>':'')+
+        (p.tempoEstimado?'<div style="font-size:11px;color:var(--text3);"><i class="fa-regular fa-clock"></i> '+esc(p.tempoEstimado)+'</div>':'')+
+        '</div>').join(''))+
+      '</div></div>';
+  };
+  html+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);letter-spacing:0.5px;margin-bottom:10px;">Projetos</div>';
+  html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;">'+
+    projCard('🚀 Em Andamento',andamento,'var(--peach)')+
+    projCard('📋 A Iniciar',planejamento,'var(--sky)')+
+    projCard('✅ Concluídos',concluido,'var(--sage)')+
+    '</div>';
+  el.innerHTML=html;
+}
 
 // ═══════════════════ SALARY ═══════════════════
 function renderSalary(){

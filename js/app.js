@@ -127,6 +127,13 @@ let _gcalTodosEventos=[]; // todos os eventos carregados do Google
 let avaliacoes=[]; // avaliações carregadas do Hostaway
 let avFiltroCanal='', avFiltroMinEstrelas=0, avOrdenar='recentes', avSoWecare=false;
 let avFiltroPublicada='', avFiltroOrigem='', avBusca='', avDe='', avAte='';
+let avView='cards';
+function setAvView(modo,btn){
+  avView=modo;
+  document.querySelectorAll('#avview-cards,#avview-tabela').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  renderAvaliacoes();
+}
 
 // ═══════════════════ LOGIN MULTIUSUÁRIO ═══════════════════
 let usuarios=[]; // gerenciados pelo admin (espelha localStorage nx_users)
@@ -446,9 +453,10 @@ function buildNivelGrid(){
 function selNivel(i){selNivelIdx=i;buildNivelGrid();renderKPIs();renderSalary();}
 
 function calcGlobal(){
-  let tot=0,pos=0;
-  KPI_DEFS.forEach(k=>{const p=k.calc(kpiVals[k.id]);if(p!==null){tot+=(p/100)*k.peso;pos+=k.peso;}});
-  return pos>0?Math.round((tot/pos)*100):0;
+  // Média ponderada de TODOS os KPIs — não preenchidos contam como 0%
+  let tot=0, totalPeso=0;
+  KPI_DEFS.forEach(k=>{const p=k.calc(kpiVals[k.id]); tot+=((p!==null?p:0)/100)*k.peso; totalPeso+=k.peso;});
+  return totalPeso>0?Math.round((tot/totalPeso)*100):0;
 }
 
 function getBand(pct){
@@ -2664,6 +2672,80 @@ function removerTurno(id){
   recalcularDiasDosTurnos();
   renderTurnos();
 }
+function abrirGerarEscala(){
+  const mes=turnosMesSel||new Date().toISOString().substring(0,7);
+  document.getElementById('ge-de').value=mes+'-01';
+  const partes=mes.split('-').map(Number); const y=partes[0], m=partes[1];
+  const ult=new Date(y,m,0).getDate();
+  document.getElementById('ge-ate').value=mes+'-'+String(ult).padStart(2,'0');
+  document.getElementById('ge-turno').value='dia';
+  document.getElementById('ge-modo').value='todos';
+  const opts=ATTS.map(a=>'<option value="'+a.id+'">'+esc(a.name)+'</option>').join('');
+  document.getElementById('ge-attA').innerHTML=opts;
+  document.getElementById('ge-attB').innerHTML=opts;
+  geAtualizarModo('todos');
+  document.getElementById('modal-gerar-escala').classList.add('open');
+}
+function geAtualizarModo(modo){
+  document.getElementById('ge-attB-group').style.display = modo==='alterna2' ? '' : 'none';
+}
+function gerarEscala(){
+  const de=document.getElementById('ge-de').value, ate=document.getElementById('ge-ate').value;
+  if(!de||!ate||de>ate){ showToast('Defina um período válido.','peach'); return; }
+  const turno=document.getElementById('ge-turno').value;
+  const modo=document.getElementById('ge-modo').value;
+  const attA=document.getElementById('ge-attA').value;
+  const attB=document.getElementById('ge-attB').value;
+  let d=new Date(de+'T12:00:00'); const fim=new Date(ate+'T12:00:00');
+  let i=0, criados=0;
+  while(d<=fim){
+    const ds=d.toISOString().split('T')[0];
+    let att=null;
+    if(modo==='todos') att=attA;
+    else if(modo==='alterna1'){ if(i%2===0) att=attA; }
+    else if(modo==='alterna2'){ att = (i%2===0)?attA:attB; }
+    if(att){
+      const existe=turnos.some(t=>t.data===ds&&t.turno===turno&&t.attId===att);
+      if(!existe){ turnos.push({id:Date.now()+i, data:ds, turno:turno, attId:att, confirmado:false}); criados++; }
+    }
+    d.setDate(d.getDate()+1); i++;
+  }
+  closeModal('modal-gerar-escala');
+  renderTurnos();
+  showToast(criados+' turnos gerados!','sage');
+}
+function solicitarConfirmacaoTurnos(){
+  const mes=turnosMesSel||new Date().toISOString().substring(0,7);
+  const n=turnos.filter(t=>t.data.startsWith(mes)).length;
+  if(n===0){ showToast('Não há turnos lançados neste mês.','peach'); return; }
+  turnos.forEach(t=>{ if(t.data.startsWith(mes)) t.solicitado=true; });
+  renderTurnos();
+  showToast('Confirmação solicitada! As atendentes verão o pedido ao acessar a Claire.','sage');
+}
+function zerarTurnosMes(){
+  const mes=turnosMesSel||new Date().toISOString().substring(0,7);
+  if(!confirm('Apagar todos os turnos de '+mes+'? Esta ação não pode ser desfeita.')) return;
+  turnos=turnos.filter(t=>!t.data.startsWith(mes));
+  if(typeof recalcularDiasDosTurnos==='function') recalcularDiasDosTurnos();
+  renderTurnos();
+  showToast('Turnos de '+mes+' zerados.','peach');
+}
+function exportarTurnosPDF(){
+  const mes=turnosMesSel||new Date().toISOString().substring(0,7);
+  const doMes=turnos.filter(t=>t.data.startsWith(mes)).sort((a,b)=>a.data.localeCompare(b.data)||a.turno.localeCompare(b.turno));
+  if(doMes.length===0){ showToast('Não há turnos neste mês.','peach'); return; }
+  const nome=id=>{const a=ATTS.find(x=>x.id===id);return a?a.name:id;};
+  let linhas=doMes.map(t=>'<tr><td style="padding:6px 10px;border-bottom:1px solid #eee;">'+t.data.split('-').reverse().join('/')+'</td><td style="padding:6px 10px;border-bottom:1px solid #eee;">'+(t.turno==='dia'?'Dia (07-19h)':'Noite (19-07h)')+'</td><td style="padding:6px 10px;border-bottom:1px solid #eee;">'+nome(t.attId)+'</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:center;">'+(t.confirmado?'✓ Confirmado':'—')+'</td></tr>').join('');
+  const resumo=ATTS.map(a=>{const c=doMes.filter(t=>t.attId===a.id).length;return c>0?'<li>'+a.name+': '+c+' turnos</li>':'';}).join('');
+  const html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Escala '+mes+'</title><style>body{font-family:Arial,sans-serif;padding:40px;color:#222}h1{color:#c0616a;font-size:20px}table{width:100%;border-collapse:collapse;margin-top:12px}th{background:#c0616a;color:#fff;padding:8px 10px;text-align:left;font-size:12px}@media print{button{display:none}}</style></head><body>'+
+    '<h1>📅 Escala de Turnos — '+mes+'</h1>'+
+    '<ul style="font-size:13px;color:#555;">'+resumo+'</ul>'+
+    '<table><thead><tr><th>Data</th><th>Turno</th><th>Atendente</th><th style="text-align:center;">Status</th></tr></thead><tbody>'+linhas+'</tbody></table>'+
+    '<p style="margin-top:24px;font-size:11px;color:#aaa;">Claire · WeCare · gerado em '+new Date().toLocaleString('pt-BR')+'</p>'+
+    '<script>window.onload=function(){window.print();}<\/script></body></html>';
+  const win=window.open('','_blank'); if(!win){ showToast('Permita pop-ups para gerar o PDF.','peach'); return; }
+  win.document.write(html); win.document.close();
+}
 function confirmarQuinzena(attId, parcela){
   const mes = turnosMesSel || new Date().toISOString().substring(0,7);
   turnos.forEach(t=>{ if(t.attId===attId && t.data.startsWith(mes) && parcelaDoDia(t.data)===parcela){ t.confirmado=true; } });
@@ -2680,7 +2762,13 @@ function renderTurnos(){
   const ehAtendente=(typeof getCurrentUser==='function') && getCurrentUser() && getCurrentUser().perfil==='atendente';
   const attsVisiveis = ehAtendente && minhaAtt ? [minhaAtt] : ATTS;
   const addBtn=document.getElementById('turnos-add-btn'); if(addBtn) addBtn.style.display=ehAtendente?'none':'';
-  el.innerHTML=attsVisiveis.map(a=>{
+  ['turnos-gerar-btn','turnos-solicitar-btn','turnos-pdf-btn','turnos-zerar-btn'].forEach(bid=>{ const b=document.getElementById(bid); if(b) b.style.display=ehAtendente?'none':''; });
+  let bannerHtml='';
+  if(ehAtendente){
+    const pend=attsVisiveis.some(a=>turnos.some(t=>t.attId===a.id && t.data.startsWith(mes) && t.solicitado && !t.confirmado));
+    if(pend) bannerHtml='<div style="background:var(--peach-light);color:var(--peach);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:14px;font-size:13px;font-weight:600;"><i class="fa-solid fa-triangle-exclamation"></i> Você tem turnos aguardando sua confirmação.</div>';
+  }
+  el.innerHTML=bannerHtml+attsVisiveis.map(a=>{
     const tDia=['P1','P2'].map(parc=>{
       const lista=turnos.filter(t=>t.attId===a.id && t.data.startsWith(mes) && parcelaDoDia(t.data)===parc).sort((x,y)=>x.data.localeCompare(y.data));
       const confirmados=lista.filter(t=>t.confirmado).length;
@@ -2776,9 +2864,32 @@ function renderAvaliacoes(){
   const el=document.getElementById('avaliacoes-lista');if(!el)return;
   const lista=_avFiltradas();
   if(avaliacoes.length===0){ el.innerHTML='<div class="card"><div class="card-body" style="text-align:center;padding:40px;color:var(--text3);"><i class="fa-solid fa-star" style="font-size:32px;opacity:0.35;margin-bottom:10px;display:block;"></i><div style="font-size:13px;margin-bottom:10px;">Nenhuma avaliação carregada.</div><button class="btn btn-sm btn-rose" onclick="sincronizarAvaliacoes()"><i class="fa-solid fa-rotate"></i> Sincronizar com Hostaway</button><div style="font-size:11px;color:var(--text3);margin-top:10px;">Requer a URL do Worker configurada (veja Configurações).</div></div></div>'; return; }
+  if(avView==='tabela'){
+    const origemLabel=t=>t==='guest-to-host'?'Hóspede':t==='host-to-guest'?'Anfitrião':(t||'—');
+    const trunc=(s,n)=>{s=s||'';return s.length>n?esc(s.substring(0,n))+'…':esc(s);};
+    el.innerHTML='<div class="card"><div style="overflow-x:auto;"><table class="data-table" style="font-size:12px;"><thead><tr>'+
+      '<th>Hóspede</th><th>Imóvel</th><th>Canal</th><th>Origem</th><th>Check-in</th><th>Check-out</th><th style="text-align:center;">Estrelas</th><th>Aval. Pública</th><th>Aval. Privada</th>'+
+      '</tr></thead><tbody>'+
+      lista.map(a=>{
+        const estrelas=a.rating!=null?(a.rating/2).toFixed(1)+'★':'—';
+        return '<tr onclick="abrirAvaliacaoModal(\''+a.id+'\')" style="cursor:pointer;'+(a.wecare?'background:var(--rose-light);':'')+'">'+
+          '<td style="white-space:nowrap;">'+esc(a.hospede||'—')+'</td>'+
+          '<td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(a.imovel||'—')+'</td>'+
+          '<td style="white-space:nowrap;">'+logoCanal(a.canal)+' '+esc(a.canal||'—')+'</td>'+
+          '<td>'+origemLabel(a.tipo)+'</td>'+
+          '<td style="white-space:nowrap;">'+(a.checkin?new Date(a.checkin).toLocaleDateString('pt-BR'):'—')+'</td>'+
+          '<td style="white-space:nowrap;">'+(a.checkout?new Date(a.checkout).toLocaleDateString('pt-BR'):'—')+'</td>'+
+          '<td style="text-align:center;font-weight:600;color:var(--gold);white-space:nowrap;">'+estrelas+'</td>'+
+          '<td style="max-width:200px;">'+trunc(a.texto,80)+'</td>'+
+          '<td style="max-width:200px;color:var(--text3);">'+trunc(a.comentarioInterno,80)+'</td>'+
+          '</tr>';
+      }).join('')+
+      '</tbody></table></div></div>';
+    return;
+  }
   el.innerHTML=lista.map(a=>{
     const estrelas=a.rating!=null?'★'.repeat(Math.round(a.rating))+'☆'.repeat(Math.max(0,5-Math.round(a.rating))):'';
-    return '<div class="card" onclick="abrirAvaliacaoModal('+JSON.stringify(String(a.id))+')" style="margin-bottom:8px;cursor:pointer;'+(a.wecare?'border-left:3px solid var(--rose);':'')+'"><div class="card-body" style="padding:12px 16px;">'+
+    return '<div class="card" onclick="abrirAvaliacaoModal(\''+a.id+'\')" style="margin-bottom:8px;cursor:pointer;'+(a.wecare?'border-left:3px solid var(--rose);':'')+'"><div class="card-body" style="padding:12px 16px;">'+
       '<div style="display:flex;align-items:center;gap:10px;margin-bottom:5px;flex-wrap:wrap;">'+
       '<span style="color:var(--gold);font-size:14px;letter-spacing:1px;">'+estrelas+'</span>'+
       (a.rating!=null?'<span style="font-size:12px;font-weight:700;">'+a.rating+'</span>':'')+
@@ -2854,21 +2965,21 @@ function aplicarAvaliacoesNoKPI(){
   const per=periodoKPIAvaliacoes();
   const refData=a=>(a.checkout||a.submittedAt||a.data||'').substring(0,10);
   const noPeriodo=avaliacoes.filter(a=>a.tipo==='guest-to-host'&&a.rating!=null&&refData(a)>=per.de&&refData(a)<=per.ate);
+  // IMPORTANTE: o Hostaway entrega TODAS as notas na escala 0-10 (Airbnb e Booking).
   const medCanal=nomes=>{const arr=noPeriodo.filter(a=>nomes.includes(a.canal));return arr.length?arr.reduce((s,a)=>s+a.rating,0)/arr.length:null;};
-  const mAir=medCanal(['Airbnb']);
-  const mBook=medCanal(['Booking.com','Booking']);
+  const mAir10=medCanal(['Airbnb']);          // média Airbnb em 0-10
+  const mBook10=medCanal(['Booking.com','Booking']); // média Booking em 0-10
   if(!kpiSubVals.av) kpiSubVals.av={};
-  if(mAir!=null) kpiSubVals.av.airbnb=mAir.toFixed(2);
-  if(mBook!=null) kpiSubVals.av.booking=mBook.toFixed(2);
-  // combinar normalizando booking (0-10) para 0-5
+  // Exibição: Airbnb na escala real 0-5 (Hostaway/2); Booking na escala 0-10
+  if(mAir10!=null) kpiSubVals.av.airbnb=(mAir10/2).toFixed(2);
+  if(mBook10!=null) kpiSubVals.av.booking=mBook10.toFixed(2);
+  // KPI combinado em 0-5: cada canal normalizado para 0-5 (dividir o valor 0-10 por 2)
   const partes=[];
-  if(mAir!=null) partes.push(mAir);
-  if(mBook!=null) partes.push(mBook/2);
-  // se nenhum canal específico, usa média geral (assumindo escala 5)
-  if(partes.length===0){ const todas=noPeriodo; if(todas.length){ const g=todas.reduce((s,a)=>s+a.rating,0)/todas.length; partes.push(g); kpiSubVals.av.airbnb=g.toFixed(2);} }
+  if(mAir10!=null) partes.push(mAir10/2);
+  if(mBook10!=null) partes.push(mBook10/2);
   kpiVals.av = partes.length ? (partes.reduce((a,b)=>a+b,0)/partes.length).toFixed(2) : null;
   if(typeof renderKPIs==='function') renderKPIs();
-  showToast('KPI atualizado com avaliações de '+per.de+' a '+per.ate+' ('+noPeriodo.length+' avaliações).','sage');
+  showToast('KPI atualizado: Airbnb '+(mAir10!=null?(mAir10/2).toFixed(2)+'★':'—')+' · Booking '+(mBook10!=null?mBook10.toFixed(2)+'/10':'—')+' ('+noPeriodo.length+' avaliações de '+per.de+' a '+per.ate+').','sage');
 }
 
 let PRECOS_ENXOVAL = {

@@ -150,6 +150,21 @@ function getMinhaAtt(){ const u=getCurrentUser(); if(!u||!u.attId) return null; 
 function getCurrentUser(){ try{ return JSON.parse(sessionStorage.getItem('nx_currentuser')||'null'); }catch(e){ return null; } }
 function isAdmin(){ const u=getCurrentUser(); return u && u.perfil==='admin'; }
 function podeAcessar(modId){ const u=getCurrentUser(); if(!u) return false; if(u.perfil==='admin') return true; return (u.modulos||[]).includes(modId); }
+function attsDoUsuario(){
+  const u=getCurrentUser();
+  if(!u) return [];
+  if(u.perfil==='admin') return ATTS.slice();
+  const ids=new Set(u.attsPermitidos||[]);
+  if(u.attId) ids.add(u.attId); // atendente sempre vê a si mesmo
+  return ATTS.filter(a=>ids.has(a.id));
+}
+function podeVerAtt(attId){
+  const u=getCurrentUser();
+  if(!u) return false;
+  if(u.perfil==='admin') return true;
+  if(u.attId===attId) return true;
+  return (u.attsPermitidos||[]).includes(attId);
+}
 function carregarUsuarios(){ try{ usuarios=JSON.parse(localStorage.getItem('nx_users')||'[]'); }catch(e){ usuarios=[]; } }
 function salvarUsuarios(){ localStorage.setItem('nx_users', JSON.stringify(usuarios)); }
 
@@ -233,10 +248,19 @@ function _renderModulosChecks(modulosSelecionados){
   ).join('');
 }
 
+function _renderAttsPermChecks(selecionados){
+  document.getElementById('u-attsperm-checks').innerHTML=ATTS.map(a=>
+    '<label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer;"><input type="checkbox" class="u-attperm-check" value="'+a.id+'"'+((selecionados||[]).includes(a.id)?' checked':'')+'> '+esc(a.name)+'</label>'
+  ).join('');
+}
+
 function aplicarPresetPerfil(perfil){
   const grp=document.getElementById('u-modulos-group');
   const attGrp=document.getElementById('u-att-group');
+  const attsPermGrp=document.getElementById('u-attsperm-group');
   if(attGrp) attGrp.style.display = perfil==='atendente'?'':'none';
+  if(attsPermGrp) attsPermGrp.style.display = perfil==='coordenacao'?'':'none';
+  if(perfil==='coordenacao') _renderAttsPermChecks([]);
   const attSel=document.getElementById('u-att');
   if(attSel) attSel.innerHTML = ATTS.map(a=>'<option value="'+a.id+'">'+esc(a.name)+'</option>').join('');
   if(perfil==='admin'){ grp.style.opacity='0.5'; _renderModulosChecks(MODULOS_LISTA.map(m=>m.id)); return; }
@@ -268,6 +292,9 @@ function abrirEditarUsuario(email){
   document.getElementById('u-perfil').value=u.perfil||'atendente';
   const attGrp=document.getElementById('u-att-group');
   if(attGrp) attGrp.style.display = u.perfil==='atendente'?'':'none';
+  const attsPermGrp=document.getElementById('u-attsperm-group');
+  if(attsPermGrp) attsPermGrp.style.display = u.perfil==='coordenacao'?'':'none';
+  if(u.perfil==='coordenacao') _renderAttsPermChecks(u.attsPermitidos||[]);
   const attSel=document.getElementById('u-att');
   if(attSel){ attSel.innerHTML = ATTS.map(a=>'<option value="'+a.id+'">'+esc(a.name)+'</option>').join(''); if(u.attId) attSel.value=u.attId; }
   if(u.perfil==='admin'){ document.getElementById('u-modulos-group').style.opacity='0.5'; _renderModulosChecks(MODULOS_LISTA.map(m=>m.id)); }
@@ -283,14 +310,15 @@ function salvarUsuario(){
   if(!nome||!email||!senha){ showToast('Preencha nome, e-mail e senha.','peach'); return; }
   const modulos=Array.from(document.querySelectorAll('.u-mod-check:checked')).map(c=>c.value);
   const attId = perfil==='atendente' ? document.getElementById('u-att').value : '';
+  const attsPermitidos = Array.from(document.querySelectorAll('.u-attperm-check:checked')).map(c=>c.value);
   // email duplicado?
   const jaExiste=usuarios.find(u=>u.email===email);
   if(jaExiste && email!==_usuarioEditEmail){ showToast('Já existe um usuário com este e-mail.','vermelha'); return; }
   if(_usuarioEditEmail){
     const idx=usuarios.findIndex(u=>u.email===_usuarioEditEmail);
-    if(idx>=0) usuarios[idx]={email,nome,senha,perfil,modulos,attId};
+    if(idx>=0) usuarios[idx]={email,nome,senha,perfil,modulos,attId,attsPermitidos};
   } else {
-    usuarios.push({email,nome,senha,perfil,modulos,attId});
+    usuarios.push({email,nome,senha,perfil,modulos,attId,attsPermitidos});
   }
   salvarUsuarios();
   renderUsuarios();
@@ -1046,29 +1074,31 @@ function getRespBand(v){v=parseFloat(v);if(v<=3)return{l:'Elite',c:'elite'};if(v
 
 function renderTeam(){
   const cu=(typeof getCurrentUser==='function')?getCurrentUser():null;
-  const ehAtendente = cu && cu.perfil==='atendente';
-  const btnNovo=document.querySelector('#panel-team button[onclick*="adicionarMembro"]'); if(btnNovo) btnNovo.style.display=ehAtendente?'none':'';
-  if(ehAtendente){
-    const a=(typeof getMinhaAtt==='function')?getMinhaAtt():null;
+  const naoAdmin = !(typeof isAdmin==='function' && isAdmin());
+  const btnNovo=document.querySelector('#panel-team button[onclick*="adicionarMembro"]'); if(btnNovo) btnNovo.style.display=naoAdmin?'none':'';
+  if(naoAdmin){
     const grid=document.getElementById('team-grid');
-    if(!a){ grid.innerHTML='<div class="card"><div class="card-body" style="text-align:center;padding:30px;color:var(--text3);">Seu login não está vinculado a um membro da equipe. Fale com o admin.</div></div>'; return; }
+    const lista=(typeof attsDoUsuario==='function')?attsDoUsuario():[];
+    if(lista.length===0){ grid.innerHTML='<div class="card"><div class="card-body" style="text-align:center;padding:30px;color:var(--text3);">Sem membros atribuídos ao seu acesso.</div></div>'; return; }
     const PC2={high:'var(--vermelha)',med:'var(--amarela)',low:'var(--sage)'};
     const PL={high:'Alta',med:'Média',low:'Baixa'};
-    const media=a.respMes!=null?a.respMes.toFixed(1):'—';
-    const pend=a.demands.filter(d=>d.s!=='done');
-    grid.innerHTML='<div class="card" style="max-width:560px;">'+
-      '<div class="card-header">'+(a.foto?'<img src="'+esc(a.foto)+'" style="width:34px;height:34px;border-radius:50%;object-fit:cover;">':'<div class="avatar '+a.av+'" style="width:34px;height:34px;font-size:14px;">'+a.ini+'</div>')+'<div class="card-title">'+esc(a.name)+'</div></div>'+
-      '<div class="card-body" style="padding:14px 16px;">'+
-      '<div style="display:flex;gap:18px;margin-bottom:12px;flex-wrap:wrap;font-size:12.5px;">'+
-      '<div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;">R$/hora</span>R$ '+a.rate+'</div>'+
-      '<div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;">Escala</span>'+esc(a.escala||'12×36')+'</div>'+
-      '<div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;">Tempo médio resp.</span>'+media+(media!=='—'?' min':'')+'</div>'+
-      '</div>'+
-      '<div style="font-size:10.5px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:6px;">Minhas Demandas ('+pend.length+')</div>'+
-      '<button class="btn btn-sm btn-rose" style="margin-bottom:8px;font-size:11px;" onclick="openAttModal(\''+a.id+'\')"><i class="fa-solid fa-plus"></i> Nova / Dar baixa</button>'+
-      (pend.length===0?'<div style="font-size:12px;color:var(--text3);padding:6px 0;">Nenhuma demanda pendente. 🎉</div>':
-      pend.map(d=>'<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-top:1px solid var(--border);"><div style="width:3px;height:20px;border-radius:2px;background:'+(PC2[d.prio]||'var(--text3)')+';"></div><span style="font-size:11px;color:var(--text3);min-width:40px;">'+(PL[d.prio]||'')+'</span><span style="font-size:12.5px;flex:1;">'+esc(d.desc)+'</span>'+(d.due?'<span style="font-size:11px;color:var(--text3);">'+fd(d.due)+'</span>':'')+'</div>').join(''))+
-      '</div></div>';
+    grid.innerHTML=lista.map(a=>{
+      const media=a.respMes!=null?a.respMes.toFixed(1):'—';
+      const pend=a.demands.filter(d=>d.s!=='done');
+      return '<div class="card" style="max-width:560px;">'+
+        '<div class="card-header">'+(a.foto?'<img src="'+esc(a.foto)+'" style="width:34px;height:34px;border-radius:50%;object-fit:cover;">':'<div class="avatar '+a.av+'" style="width:34px;height:34px;font-size:14px;">'+a.ini+'</div>')+'<div class="card-title">'+esc(a.name)+'</div></div>'+
+        '<div class="card-body" style="padding:14px 16px;">'+
+        '<div style="display:flex;gap:18px;margin-bottom:12px;flex-wrap:wrap;font-size:12.5px;">'+
+        '<div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;">R$/hora</span>R$ '+a.rate+'</div>'+
+        '<div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;">Escala</span>'+esc(a.escala||'12×36')+'</div>'+
+        '<div><span style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;">Tempo médio resp.</span>'+media+(media!=='—'?' min':'')+'</div>'+
+        '</div>'+
+        '<div style="font-size:10.5px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:6px;">Demandas ('+pend.length+')</div>'+
+        '<button class="btn btn-sm btn-rose" style="margin-bottom:8px;font-size:11px;" onclick="openAttModal(\''+a.id+'\')"><i class="fa-solid fa-plus"></i> Nova / Dar baixa</button>'+
+        (pend.length===0?'<div style="font-size:12px;color:var(--text3);padding:6px 0;">Nenhuma demanda pendente. 🎉</div>':
+        pend.map(d=>'<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-top:1px solid var(--border);"><div style="width:3px;height:20px;border-radius:2px;background:'+(PC2[d.prio]||'var(--text3)')+';"></div><span style="font-size:11px;color:var(--text3);min-width:40px;">'+(PL[d.prio]||'')+'</span><span style="font-size:12.5px;flex:1;">'+esc(d.desc)+'</span>'+(d.due?'<span style="font-size:11px;color:var(--text3);">'+fd(d.due)+'</span>':'')+'</div>').join(''))+
+        '</div></div>';
+    }).join('');
     return;
   }
   const PC2={high:'var(--vermelha)',med:'var(--amarela)',low:'var(--sage)'};
@@ -1151,31 +1181,41 @@ function renderOverview(){
   const admin=document.getElementById('overview-admin');
   const aten=document.getElementById('overview-atendente');
   if(!admin||!aten) return;
-  if(cu && cu.perfil==='atendente'){
+  if(cu && cu.perfil!=='admin'){
     admin.style.display='none';
     aten.style.display='';
-    const a=(typeof getMinhaAtt==='function')?getMinhaAtt():null;
+    const lista=(typeof attsDoUsuario==='function')?attsDoUsuario():[];
     const hoje=new Date().toISOString().split('T')[0];
     const mes=hoje.substring(0,7);
     const nome=(cu.nome||'').split(' ')[0];
-    let html='<div style="margin-bottom:22px;"><h1 style="font-family:var(--font-display);font-size:24px;font-weight:700;">Olá, '+esc(nome||'você')+'! 🌸</h1><p style="color:var(--text3);font-size:13.5px;margin-top:3px;">Aqui estão as suas tarefas e turnos.</p></div>';
-    if(!a){ html+='<div class="card"><div class="card-body" style="text-align:center;padding:30px;color:var(--text3);">Seu login ainda não está vinculado a um membro. Fale com o admin.</div></div>'; aten.innerHTML=html; return; }
-    const pend=a.demands.filter(d=>d.s!=='done');
-    const atrasadas=pend.filter(d=>d.due && d.due<hoje);
+    const varios=lista.length>1;
+    let html='<div style="margin-bottom:22px;"><h1 style="font-family:var(--font-display);font-size:24px;font-weight:700;">Olá, '+esc(nome||'você')+'! 🌸</h1><p style="color:var(--text3);font-size:13.5px;margin-top:3px;">Aqui estão as tarefas e turnos do seu acesso.</p></div>';
+    if(lista.length===0){ html+='<div class="card"><div class="card-body" style="text-align:center;padding:30px;color:var(--text3);">Sem membros atribuídos ao seu acesso. Fale com o admin.</div></div>'; aten.innerHTML=html; return; }
+    let totPend=0, totAtr=0;
+    lista.forEach(a=>{ const p=a.demands.filter(d=>d.s!=='done'); totPend+=p.length; totAtr+=p.filter(d=>d.due && d.due<hoje).length; });
     html+='<div class="metrics-grid" style="margin-bottom:18px;">'+
-      '<div class="metric-card rose"><div class="metric-icon rose"><i class="fa-solid fa-list-check"></i></div><div class="metric-value">'+pend.length+'</div><div class="metric-label">Demandas Pendentes</div></div>'+
-      '<div class="metric-card peach"><div class="metric-icon peach"><i class="fa-solid fa-triangle-exclamation"></i></div><div class="metric-value">'+atrasadas.length+'</div><div class="metric-label">Atrasadas</div></div>'+
+      '<div class="metric-card rose"><div class="metric-icon rose"><i class="fa-solid fa-list-check"></i></div><div class="metric-value">'+totPend+'</div><div class="metric-label">Demandas Pendentes</div></div>'+
+      '<div class="metric-card peach"><div class="metric-icon peach"><i class="fa-solid fa-triangle-exclamation"></i></div><div class="metric-value">'+totAtr+'</div><div class="metric-label">Atrasadas</div></div>'+
       '</div>';
     const PC2={high:'var(--vermelha)',med:'var(--amarela)',low:'var(--sage)'};
-    html+='<div class="card" style="margin-bottom:18px;"><div class="card-header"><div class="card-title">Minhas Demandas</div><button class="card-action" onclick="openAttModal(\''+a.id+'\')">Gerenciar →</button></div><div class="card-body">'+
-      (pend.length===0?'<div style="text-align:center;color:var(--text3);font-size:13px;padding:10px;">Tudo em dia! 🎉</div>':
-      pend.map(d=>'<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);"><div style="width:3px;height:20px;border-radius:2px;background:'+(PC2[d.prio]||'var(--text3)')+';"></div><span style="flex:1;font-size:13px;">'+esc(d.desc)+'</span>'+(d.due?'<span style="font-size:11px;color:'+(d.due<hoje?'var(--vermelha)':'var(--text3)')+';">'+fd(d.due)+'</span>':'')+'</div>').join(''))+
-      '</div></div>';
+    html+='<div class="card" style="margin-bottom:18px;"><div class="card-header"><div class="card-title">'+(varios?'Demandas da Equipe':'Minhas Demandas')+'</div></div><div class="card-body">';
+    let algumaDemanda=false;
+    lista.forEach(a=>{
+      const pend=a.demands.filter(d=>d.s!=='done');
+      if(pend.length===0) return;
+      algumaDemanda=true;
+      if(varios) html+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);margin:10px 0 4px;">'+esc(a.name)+'</div>';
+      html+=pend.map(d=>'<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);"><div style="width:3px;height:20px;border-radius:2px;background:'+(PC2[d.prio]||'var(--text3)')+';"></div><span style="flex:1;font-size:13px;">'+esc(d.desc)+'</span>'+(d.due?'<span style="font-size:11px;color:'+(d.due<hoje?'var(--vermelha)':'var(--text3)')+';">'+fd(d.due)+'</span>':'')+'</div>').join('');
+    });
+    if(!algumaDemanda) html+='<div style="text-align:center;color:var(--text3);font-size:13px;padding:10px;">Tudo em dia! 🎉</div>';
+    html+='</div></div>';
     if(typeof turnos!=='undefined'){
-      const meusTurnos=turnos.filter(t=>t.attId===a.id && t.data.startsWith(mes)).sort((x,y)=>x.data.localeCompare(y.data));
-      html+='<div class="card"><div class="card-header"><div class="card-title">Meus Turnos do Mês</div><button class="card-action" onclick="showPanel(\'turnos\',document.querySelector(\'#sidebar .nav-item[onclick*=turnos]\'))">Ver / Confirmar →</button></div><div class="card-body">'+
+      const ids=lista.map(a=>a.id);
+      const meusTurnos=turnos.filter(t=>ids.includes(t.attId) && t.data.startsWith(mes)).sort((x,y)=>x.data.localeCompare(y.data));
+      const nomeAtt={}; lista.forEach(a=>nomeAtt[a.id]=a.name);
+      html+='<div class="card"><div class="card-header"><div class="card-title">Turnos do Mês</div><button class="card-action" onclick="showPanel(\'turnos\',document.querySelector(\'#sidebar .nav-item[onclick*=turnos]\'))">Ver →</button></div><div class="card-body">'+
         (meusTurnos.length===0?'<div style="text-align:center;color:var(--text3);font-size:13px;padding:10px;">Nenhum turno lançado ainda.</div>':
-        meusTurnos.slice(0,10).map(t=>'<div style="display:flex;gap:10px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12.5px;"><span style="width:54px;color:var(--text3);">'+t.data.substring(8,10)+'/'+t.data.substring(5,7)+'</span><span style="flex:1;">'+(t.turno==='dia'?'☀️ Dia (07-19h)':'🌙 Noite (19-07h)')+'</span>'+(t.confirmado?'<span style="color:var(--sage);"><i class="fa-solid fa-check"></i> ok</span>':'<span style="color:var(--peach);">a confirmar</span>')+'</div>').join(''))+
+        meusTurnos.slice(0,15).map(t=>'<div style="display:flex;gap:10px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12.5px;"><span style="width:54px;color:var(--text3);">'+t.data.substring(8,10)+'/'+t.data.substring(5,7)+'</span>'+(varios?'<span style="width:70px;color:var(--text3);">'+esc(nomeAtt[t.attId]||'')+'</span>':'')+'<span style="flex:1;">'+(t.turno==='dia'?'☀️ Dia (07-19h)':'🌙 Noite (19-07h)')+'</span>'+(t.confirmado?'<span style="color:var(--sage);"><i class="fa-solid fa-check"></i> ok</span>':'<span style="color:var(--peach);">a confirmar</span>')+'</div>').join(''))+
         '</div></div>';
     }
     aten.innerHTML=html;
@@ -1258,8 +1298,12 @@ function renderPerformance(){
 
 // ═══════════════════ SALARY ═══════════════════
 function renderSalary(){
+  const ehAdmin = (typeof isAdmin==='function') && isAdmin();
+  const attsVis = ehAdmin ? ATTS : (typeof attsDoUsuario==='function'?attsDoUsuario():[]);
+  const headsCard=document.getElementById('sal-heads-card'); if(headsCard) headsCard.style.display=ehAdmin?'':'none';
+  const folhaCard=document.getElementById('sal-folha-card'); if(folhaCard) folhaCard.style.display=ehAdmin?'':'none';
   // Atendentes
-  document.getElementById('sal-att-body').innerHTML=ATTS.map(a=>{
+  document.getElementById('sal-att-body').innerHTML=attsVis.map(a=>{
     const d1=workDaysP1[a.id]!==undefined?workDaysP1[a.id]:8;
     const d2=workDaysP2[a.id]!==undefined?workDaysP2[a.id]:7;
     const v1=d1*12*a.rate, v2=d2*12*a.rate, total=v1+v2;
@@ -1271,6 +1315,7 @@ function renderSalary(){
       '</div>';
   }).join('');
 
+  if(!ehAdmin) return;
   // Heads
   const g=calcGlobal(),band=getBand(g),nv=NIVEIS[selNivelIdx],vp=Math.round(nv.variavel*band.mult);
   document.getElementById('sal-heads-body').innerHTML=[
@@ -2799,17 +2844,19 @@ function renderTurnos(){
   const mesInput=document.getElementById('turnos-mes');
   if(mesInput && !mesInput.value){ mesInput.value=new Date().toISOString().substring(0,7); turnosMesSel=mesInput.value; }
   const mes=turnosMesSel||new Date().toISOString().substring(0,7);
-  const minhaAtt=(typeof getMinhaAtt==='function')?getMinhaAtt():null;
-  const ehAtendente=(typeof getCurrentUser==='function') && getCurrentUser() && getCurrentUser().perfil==='atendente';
-  const attsVisiveis = ehAtendente && minhaAtt ? [minhaAtt] : ATTS;
-  const addBtn=document.getElementById('turnos-add-btn'); if(addBtn) addBtn.style.display=ehAtendente?'none':'';
-  ['turnos-gerar-btn','turnos-solicitar-btn','turnos-pdf-btn','turnos-zerar-btn'].forEach(bid=>{ const b=document.getElementById(bid); if(b) b.style.display=ehAtendente?'none':''; });
+  const cu=(typeof getCurrentUser==='function')?getCurrentUser():null;
+  const ehAdmin=(typeof isAdmin==='function') && isAdmin();
+  const naoAdmin=!ehAdmin;
+  const attsVisiveis = ehAdmin ? ATTS : (typeof attsDoUsuario==='function'?attsDoUsuario():[]);
+  const addBtn=document.getElementById('turnos-add-btn'); if(addBtn) addBtn.style.display=naoAdmin?'none':'';
+  ['turnos-gerar-btn','turnos-solicitar-btn','turnos-pdf-btn','turnos-zerar-btn'].forEach(bid=>{ const b=document.getElementById(bid); if(b) b.style.display=naoAdmin?'none':''; });
   let bannerHtml='';
-  if(ehAtendente){
-    const pend=attsVisiveis.some(a=>turnos.some(t=>t.attId===a.id && t.data.startsWith(mes) && t.solicitado && !t.confirmado));
+  if(naoAdmin){
+    const pend=attsVisiveis.some(a=>cu && a.id===cu.attId && turnos.some(t=>t.attId===a.id && t.data.startsWith(mes) && t.solicitado && !t.confirmado));
     if(pend) bannerHtml='<div style="background:var(--peach-light);color:var(--peach);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:14px;font-size:13px;font-weight:600;"><i class="fa-solid fa-triangle-exclamation"></i> Você tem turnos aguardando sua confirmação.</div>';
   }
   el.innerHTML=bannerHtml+attsVisiveis.map(a=>{
+    const ehProprio = ehAdmin || (cu && a.id===cu.attId);
     const tDia=['P1','P2'].map(parc=>{
       const lista=turnos.filter(t=>t.attId===a.id && t.data.startsWith(mes) && parcelaDoDia(t.data)===parc).sort((x,y)=>x.data.localeCompare(y.data));
       const confirmados=lista.filter(t=>t.confirmado).length;
@@ -2819,8 +2866,8 @@ function renderTurnos(){
         (todosConf?'<span style="font-size:10px;background:var(--sage-light);color:var(--sage);padding:1px 7px;border-radius:8px;font-weight:700;"><i class="fa-solid fa-check"></i> Confirmada</span>':(lista.length?'<span style="font-size:10px;background:var(--peach-light);color:var(--peach);padding:1px 7px;border-radius:8px;">'+confirmados+'/'+lista.length+'</span>':''))+
         '</div>'+
         (lista.length===0?'<div style="font-size:12px;color:var(--text3);text-align:center;padding:8px;">Sem turnos.</div>':
-        lista.map(t=>'<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px;border-bottom:1px solid var(--border);"><span style="width:46px;">'+t.data.substring(8,10)+'/'+t.data.substring(5,7)+'</span><span style="flex:1;">'+(t.turno==='dia'?'☀️ Dia':'🌙 Noite')+'</span>'+(t.confirmado?'<i class="fa-solid fa-check" style="color:var(--sage);"></i>':'')+(ehAtendente?'':'<button onclick="removerTurno('+t.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;"><i class="fa-solid fa-xmark"></i></button>')+'</div>').join(''))+
-        (lista.length>0 && !todosConf ? '<button class="btn btn-sm btn-rose" style="margin-top:8px;width:100%;font-size:11px;" onclick="confirmarQuinzena(\''+a.id+'\',\''+parc+'\')"><i class="fa-solid fa-check"></i> Confirmar '+(ehAtendente?'meus turnos':'turnos')+'</button>':'')+
+        lista.map(t=>'<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px;border-bottom:1px solid var(--border);"><span style="width:46px;">'+t.data.substring(8,10)+'/'+t.data.substring(5,7)+'</span><span style="flex:1;">'+(t.turno==='dia'?'☀️ Dia':'🌙 Noite')+'</span>'+(t.confirmado?'<i class="fa-solid fa-check" style="color:var(--sage);"></i>':'')+(ehAdmin?'<button onclick="removerTurno('+t.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;"><i class="fa-solid fa-xmark"></i></button>':'')+'</div>').join(''))+
+        (lista.length>0 && !todosConf && ehProprio ? '<button class="btn btn-sm btn-rose" style="margin-top:8px;width:100%;font-size:11px;" onclick="confirmarQuinzena(\''+a.id+'\',\''+parc+'\')"><i class="fa-solid fa-check"></i> Confirmar '+(ehAdmin?'turnos':'meus turnos')+'</button>':'')+
         '</div>';
     }).join('');
     return '<div class="card" style="margin-bottom:14px;"><div class="card-header"><div class="avatar '+a.av+'" style="width:30px;height:30px;font-size:12px;">'+a.ini+'</div><div class="card-title">'+esc(a.name)+'</div><div style="margin-left:auto;font-size:11px;color:var(--text3);">'+mes+'</div></div><div class="card-body" style="padding:14px;display:flex;gap:12px;flex-wrap:wrap;">'+tDia+'</div></div>';

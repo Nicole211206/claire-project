@@ -443,12 +443,12 @@ function _validarLogin(){
           <div class="card-header"><div class="metric-icon sage" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-solid fa-users"></i></div><div><div class="card-title">Atendentes — Por Hora</div><div class="card-sub">Escala 12×36 · dias editáveis</div></div></div>
           <div class="card-body" id="sal-att-body"></div>
         </div>
-        <div class="card">
+        <div class="card" id="sal-heads-card">
           <div class="card-header"><div class="metric-icon lav" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-solid fa-crown"></i></div><div><div class="card-title">Heads</div><div class="card-sub">Fixo (50/50) + comissão</div></div></div>
           <div class="card-body" id="sal-heads-body"></div>
         </div>
       </div>
-      <div class="card">
+      <div class="card" id="sal-folha-card">
         <div class="card-header"><i class="fa-solid fa-file-invoice-dollar" style="color:var(--sage);font-size:14px;"></i><div class="card-title">Folha Total Estimada</div></div>
         <div class="card-body"><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;" id="folha-grid"></div></div>
       </div>
@@ -1119,6 +1119,10 @@ function _validarLogin(){
       <select class="form-select" id="u-att"></select>
       <div style="font-size:11px;color:var(--text3);margin-top:4px;">A atendente verá apenas as informações deste membro.</div>
     </div>
+    <div class="form-group" id="u-attsperm-group" style="display:none;">
+      <label class="form-label">Quais membros pode ver (Turnos, Equipe, Salários)</label>
+      <div id="u-attsperm-checks" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;background:var(--bg3);border-radius:var(--r-sm);padding:12px;"></div>
+    </div>
     <div class="form-group" id="u-modulos-group">
       <label class="form-label">Módulos que pode acessar</label>
       <div id="u-modulos-checks" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;background:var(--bg3);border-radius:var(--r-sm);padding:12px;"></div>
@@ -1172,6 +1176,6 @@ function _validarLogin(){
     <div class="modal-footer"><button class="btn" onclick="closeModal('modal-gerar-escala')">Cancelar</button><button class="btn btn-rose" onclick="gerarEscala()"><i class="fa-solid fa-check"></i> Gerar</button></div>
   </div>
 </div>
-<script src="js/app.js?v=22"></script>
+<script src="js/app.js?v=23"></script>
 </body>
 </html>

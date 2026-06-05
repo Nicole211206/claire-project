@@ -310,7 +310,9 @@ function apagarUsuario(email){
 }
 
 // ═══════════════════ INIT ═══════════════════
-document.addEventListener('DOMContentLoaded',()=>{
+document.addEventListener('DOMContentLoaded', async ()=>{
+  // Espera o backend KV popular o localStorage (dispositivos compartilham os dados)
+  if(window._claireKVPromise){ try{ await window._claireKVPromise; }catch(e){} }
   loadAll();
   ATTS.forEach(a=>{if(!a.respWeekly)a.respWeekly=[null,null,null,null];if(a.respMes===undefined)a.respMes=null;});
   greet();
@@ -363,7 +365,7 @@ function showPanel(id,btn){
   if(id==='focus'){renderFocusInsights();}
   if(id==='performance'){renderPerformance();}
   if(id==='avaliacoes'){renderAvaliacoes();}
-  if(id==='turnos'){renderTurnos();}
+  if(id==='turnos'){renderTurnos();kvPull().then(function(ok){if(ok)renderTurnos();});}
 }
 
 function contarDemandasAtrasadas(){
@@ -2607,6 +2609,45 @@ function saveAll(){
       localStorage.setItem(k, JSON.stringify(_PERSIST_KEYS[k]()));
     }
   }catch(e){ console.warn('saveAll falhou', e); }
+  _kvPushDebounced();
+}
+
+// ─── Sincronização com o backend KV (compartilhado entre dispositivos) ───
+// Chaves que sincronizam (dados de equipe/operação). Credenciais e a lista
+// pesada de avaliações ficam SEMPRE locais.
+const SYNC_KEYS=['nx_users','nx_tasks','nx_imoveis','nx_notes','nx_compras','nx_projetos','nx_atts','nx_workP1','nx_workP2','nx_headfixo','nx_headcom','nx_headfotos','nx_kpivals','nx_kpisub','nx_taskcats','nx_catalog','nx_precos','nx_precoenx','nx_niveldx','nx_nicolecom','nx_nextatt','nx_transcricoes','nx_turnos','nx_name'];
+let _kvTimer=null;
+function _kvPushDebounced(){
+  const s=window.CLAIRE_SYNC||{};
+  if(!s.url) return;
+  if(_kvTimer) clearTimeout(_kvTimer);
+  _kvTimer=setTimeout(_kvPushNow, 2500);
+}
+async function _kvPushNow(){
+  const s=window.CLAIRE_SYNC||{};
+  if(!s.url) return;
+  try{
+    const blob={};
+    SYNC_KEYS.forEach(k=>{ const v=localStorage.getItem(k); if(v!==null){ try{ blob[k]=JSON.parse(v); }catch(e){} } });
+    await fetch(s.url.replace(/\/$/,'')+'/save?token='+encodeURIComponent(s.token||''),{
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(blob)
+    });
+  }catch(e){ /* offline: tenta na próxima */ }
+}
+// Recarrega o estado compartilhado do KV e aplica (usado para ver mudanças de outros usuários)
+async function kvPull(){
+  const s=window.CLAIRE_SYNC||{};
+  if(!s.url) return false;
+  try{
+    const r=await fetch(s.url.replace(/\/$/,'')+'/load?token='+encodeURIComponent(s.token||''));
+    const j=await r.json();
+    if(j&&j.data){
+      for(const k in j.data){ try{ localStorage.setItem(k, JSON.stringify(j.data[k])); }catch(e){} }
+      loadAll();
+      return true;
+    }
+  }catch(e){}
+  return false;
 }
 
 function loadAll(){

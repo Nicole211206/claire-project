@@ -11,9 +11,32 @@
 <link rel="stylesheet" href="css/styles.css?v=2">
 <script src="https://accounts.google.com/gsi/client" async></script>
 <script>
+// ════════ SINCRONIZAÇÃO (backend KV) ════════
+// Preencha com a URL do Worker claire-dados e o token escolhido.
+// Se ficar vazio, a Claire funciona só local (sem compartilhar entre dispositivos).
+window.CLAIRE_SYNC = { url: '', token: '' };
+
+// Carrega o estado compartilhado do KV ANTES do login/app (para funcionar em qualquer device).
+// Chaves de credenciais ficam SEMPRE locais (não sincronizam).
+window._claireKVReady = false;
+window._claireKVPromise = (async function(){
+  try{
+    var s = window.CLAIRE_SYNC || {};
+    if(!s.url){ return; }
+    var r = await fetch(s.url.replace(/\/$/,'') + '/load?token=' + encodeURIComponent(s.token||''));
+    var j = await r.json();
+    if(j && j.data){
+      for(var k in j.data){
+        try{ localStorage.setItem(k, JSON.stringify(j.data[k])); }catch(e){}
+      }
+    }
+  }catch(e){ /* offline: usa o que tiver local */ }
+  finally{ window._claireKVReady = true; }
+})();
+
 // LOGIN MULTIUSUÁRIO — independente do app.js
-// Seed do admin padrão (só na primeira vez)
-(function(){
+// Seed do admin padrão (só na primeira vez, se não houver nada local nem no KV)
+function _seedAdmin(){
   try{
     var raw=localStorage.getItem('nx_users');
     if(!raw){
@@ -21,9 +44,17 @@
       localStorage.setItem('nx_users', JSON.stringify(admin));
     }
   }catch(e){}
-})();
+}
 
-function verificarLogin(){
+async function verificarLogin(){
+  var erro=document.getElementById('login-erro');
+  // Espera o KV carregar os usuários (importante em dispositivos novos)
+  if(window._claireKVPromise){ erro.textContent='Sincronizando...'; try{ await window._claireKVPromise; }catch(e){} erro.textContent=''; }
+  _seedAdmin();
+  return _validarLogin();
+}
+
+function _validarLogin(){
   var email=(document.getElementById('login-email').value||'').trim().toLowerCase();
   var senha=document.getElementById('login-senha').value||'';
   var erro=document.getElementById('login-erro');
@@ -1141,6 +1172,6 @@ function verificarLogin(){
     <div class="modal-footer"><button class="btn" onclick="closeModal('modal-gerar-escala')">Cancelar</button><button class="btn btn-rose" onclick="gerarEscala()"><i class="fa-solid fa-check"></i> Gerar</button></div>
   </div>
 </div>
-<script src="js/app.js?v=20"></script>
+<script src="js/app.js?v=21"></script>
 </body>
 </html>

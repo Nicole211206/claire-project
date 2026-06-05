@@ -104,7 +104,29 @@ export default {
         const comNota = arr.filter(function (x) { return x.rating != null; }).length;
         const porCanal = {};
         arr.forEach(function (x) { porCanal[x.canal] = (porCanal[x.canal] || 0) + 1; });
-        return json({ totalBaixado: arr.length, hostawayCount: hostawayCount, comTexto: comTexto, comNota: comNota, porCanal: porCanal }, cors);
+        // Análise opcional por período de check-out: /stats?from=YYYY-MM-DD&to=YYYY-MM-DD
+        const from = url.searchParams.get('from') || '';
+        const to = url.searchParams.get('to') || '';
+        let periodo = null;
+        if (from && to) {
+          const ref = function (x) { return (x.checkout || x.submittedAt || x.data || '').substring(0, 10); };
+          const noPer = arr.filter(function (x) { return x.tipo === 'guest-to-host' && ref(x) >= from && ref(x) <= to; });
+          const reais = noPer.filter(function (x) { return x.rating != null || (x.texto && x.texto.trim()); });
+          const comNotaPer = noPer.filter(function (x) { return x.rating != null; });
+          const mediaNota = comNotaPer.length ? (comNotaPer.reduce(function (s, x) { return s + x.rating; }, 0) / comNotaPer.length) : null;
+          const canalPer = {};
+          reais.forEach(function (x) { canalPer[x.canal] = (canalPer[x.canal] || 0) + 1; });
+          periodo = {
+            de: from, ate: to,
+            totalNoPeriodo: noPer.length,
+            avaliacoesReais: reais.length,
+            comNota: comNotaPer.length,
+            mediaNota_0a10: mediaNota != null ? Math.round(mediaNota * 100) / 100 : null,
+            mediaNota_0a5: mediaNota != null ? Math.round((mediaNota / 2) * 100) / 100 : null,
+            porCanal: canalPer
+          };
+        }
+        return json({ totalBaixado: arr.length, hostawayCount: hostawayCount, comTexto: comTexto, comNota: comNota, porCanal: porCanal, periodo: periodo }, cors);
       }
       // Diagnóstico: retorna 2 avaliações cruas (sem normalizar) pra inspecionar os campos do Hostaway
       if (url.pathname.endsWith('/debug')) {

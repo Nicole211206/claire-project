@@ -128,14 +128,22 @@ export default {
         }
         return json({ totalBaixado: arr.length, hostawayCount: hostawayCount, comTexto: comTexto, comNota: comNota, porCanal: porCanal, periodo: periodo }, cors);
       }
-      // Diagnóstico: retorna 2 avaliações cruas (sem normalizar) pra inspecionar os campos do Hostaway
+      // Diagnóstico: retorna avaliações cruas COM nota (rating!=null) pra ver rating vs reviewCategory
       if (url.pathname.endsWith('/debug')) {
         const token = await getToken(env);
-        const r = await fetch(HOSTAWAY_BASE + '/reviews?limit=2&sortOrder=desc', {
-          headers: { 'Authorization': 'Bearer ' + token, 'Cache-control': 'no-cache' },
-        });
-        const data = await r.json();
-        return json({ raw: (data.result || []).slice(0, 2) }, cors);
+        let achados = [];
+        let offset = 0;
+        for (let p = 0; p < 50 && achados.length < 5; p++) {
+          const r = await fetch(HOSTAWAY_BASE + '/reviews?limit=100&offset=' + offset, {
+            headers: { 'Authorization': 'Bearer ' + token, 'Cache-control': 'no-cache' },
+          });
+          const data = await r.json();
+          const lote = data.result || [];
+          if (lote.length === 0) break;
+          lote.forEach(function (rv) { if (rv && rv.rating != null && achados.length < 5) achados.push({ id: rv.id, rating: rv.rating, reviewCategory: rv.reviewCategory, channelId: rv.channelId, departureDate: rv.departureDate, publicReview: (rv.publicReview || '').substring(0, 40) }); });
+          offset += 100;
+        }
+        return json({ amostras: achados }, cors);
       }
       return json({ error: 'rota não encontrada' }, cors, 404);
     } catch (e) {

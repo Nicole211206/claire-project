@@ -528,15 +528,15 @@ function renderKPIs(){
       if(hasB) partesAvg.push((+sub.booking||0)/2);
       const avg=partesAvg.length?(partesAvg.reduce((a,b)=>a+b,0)/partesAvg.length).toFixed(2):null;
       inputHTML='<div style="display:grid;gap:6px;">'+
-        '<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:90px;">Airbnb (0-5):</label><input type="number" step="0.01" min="0" max="5" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub.airbnb||'')+'" placeholder="—" oninput="setKPISub(\'av\',\'airbnb\',this.value)"></div>'+
-        '<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:90px;">Booking (0-10):</label><input type="number" step="0.01" min="0" max="10" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub.booking||'')+'" placeholder="—" oninput="setKPISub(\'av\',\'booking\',this.value)"></div>'+
+        '<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:90px;">Airbnb (0-5):</label><input type="number" step="0.01" min="0" max="5" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub.airbnb||'')+'" placeholder="—" onchange="setKPISub(\'av\',\'airbnb\',this.value)"></div>'+
+        '<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:90px;">Booking (0-10):</label><input type="number" step="0.01" min="0" max="10" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub.booking||'')+'" placeholder="—" onchange="setKPISub(\'av\',\'booking\',this.value)"></div>'+
         (avg!==null?'<div style="font-size:12px;font-weight:700;color:var(--sage);margin-top:2px;">Média Total: '+avg+' estrelas <span style="font-weight:400;color:var(--text3);">(Booking normalizado p/ 0-5)</span></div>':'')+'</div>';
     } else if(k.id==='cv'){
       const sub=kpiSubVals.cv||{};
       const pct2=(sub.reviews!==undefined&&sub.checkouts!==undefined&&+sub.checkouts>0?(((+sub.reviews||0)/(+sub.checkouts||1))*100).toFixed(1):null);
       inputHTML='<div style="display:grid;gap:6px;">'+
-        '<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:120px;">Nº de reviews:</label><input type="number" step="1" min="0" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub.reviews||'')+'" placeholder="—" oninput="setKPISub(\'cv\',\'reviews\',this.value)"></div>'+
-        '<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:120px;">Nº de checkouts:</label><input type="number" step="1" min="0" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub.checkouts||'')+'" placeholder="—" oninput="setKPISub(\'cv\',\'checkouts\',this.value)"></div>'+
+        '<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:120px;">Nº de reviews:</label><input type="number" step="1" min="0" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub.reviews||'')+'" placeholder="—" onchange="setKPISub(\'cv\',\'reviews\',this.value)"></div>'+
+        '<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:120px;">Nº de checkouts:</label><input type="number" step="1" min="0" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub.checkouts||'')+'" placeholder="—" onchange="setKPISub(\'cv\',\'checkouts\',this.value)"></div>'+
         (pct2!==null?'<div style="font-size:12px;font-weight:700;color:var(--sage);margin-top:2px;">Conversão: '+pct2+'%</div>':'')+'</div>';
     } else if(k.id==='tr'){
       const sub=kpiSubVals.tr||{};
@@ -546,7 +546,7 @@ function renderKPIs(){
       const filled=vals.filter(v=>v!==null);
       const avg2=filled.length>0?(filled.reduce((a,b)=>a+b,0)/filled.length).toFixed(1):null;
       inputHTML='<div style="display:grid;gap:6px;">'+
-        atts.map((a,i)=>'<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:80px;">'+attLabels[i]+':</label><input type="number" step="0.1" min="0" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub[a]||'')+'" placeholder="min" oninput="setKPISub(\'tr\',\''+a+'\',this.value)"></div>').join('')+
+        atts.map((a,i)=>'<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:80px;">'+attLabels[i]+':</label><input type="number" step="0.1" min="0" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub[a]||'')+'" placeholder="min" onchange="setKPISub(\'tr\',\''+a+'\',this.value)"></div>').join('')+
         (avg2!==null?'<div style="font-size:12px;font-weight:700;color:var(--sage);margin-top:2px;">Média: '+avg2+' min</div>':'')+'</div>';
     } else if(k.id==='ob'){
       // Imóveis ativados: tempo real = dataAtivacao - dataCriacao
@@ -610,10 +610,10 @@ function renderKPIs(){
           const ecoColor=eco===null?'var(--text3)':parseFloat(eco)>=10?'var(--sage)':parseFloat(eco)>=0?'var(--amarela)':'var(--vermelha)';
           return '<div style="display:grid;grid-template-columns:1fr 90px 90px 70px;gap:4px;padding:5px 0;border-bottom:1px solid var(--border);align-items:center;">'+
             '<div><div style="font-size:12.5px;font-weight:500;">'+it.label+'</div><div style="font-size:10.5px;color:var(--text3);">'+it.hint+'</div></div>'+
-            '<input type="number" class="form-input" style="padding:4px 6px;font-size:12px;text-align:center;" placeholder="0" value="'+(rcSub[it.key].previsto||'')+'" oninput="setKPIRcSub(\''+it.key+'\',\'previsto\',this.value)">'+
+            '<input type="number" class="form-input" style="padding:4px 6px;font-size:12px;text-align:center;" placeholder="0" value="'+(rcSub[it.key].previsto||'')+'" onchange="setKPIRcSub(\''+it.key+'\',\'previsto\',this.value)">'+
             (it.key==='margem'
               ?'<div style="text-align:center;"><div style="font-size:12px;font-weight:600;">'+(rcSub.margem.gasto?'R$ '+rcSub.margem.gasto:'—')+'</div><div style="font-size:9px;color:var(--text3);">auto (compras)</div></div>'
-              :'<input type="number" class="form-input" style="padding:4px 6px;font-size:12px;text-align:center;" placeholder="0" value="'+(rcSub[it.key].gasto||'')+'" oninput="setKPIRcSub(\''+it.key+'\',\'gasto\',this.value)">')+
+              :'<input type="number" class="form-input" style="padding:4px 6px;font-size:12px;text-align:center;" placeholder="0" value="'+(rcSub[it.key].gasto||'')+'" onchange="setKPIRcSub(\''+it.key+'\',\'gasto\',this.value)">')+
             '<div style="text-align:center;font-size:13px;font-weight:700;color:'+ecoColor+';">'+(eco!==null?eco+'%':'—')+'</div>'+
             '</div>';
         }).join('')+
@@ -625,7 +625,7 @@ function renderKPIs(){
     } else {
       inputHTML='<div style="display:flex;align-items:center;gap:8px;">'+
         '<label style="font-size:12px;color:var(--text2);white-space:nowrap;">Valor ('+k.unit+'):</label>'+
-        '<input type="number" step="0.01" class="form-input" style="width:100px;padding:5px 8px;" value="'+(kpiVals[k.id]||'')+'" placeholder="—" oninput="setKPI(\''+k.id+'\',this.value)">'+
+        '<input type="number" step="0.01" class="form-input" style="width:100px;padding:5px 8px;" value="'+(kpiVals[k.id]||'')+'" placeholder="—" onchange="setKPI(\''+k.id+'\',this.value)">'+
         '</div>';
     }
     return '<div class="card"><div class="card-header">'+
@@ -1078,19 +1078,19 @@ function renderTeam(){
     return '<div class="card">'+
       '<div class="card-header">'+
       (a.foto ? '<img src="'+esc(a.foto)+'" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;">' : '<div class="avatar '+a.av+'" style="width:32px;height:32px;font-size:13px;">'+a.ini+'</div>')+
-      '<div style="flex:1;"><input class="editable" style="font-size:14px;font-weight:600;width:140px;" value="'+esc(a.name)+'" oninput="setAttNome(\''+a.id+'\',this.value)"></div>'+
+      '<div style="flex:1;"><input class="editable" style="font-size:14px;font-weight:600;width:140px;" value="'+esc(a.name)+'" onchange="setAttNome(\''+a.id+'\',this.value)"></div>'+
       '<button onclick="removerMembro(\''+a.id+'\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;" title="Remover"><i class="fa-solid fa-trash"></i></button>'+
       '</div>'+
       '<div class="card-body" style="padding:12px 16px;">'+
       '<label style="font-size:11px;color:var(--rose);cursor:pointer;display:inline-block;margin-bottom:10px;"><i class="fa-solid fa-camera"></i> '+(a.foto?'Trocar foto':'Adicionar foto')+'<input type="file" accept="image/*" style="display:none;" onchange="uploadAttFoto(\''+a.id+'\',event)"></label>'+
       '<div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;">'+
-      '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;">R$/hora</label><input type="number" class="editable" style="width:72px;" value="'+a.rate+'" oninput="setAttRate(\''+a.id+'\',this.value)"></div>'+
-      '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;">Escala</label><input class="editable" style="width:80px;" value="'+esc(a.escala||'12×36')+'" oninput="setAttEscala(\''+a.id+'\',this.value)"></div>'+
+      '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;">R$/hora</label><input type="number" class="editable" style="width:72px;" value="'+a.rate+'" onchange="setAttRate(\''+a.id+'\',this.value)"></div>'+
+      '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;">Escala</label><input class="editable" style="width:80px;" value="'+esc(a.escala||'12×36')+'" onchange="setAttEscala(\''+a.id+'\',this.value)"></div>'+
       '</div>'+
       '<div style="background:var(--bg3);border-radius:var(--r-sm);padding:10px;margin-bottom:10px;">'+
       '<div style="font-size:10.5px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:8px;">⏱ Tempo de Resposta (min) — Semanal</div>'+
       '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px;">'+
-      [0,1,2,3].map(i=>'<div style="text-align:center;"><div style="font-size:10px;color:var(--text3);">Sem.'+(i+1)+'</div><input type="number" step="0.1" min="0" class="form-input" style="text-align:center;padding:4px;font-size:12px;" value="'+(a.respWeekly&&a.respWeekly[i]!==null&&a.respWeekly[i]!==undefined?a.respWeekly[i]:'')+'" placeholder="—" oninput="setRespWeek(\''+a.id+'\','+i+',this.value)"></div>').join('')+
+      [0,1,2,3].map(i=>'<div style="text-align:center;"><div style="font-size:10px;color:var(--text3);">Sem.'+(i+1)+'</div><input type="number" step="0.1" min="0" class="form-input" style="text-align:center;padding:4px;font-size:12px;" value="'+(a.respWeekly&&a.respWeekly[i]!==null&&a.respWeekly[i]!==undefined?a.respWeekly[i]:'')+'" placeholder="—" onchange="setRespWeek(\''+a.id+'\','+i+',this.value)"></div>').join('')+
       '</div>'+
       '<div style="display:flex;align-items:center;justify-content:space-between;">'+
       '<div style="font-size:12px;">Média mensal: <strong style="color:'+(media?getRespBand(media).c==='verde'?'var(--sage)':getRespBand(media).c==='amarela'?'var(--amarela)':'var(--vermelha)':'var(--text3)')+'">'+(media?media+' min':'—')+'</strong></div>'+
@@ -1265,8 +1265,8 @@ function renderSalary(){
     const v1=d1*12*a.rate, v2=d2*12*a.rate, total=v1+v2;
     return '<div class="salary-block">'+
       '<div class="salary-name"><div class="avatar '+a.av+'" style="width:26px;height:26px;font-size:10px;">'+a.ini+'</div>'+esc(a.name)+'<span style="font-size:11px;color:var(--text3);margin-left:auto;">R$ '+a.rate+'/h</span></div>'+
-      '<div class="salary-row"><span class="salary-label">1ª parcela (dias 01-15)</span><span class="salary-val"><input type="number" min="0" max="16" class="editable" value="'+d1+'" oninput="setWD1(\''+a.id+'\',this.value)"> plantões = '+brl(v1)+'</span></div>'+
-      '<div class="salary-row"><span class="salary-label">2ª parcela (dias 16-31)</span><span class="salary-val"><input type="number" min="0" max="16" class="editable" value="'+d2+'" oninput="setWD2(\''+a.id+'\',this.value)"> plantões = '+brl(v2)+'</span></div>'+
+      '<div class="salary-row"><span class="salary-label">1ª parcela (dias 01-15)</span><span class="salary-val"><input type="number" min="0" max="16" class="editable" value="'+d1+'" onchange="setWD1(\''+a.id+'\',this.value)"> plantões = '+brl(v1)+'</span></div>'+
+      '<div class="salary-row"><span class="salary-label">2ª parcela (dias 16-31)</span><span class="salary-val"><input type="number" min="0" max="16" class="editable" value="'+d2+'" onchange="setWD2(\''+a.id+'\',this.value)"> plantões = '+brl(v2)+'</span></div>'+
       '<div class="salary-row total"><span class="salary-label">Total do mês</span><span class="salary-val" style="color:var(--sage);">'+brl(total)+'</span></div>'+
       '</div>';
   }).join('');
@@ -1283,9 +1283,9 @@ function renderSalary(){
     <div class="salary-block">
       <div class="salary-name">${headFotos[h.id]?'<img src="'+esc(headFotos[h.id])+'" style="width:26px;height:26px;border-radius:50%;object-fit:cover;">':'<div class="avatar '+h.av+'" style="width:26px;height:26px;font-size:10px;">'+h.ini+'</div>'}<div><div style="font-size:13px;font-weight:600;">${h.name}</div><div style="font-size:10.5px;color:var(--text3);">${h.cargo}</div></div></div>
       <div class="salary-row"><span class="salary-label">Foto</span><span class="salary-val"><label style="font-size:11px;color:var(--rose);cursor:pointer;"><i class="fa-solid fa-camera"></i> ${headFotos[h.id]?'Trocar foto':'Adicionar foto'}<input type="file" accept="image/*" style="display:none;" onchange="uploadHeadFoto('${h.id}',event)"></label></span></div>
-      <div class="salary-row"><span class="salary-label">Fixo — 1ª parcela (50%)</span><span class="salary-val">${h.isNicole?brl(Math.round(h.fixo/2)):`<input type="number" class="editable editable-wide" value="${h.fixo}" oninput="setHF('${h.id}',this.value)"> ÷2 = ${brl(Math.round(h.fixo/2))}`}</span></div>
+      <div class="salary-row"><span class="salary-label">Fixo — 1ª parcela (50%)</span><span class="salary-val">${h.isNicole?brl(Math.round(h.fixo/2)):`<input type="number" class="editable editable-wide" value="${h.fixo}" onchange="setHF('${h.id}',this.value)"> ÷2 = ${brl(Math.round(h.fixo/2))}`}</span></div>
       <div class="salary-row"><span class="salary-label">Fixo — 2ª parcela (50%)</span><span class="salary-val">${brl(Math.round(h.fixo/2))}</span></div>
-      ${h.isNicole?'<div class="salary-row"><span class="salary-label">Comissão '+(nicoleComissaoOverride!==null?'(manual)':'(auto KPI)')+'</span><span class="salary-val" style="color:var(--rose);"><input type="number" class="editable editable-wide" value="'+(nicoleComissaoOverride!==null?nicoleComissaoOverride:h.comissao)+'" oninput="setNicoleComissao(this.value)"> '+(nicoleComissaoOverride!==null?'<button onclick="resetNicoleComissao()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:10px;" title="Voltar ao cálculo automático"><i class=\'fa-solid fa-rotate-left\'></i></button>':'')+'</span></div>':`<div class="salary-row"><span class="salary-label">Comissão</span><span class="salary-val" style="color:var(--rose);"><input type="number" class="editable editable-wide" value="${h.comissao}" oninput="setHC('${h.id}',this.value)"></span></div>`}
+      ${h.isNicole?'<div class="salary-row"><span class="salary-label">Comissão '+(nicoleComissaoOverride!==null?'(manual)':'(auto KPI)')+'</span><span class="salary-val" style="color:var(--rose);"><input type="number" class="editable editable-wide" value="'+(nicoleComissaoOverride!==null?nicoleComissaoOverride:h.comissao)+'" onchange="setNicoleComissao(this.value)"> '+(nicoleComissaoOverride!==null?'<button onclick="resetNicoleComissao()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:10px;" title="Voltar ao cálculo automático"><i class=\'fa-solid fa-rotate-left\'></i></button>':'')+'</span></div>':`<div class="salary-row"><span class="salary-label">Comissão</span><span class="salary-val" style="color:var(--rose);"><input type="number" class="editable editable-wide" value="${h.comissao}" onchange="setHC('${h.id}',this.value)"></span></div>`}
       <div class="salary-row total"><span class="salary-label">Total estimado</span><span class="salary-val" style="color:var(--sage);">${brl(h.fixo+h.comissao)}</span></div>
       ${h.note?`<div style="font-size:11px;color:var(--text3);margin-top:3px;"><i class="fa-solid fa-circle-info"></i> ${h.note}</div>`:''}
     </div>`).join('');

@@ -206,7 +206,12 @@ function aplicarPermissoes(){
     const primeiro=MODULOS_LISTA.find(m=>u.perfil==='admin'||podeAcessar(m.id));
     if(primeiro){ const btn=document.querySelector('#sidebar .nav-item[onclick*="showPanel(\''+primeiro.id+'\'"]'); showPanel(primeiro.id, btn||null); }
   }
+  // Redesenhar telas dependentes de permissão (importante: o 1º render ocorre antes do login)
   if(typeof renderOverview==='function') renderOverview();
+  if(typeof renderTeam==='function') renderTeam();
+  if(typeof renderSalary==='function') renderSalary();
+  if(typeof renderTurnos==='function') renderTurnos();
+  if(typeof renderKPIs==='function') renderKPIs();
 }
 
 function logout(){
@@ -394,6 +399,9 @@ function showPanel(id,btn){
   if(id==='performance'){renderPerformance();}
   if(id==='avaliacoes'){renderAvaliacoes();}
   if(id==='turnos'){renderTurnos();kvPull().then(function(ok){if(ok)renderTurnos();});}
+  if(id==='team'){renderTeam();}
+  if(id==='salary'){renderSalary();}
+  if(id==='kpis'){renderKPIs();}
 }
 
 function contarDemandasAtrasadas(){

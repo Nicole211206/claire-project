@@ -437,7 +437,7 @@ function _validarLogin(){
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
         <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Calculadora de Salários</h2>
         <div style="display:flex;gap:8px;">
-          <button class="btn" onclick="adicionarMembro()"><i class="fa-solid fa-user-plus"></i> Novo Membro</button>
+          <button class="btn" onclick="abrirNovoOutroMembro()"><i class="fa-solid fa-user-plus"></i> Novo Membro</button>
           <button class="btn btn-rose" onclick="exportarSalariosPDF()"><i class="fa-solid fa-file-pdf"></i> Relatório PDF</button>
         </div>
       </div>
@@ -451,9 +451,13 @@ function _validarLogin(){
           <div class="card-body" id="sal-heads-body"></div>
         </div>
       </div>
+      <div class="card" id="sal-outros-card" style="margin-top:14px;">
+        <div class="card-header"><div class="metric-icon peach" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-solid fa-user-tie"></i></div><div><div class="card-title">Outros Membros</div><div class="card-sub">Cargo livre · fixo + extra</div></div></div>
+        <div class="card-body" id="sal-outros-body"></div>
+      </div>
       <div class="card" id="sal-folha-card">
         <div class="card-header"><i class="fa-solid fa-file-invoice-dollar" style="color:var(--sage);font-size:14px;"></i><div class="card-title">Folha Total Estimada</div></div>
-        <div class="card-body"><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;" id="folha-grid"></div></div>
+        <div class="card-body"><div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;" id="folha-grid"></div></div>
       </div>
     </div>
 
@@ -1200,6 +1204,20 @@ function _validarLogin(){
     <div class="modal-footer"><button class="btn" onclick="closeModal('modal-gerar-escala')">Cancelar</button><button class="btn btn-rose" onclick="gerarEscala()"><i class="fa-solid fa-check"></i> Gerar</button></div>
   </div>
 </div>
-<script src="js/app.js?v=26"></script>
+<div class="modal-overlay" id="modal-outro-membro">
+  <div class="modal" style="width:480px;">
+    <div class="modal-title" id="outro-modal-title">Novo Membro</div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Nome</label><input type="text" class="form-input" id="om-nome" placeholder="Ex: Nilson"></div>
+      <div class="form-group"><label class="form-label">Cargo</label><input type="text" class="form-input" id="om-cargo" placeholder="Ex: Manutenção"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Fixo (R$)</label><input type="number" class="form-input" id="om-fixo" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Comissão / Extra (R$)</label><input type="number" class="form-input" id="om-comissao" placeholder="0"></div>
+    </div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-outro-membro')">Cancelar</button><button class="btn btn-rose" onclick="salvarOutroMembro()"><i class="fa-solid fa-check"></i> Salvar</button></div>
+  </div>
+</div>
+<script src="js/app.js?v=27"></script>
 </body>
 </html>

@@ -104,6 +104,7 @@ let workDaysP2={patricia:7,sara:7,lisarb:7,lais:7};  // turnos dias 16-31
 let turnos=[]; // {id, data:'YYYY-MM-DD', turno:'dia'|'noite', attId, confirmado:false}
 let turnosMesSel=''; // mês selecionado no admin (YYYY-MM)
 let salPagos={}; // { 'attId_2026-06': true }
+let outrosMembros=[]; // {id, nome, cargo, fixo, comissao}
 let projetos=[];
 let transcricoes=[];
 let transcricaoAtiva=null;
@@ -1411,6 +1412,28 @@ function renderSalary(){
       ${h.note?`<div style="font-size:11px;color:var(--text3);margin-top:3px;"><i class="fa-solid fa-circle-info"></i> ${h.note}</div>`:''}
     </div>`).join('');
 
+  // Outros Membros (só admin)
+  const outrosCard=document.getElementById('sal-outros-card');
+  if(outrosCard) outrosCard.style.display = isAdmin() ? '' : 'none';
+  const outrosBody=document.getElementById('sal-outros-body');
+  if(outrosBody && isAdmin()){
+    outrosBody.innerHTML = outrosMembros.length===0
+      ? '<div style="font-size:13px;color:var(--text3);text-align:center;padding:10px;">Nenhum outro membro. Clique em "Novo Membro" acima.</div>'
+      : outrosMembros.map(m=>{
+        const total=(m.fixo||0)+(m.comissao||0);
+        const pago=salPagos[m.id+'_'+_mesAtualSal()];
+        return '<div class="salary-block">'+
+          '<div class="salary-name"><div class="avatar av-peach" style="width:26px;height:26px;font-size:10px;">'+(m.nome||'?').charAt(0).toUpperCase()+'</div>'+
+          '<div style="flex:1;"><input class="editable" style="font-size:13px;font-weight:600;width:120px;" value="'+esc(m.nome)+'" onchange="setOutroCampo(\''+m.id+'\',\'nome\',this.value)"><input class="editable" style="font-size:11px;color:var(--text3);width:120px;display:block;" value="'+esc(m.cargo||'')+'" placeholder="cargo" onchange="setOutroCampo(\''+m.id+'\',\'cargo\',this.value)"></div>'+
+          '<button onclick="removerOutroMembro(\''+m.id+'\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;" title="Apagar"><i class="fa-solid fa-trash"></i></button></div>'+
+          '<div class="salary-row"><span class="salary-label">Fixo</span><span class="salary-val"><input type="number" class="editable editable-wide" value="'+(m.fixo||0)+'" onchange="setOutroCampo(\''+m.id+'\',\'fixo\',this.value)"></span></div>'+
+          '<div class="salary-row"><span class="salary-label">Comissão / Extra</span><span class="salary-val"><input type="number" class="editable editable-wide" value="'+(m.comissao||0)+'" onchange="setOutroCampo(\''+m.id+'\',\'comissao\',this.value)"></span></div>'+
+          '<div class="salary-row total"><span class="salary-label">Total</span><span class="salary-val" style="color:var(--sage);">'+brl(total)+'</span></div>'+
+          '<div style="margin-top:6px;text-align:right;">'+(pago?'<span style="font-size:11px;background:var(--sage-light);color:var(--sage);padding:3px 10px;border-radius:10px;font-weight:700;cursor:pointer;" onclick="marcarPago(\''+m.id+'\')"><i class="fa-solid fa-circle-check"></i> Pago</span>':'<button class="btn btn-sm" onclick="marcarPago(\''+m.id+'\')" style="font-size:11px;"><i class="fa-solid fa-money-bill-wave"></i> Dar baixa (pago)</button>')+'</div>'+
+          '</div>';
+      }).join('');
+  }
+
   const tAtt=ATTS.reduce((acc,a)=>{
     const d1=workDaysP1[a.id]!==undefined?workDaysP1[a.id]:8;
     const d2=workDaysP2[a.id]!==undefined?workDaysP2[a.id]:7;
@@ -1418,8 +1441,9 @@ function renderSalary(){
   },0);
   const tNic=nv.fixo+(nicoleComissaoOverride!==null?nicoleComissaoOverride:vp);
   const tGF=(headFixo.gabriela||6000)+(headComissao.gabriela||0)+(headFixo.felipe||6000)+(headComissao.felipe||0);
+  const tOutros=outrosMembros.reduce((s,m)=>s+(m.fixo||0)+(m.comissao||0),0);
   document.getElementById('folha-grid').innerHTML=[
-    {l:'Atendentes',v:tAtt,c:'sage'},{l:'Nicole',v:tNic,c:'rose'},{l:'Gabriela + Felipe',v:tGF,c:'lav'},{l:'Total Folha',v:tAtt+tNic+tGF,c:'peach'},
+    {l:'Atendentes',v:tAtt,c:'sage'},{l:'Nicole',v:tNic,c:'rose'},{l:'Gabriela + Felipe',v:tGF,c:'lav'},{l:'Outros',v:tOutros,c:'peach'},{l:'Total Folha',v:tAtt+tNic+tGF+tOutros,c:'peach'},
   ].map(x=>`<div style="background:var(--bg3);border-radius:var(--r-sm);padding:14px;text-align:center;"><div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px;">${x.l}</div><div style="font-family:var(--font-display);font-size:22px;font-weight:700;color:var(--${x.c});">${brl(x.v)}</div></div>`).join('');
 }
 
@@ -1430,6 +1454,47 @@ function setHeadFoto(id,v){headFotos[id]=v;renderSalary();}
 function setHC(id,v){headComissao[id]=parseFloat(v)||0;renderSalary();}
 function setNicoleComissao(v){nicoleComissaoOverride=v===''?null:(parseFloat(v)||0);renderSalary();}
 function resetNicoleComissao(){nicoleComissaoOverride=null;renderSalary();}
+
+let _outroEditId=null;
+function abrirNovoOutroMembro(){
+  _outroEditId=null;
+  document.getElementById('outro-modal-title').textContent='Novo Membro';
+  document.getElementById('om-nome').value='';
+  document.getElementById('om-cargo').value='';
+  document.getElementById('om-fixo').value='';
+  document.getElementById('om-comissao').value='';
+  document.getElementById('modal-outro-membro').classList.add('open');
+}
+function salvarOutroMembro(){
+  const nome=document.getElementById('om-nome').value.trim();
+  if(!nome){ showToast('Informe o nome.','peach'); return; }
+  const obj={
+    id:_outroEditId||('om'+Date.now()),
+    nome,
+    cargo:document.getElementById('om-cargo').value.trim(),
+    fixo:parseFloat(document.getElementById('om-fixo').value)||0,
+    comissao:parseFloat(document.getElementById('om-comissao').value)||0
+  };
+  if(_outroEditId){ const i=outrosMembros.findIndex(x=>x.id===_outroEditId); if(i>=0) outrosMembros[i]=obj; }
+  else outrosMembros.push(obj);
+  closeModal('modal-outro-membro');
+  if(typeof saveAll==='function') saveAll();
+  renderSalary();
+  showToast('Membro salvo!','sage');
+}
+function setOutroCampo(id,campo,valor){
+  const m=outrosMembros.find(x=>x.id===id); if(!m) return;
+  m[campo]=(campo==='fixo'||campo==='comissao')?(parseFloat(valor)||0):valor;
+  if(typeof saveAll==='function') saveAll();
+  renderSalary();
+}
+function removerOutroMembro(id){
+  if(!confirm('Apagar este membro?')) return;
+  outrosMembros=outrosMembros.filter(x=>x.id!==id);
+  if(typeof saveAll==='function') saveAll();
+  renderSalary();
+  showToast('Membro removido.','peach');
+}
 
 function exportarSalariosPDF(){
   const g=calcGlobal(),band=getBand(g),nv=NIVEIS[selNivelIdx],vp=Math.round(nv.variavel*band.mult);
@@ -2722,7 +2787,8 @@ const _PERSIST_KEYS = {
   nx_nicolecom:()=>nicoleComissaoOverride, nx_nextatt:()=>nextAttId,
   nx_transcricoes:()=>transcricoes, nx_precoenx:()=>PRECOS_ENXOVAL,
   nx_avaliacoes:()=>avaliacoes, nx_turnos:()=>turnos,
-  nx_salpagos:()=>salPagos
+  nx_salpagos:()=>salPagos,
+  nx_outros:()=>outrosMembros
 };
 
 function saveAll(){
@@ -2737,7 +2803,7 @@ function saveAll(){
 // ─── Sincronização com o backend KV (compartilhado entre dispositivos) ───
 // Chaves que sincronizam (dados de equipe/operação). Credenciais e a lista
 // pesada de avaliações ficam SEMPRE locais.
-const SYNC_KEYS=['nx_users','nx_tasks','nx_imoveis','nx_notes','nx_compras','nx_projetos','nx_atts','nx_workP1','nx_workP2','nx_headfixo','nx_headcom','nx_headfotos','nx_kpivals','nx_kpisub','nx_taskcats','nx_catalog','nx_precos','nx_precoenx','nx_niveldx','nx_nicolecom','nx_nextatt','nx_transcricoes','nx_turnos','nx_salpagos','nx_name'];
+const SYNC_KEYS=['nx_users','nx_tasks','nx_imoveis','nx_notes','nx_compras','nx_projetos','nx_atts','nx_workP1','nx_workP2','nx_headfixo','nx_headcom','nx_headfotos','nx_kpivals','nx_kpisub','nx_taskcats','nx_catalog','nx_precos','nx_precoenx','nx_niveldx','nx_nicolecom','nx_nextatt','nx_transcricoes','nx_turnos','nx_salpagos','nx_outros','nx_name'];
 let _kvTimer=null;
 function _kvPushDebounced(){
   const s=window.CLAIRE_SYNC||{};
@@ -2800,6 +2866,7 @@ function loadAll(){
     v=g('nx_avaliacoes'); if(Array.isArray(v)) avaliacoes=v;
     v=g('nx_turnos');     if(Array.isArray(v)) turnos=v;
     v=g('nx_salpagos');   if(v&&typeof v==='object') salPagos=v;
+    v=g('nx_outros');     if(Array.isArray(v)) outrosMembros=v;
   }catch(e){ console.warn('loadAll falhou', e); }
 }
 

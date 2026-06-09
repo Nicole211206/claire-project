@@ -1318,12 +1318,21 @@ function removerUpdateDemanda(i){
   d.updates.splice(i,1); renderDemandaUpdates(); if(typeof saveAll==='function') saveAll();
 }
 function _mesAtualSal(){ return new Date().toISOString().substring(0,7); }
-function marcarPago(attId){
-  const k=attId+'_'+_mesAtualSal();
+function marcarPago(id, parte){
+  const k=id+'_'+_mesAtualSal()+'_'+parte;
   salPagos[k]=!salPagos[k];
   if(typeof saveAll==='function') saveAll();
   renderSalary();
-  showToast(salPagos[k]?'Marcado como pago!':'Baixa removida.','sage');
+}
+function _pagoBadges(id){
+  const m=_mesAtualSal();
+  const partes=[{k:'p15',l:'Dia 15'},{k:'p30',l:'Dia 30'},{k:'com',l:'Comissão'}];
+  return '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;justify-content:flex-end;">'+
+    partes.map(function(p){
+      const pago=salPagos[id+'_'+m+'_'+p.k];
+      return '<span onclick="marcarPago(\''+id+'\',\''+p.k+'\')" title="Clique para marcar/desmarcar" style="cursor:pointer;font-size:10.5px;padding:3px 9px;border-radius:10px;font-weight:600;'+(pago?'background:var(--sage-light);color:var(--sage);':'background:var(--bg3);color:var(--text3);border:1px solid var(--border);')+'">'+(pago?'<i class="fa-solid fa-check"></i> ':'')+p.l+'</span>';
+    }).join('')+
+    '</div>';
 }
 
 function renderPerformance(){
@@ -1384,11 +1393,7 @@ function renderSalary(){
       '<div class="salary-row"><span class="salary-label">1ª parcela (dias 01-15)</span><span class="salary-val"><input type="number" min="0" max="16" class="editable" value="'+d1+'" onchange="setWD1(\''+a.id+'\',this.value)"> plantões = '+brl(v1)+'</span></div>'+
       '<div class="salary-row"><span class="salary-label">2ª parcela (dias 16-31)</span><span class="salary-val"><input type="number" min="0" max="16" class="editable" value="'+d2+'" onchange="setWD2(\''+a.id+'\',this.value)"> plantões = '+brl(v2)+'</span></div>'+
       '<div class="salary-row total"><span class="salary-label">Total do mês</span><span class="salary-val" style="color:var(--sage);">'+brl(total)+'</span></div>'+
-      '<div style="margin-top:8px;text-align:right;">'+
-      (salPagos[a.id+'_'+_mesAtualSal()]
-        ? '<span style="font-size:11px;background:var(--sage-light);color:var(--sage);padding:3px 10px;border-radius:10px;font-weight:700;cursor:pointer;" onclick="marcarPago(\''+a.id+'\')"><i class="fa-solid fa-circle-check"></i> Pago — clique p/ desfazer</span>'
-        : '<button class="btn btn-sm" onclick="marcarPago(\''+a.id+'\')" style="font-size:11px;"><i class="fa-solid fa-money-bill-wave"></i> Dar baixa (pago)</button>')+
-      '</div>'+
+      _pagoBadges(a.id)+
       '</div>';
   }).join('');
 
@@ -1410,6 +1415,7 @@ function renderSalary(){
       ${h.isNicole?'<div class="salary-row"><span class="salary-label">Comissão '+(nicoleComissaoOverride!==null?'(manual)':'(auto KPI)')+'</span><span class="salary-val" style="color:var(--rose);"><input type="number" class="editable editable-wide" value="'+(nicoleComissaoOverride!==null?nicoleComissaoOverride:h.comissao)+'" onchange="setNicoleComissao(this.value)"> '+(nicoleComissaoOverride!==null?'<button onclick="resetNicoleComissao()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:10px;" title="Voltar ao cálculo automático"><i class=\'fa-solid fa-rotate-left\'></i></button>':'')+'</span></div>':`<div class="salary-row"><span class="salary-label">Comissão</span><span class="salary-val" style="color:var(--rose);"><input type="number" class="editable editable-wide" value="${h.comissao}" onchange="setHC('${h.id}',this.value)"></span></div>`}
       <div class="salary-row total"><span class="salary-label">Total estimado</span><span class="salary-val" style="color:var(--sage);">${brl(h.fixo+h.comissao)}</span></div>
       ${h.note?`<div style="font-size:11px;color:var(--text3);margin-top:3px;"><i class="fa-solid fa-circle-info"></i> ${h.note}</div>`:''}
+      ${_pagoBadges(h.id)}
     </div>`).join('');
 
   // Outros Membros (só admin)
@@ -1421,7 +1427,6 @@ function renderSalary(){
       ? '<div style="font-size:13px;color:var(--text3);text-align:center;padding:10px;">Nenhum outro membro. Clique em "Novo Membro" acima.</div>'
       : outrosMembros.map(m=>{
         const total=(m.fixo||0)+(m.comissao||0);
-        const pago=salPagos[m.id+'_'+_mesAtualSal()];
         return '<div class="salary-block">'+
           '<div class="salary-name"><div class="avatar av-peach" style="width:26px;height:26px;font-size:10px;">'+(m.nome||'?').charAt(0).toUpperCase()+'</div>'+
           '<div style="flex:1;"><input class="editable" style="font-size:13px;font-weight:600;width:120px;" value="'+esc(m.nome)+'" onchange="setOutroCampo(\''+m.id+'\',\'nome\',this.value)"><input class="editable" style="font-size:11px;color:var(--text3);width:120px;display:block;" value="'+esc(m.cargo||'')+'" placeholder="cargo" onchange="setOutroCampo(\''+m.id+'\',\'cargo\',this.value)"></div>'+
@@ -1429,7 +1434,7 @@ function renderSalary(){
           '<div class="salary-row"><span class="salary-label">Fixo</span><span class="salary-val"><input type="number" class="editable editable-wide" value="'+(m.fixo||0)+'" onchange="setOutroCampo(\''+m.id+'\',\'fixo\',this.value)"></span></div>'+
           '<div class="salary-row"><span class="salary-label">Comissão / Extra</span><span class="salary-val"><input type="number" class="editable editable-wide" value="'+(m.comissao||0)+'" onchange="setOutroCampo(\''+m.id+'\',\'comissao\',this.value)"></span></div>'+
           '<div class="salary-row total"><span class="salary-label">Total</span><span class="salary-val" style="color:var(--sage);">'+brl(total)+'</span></div>'+
-          '<div style="margin-top:6px;text-align:right;">'+(pago?'<span style="font-size:11px;background:var(--sage-light);color:var(--sage);padding:3px 10px;border-radius:10px;font-weight:700;cursor:pointer;" onclick="marcarPago(\''+m.id+'\')"><i class="fa-solid fa-circle-check"></i> Pago</span>':'<button class="btn btn-sm" onclick="marcarPago(\''+m.id+'\')" style="font-size:11px;"><i class="fa-solid fa-money-bill-wave"></i> Dar baixa (pago)</button>')+'</div>'+
+          _pagoBadges(m.id)+
           '</div>';
       }).join('');
   }

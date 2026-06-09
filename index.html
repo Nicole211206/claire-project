@@ -436,7 +436,10 @@ function _validarLogin(){
     <div class="panel" id="panel-salary">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
         <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Calculadora de Salários</h2>
-        <button class="btn btn-rose" onclick="exportarSalariosPDF()"><i class="fa-solid fa-file-pdf"></i> Relatório PDF</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn" onclick="adicionarMembro()"><i class="fa-solid fa-user-plus"></i> Novo Membro</button>
+          <button class="btn btn-rose" onclick="exportarSalariosPDF()"><i class="fa-solid fa-file-pdf"></i> Relatório PDF</button>
+        </div>
       </div>
       <div class="two-col-eq" style="margin-bottom:18px;">
         <div class="card">
@@ -841,6 +844,27 @@ function _validarLogin(){
   </div>
 </div>
 
+<div class="modal-overlay" id="modal-demanda-det">
+  <div class="modal" style="width:560px;max-height:92vh;overflow-y:auto;">
+    <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:6px;">
+      <div style="flex:1;">
+        <div style="font-family:var(--font-display);font-size:16px;font-weight:700;margin-bottom:6px;" id="dd-titulo"></div>
+        <div id="dd-meta" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;"></div>
+      </div>
+      <button onclick="closeModal('modal-demanda-det')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;flex-shrink:0;"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div id="dd-editar" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;"></div>
+    <div style="margin:14px 0 10px;border-top:1px solid var(--border);padding-top:14px;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);letter-spacing:0.5px;margin-bottom:10px;">📋 Atualizações</div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;">
+        <textarea id="dd-nova-update" class="form-input" rows="2" style="flex:1;resize:none;font-size:13px;" placeholder="Escreva uma atualização..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();adicionarUpdateDemanda();}"></textarea>
+        <button class="btn btn-rose" onclick="adicionarUpdateDemanda()" style="align-self:flex-end;white-space:nowrap;"><i class="fa-solid fa-paper-plane"></i> Adicionar</button>
+      </div>
+      <div id="dd-updates-list" style="max-height:300px;overflow-y:auto;"></div>
+    </div>
+  </div>
+</div>
+
 <!-- Criar Documento -->
 <div class="modal-overlay" id="modal-create-doc">
   <div class="modal" style="width:540px;">
@@ -1176,6 +1200,6 @@ function _validarLogin(){
     <div class="modal-footer"><button class="btn" onclick="closeModal('modal-gerar-escala')">Cancelar</button><button class="btn btn-rose" onclick="gerarEscala()"><i class="fa-solid fa-check"></i> Gerar</button></div>
   </div>
 </div>
-<script src="js/app.js?v=25"></script>
+<script src="js/app.js?v=26"></script>
 </body>
 </html>

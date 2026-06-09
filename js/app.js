@@ -103,6 +103,7 @@ let workDaysP1={patricia:8,sara:8,lisarb:8,lais:8};  // turnos dias 01-15
 let workDaysP2={patricia:7,sara:7,lisarb:7,lais:7};  // turnos dias 16-31
 let turnos=[]; // {id, data:'YYYY-MM-DD', turno:'dia'|'noite', attId, confirmado:false}
 let turnosMesSel=''; // mês selecionado no admin (YYYY-MM)
+let salPagos={}; // { 'attId_2026-06': true }
 let projetos=[];
 let transcricoes=[];
 let transcricaoAtiva=null;
@@ -1092,7 +1093,7 @@ function renderTeam(){
     const PL={high:'Alta',med:'Média',low:'Baixa'};
     grid.innerHTML=lista.map(a=>{
       const media=a.respMes!=null?a.respMes.toFixed(1):'—';
-      const pend=a.demands.filter(d=>d.s!=='done');
+      const pend=a.demands.map((d,i)=>({d,i})).filter(x=>x.d.s!=='done');
       return '<div class="card" style="max-width:560px;">'+
         '<div class="card-header">'+(a.foto?'<img src="'+esc(a.foto)+'" style="width:34px;height:34px;border-radius:50%;object-fit:cover;">':'<div class="avatar '+a.av+'" style="width:34px;height:34px;font-size:14px;">'+a.ini+'</div>')+'<div class="card-title">'+esc(a.name)+'</div></div>'+
         '<div class="card-body" style="padding:14px 16px;">'+
@@ -1104,7 +1105,7 @@ function renderTeam(){
         '<div style="font-size:10.5px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:6px;">Demandas ('+pend.length+')</div>'+
         '<button class="btn btn-sm btn-rose" style="margin-bottom:8px;font-size:11px;" onclick="openAttModal(\''+a.id+'\')"><i class="fa-solid fa-plus"></i> Nova / Dar baixa</button>'+
         (pend.length===0?'<div style="font-size:12px;color:var(--text3);padding:6px 0;">Nenhuma demanda pendente. 🎉</div>':
-        pend.map(d=>'<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-top:1px solid var(--border);"><div style="width:3px;height:20px;border-radius:2px;background:'+(PC2[d.prio]||'var(--text3)')+';"></div><span style="font-size:11px;color:var(--text3);min-width:40px;">'+(PL[d.prio]||'')+'</span><span style="font-size:12.5px;flex:1;">'+esc(d.desc)+'</span>'+(d.due?'<span style="font-size:11px;color:var(--text3);">'+fd(d.due)+'</span>':'')+'</div>').join(''))+
+        pend.map(({d,i})=>'<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-top:1px solid var(--border);cursor:pointer;" onclick="abrirDemandaModal(\''+a.id+'\','+i+')"><div style="width:3px;height:20px;border-radius:2px;background:'+(PC2[d.prio]||'var(--text3)')+';"></div><span style="font-size:11px;color:var(--text3);min-width:40px;">'+(PL[d.prio]||'')+'</span><span style="font-size:12.5px;flex:1;">'+esc(d.desc)+(d.updates&&d.updates.length?' <span style="font-size:10px;color:var(--text3);">💬'+d.updates.length+'</span>':'')+'</span>'+(d.due?'<span style="font-size:11px;color:var(--text3);">'+fd(d.due)+'</span>':'')+'</div>').join(''))+
         '</div></div>';
     }).join('');
     return;
@@ -1135,7 +1136,7 @@ function renderTeam(){
       '<button class="btn btn-sm" onclick="zerarRespMes(\''+a.id+'\')" style="font-size:10px;padding:3px 8px;"><i class="fa-solid fa-rotate-left"></i> Zerar Mês</button>'+
       '</div></div>'+
       '<div style="margin-bottom:8px;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;"><div style="font-size:10.5px;font-weight:700;text-transform:uppercase;color:var(--text3);">Demandas ('+a.demands.filter(d=>d.s!=='done').length+')</div><button class="btn btn-sm btn-rose" onclick="openAttModal(\''+a.id+'\')" style="font-size:10px;padding:3px 8px;"><i class="fa-solid fa-list"></i> Ver</button></div>'+
-      a.demands.filter(d=>d.s!=='done').slice(0,3).map(d=>'<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-top:1px solid var(--border);"><div style="width:3px;height:20px;border-radius:2px;background:'+(PC2[d.prio]||'var(--text3)')+';flex-shrink:0;"></div><span style="font-size:11px;color:var(--text3);font-weight:600;min-width:36px;">'+(PL[d.prio]||'')+' </span><span style="font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(d.desc)+'</span>'+(d.recorrente?'<span style="font-size:10px;background:var(--lav-light);color:var(--lavender);padding:1px 5px;border-radius:8px;">🔁</span>':'')+'</div>').join('')+
+      a.demands.map((d,i)=>({d,i})).filter(x=>x.d.s!=='done').slice(0,3).map(({d,i})=>'<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-top:1px solid var(--border);cursor:pointer;" onclick="abrirDemandaModal(\''+a.id+'\','+i+')"><div style="width:3px;height:20px;border-radius:2px;background:'+(PC2[d.prio]||'var(--text3)')+';flex-shrink:0;"></div><span style="font-size:11px;color:var(--text3);font-weight:600;min-width:36px;">'+(PL[d.prio]||'')+' </span><span style="font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(d.desc)+(d.updates&&d.updates.length?' 💬'+d.updates.length:'')+'</span>'+(d.recorrente?'<span style="font-size:10px;background:var(--lav-light);color:var(--lavender);padding:1px 5px;border-radius:8px;">🔁</span>':'')+'</div>').join('')+
       '</div>'+
       '<textarea class="form-input" rows="2" style="font-size:12px;resize:none;" placeholder="Anotações..." oninput="setNote(\''+a.id+'\',this.value)">'+esc(a.note||'')+'</textarea>'+
       '</div></div>';
@@ -1209,11 +1210,11 @@ function renderOverview(){
     html+='<div class="card" style="margin-bottom:18px;"><div class="card-header"><div class="card-title">'+(varios?'Demandas da Equipe':'Minhas Demandas')+'</div></div><div class="card-body">';
     let algumaDemanda=false;
     lista.forEach(a=>{
-      const pend=a.demands.filter(d=>d.s!=='done');
+      const pend=a.demands.map((d,i)=>({d,i})).filter(x=>x.d.s!=='done');
       if(pend.length===0) return;
       algumaDemanda=true;
       if(varios) html+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);margin:10px 0 4px;">'+esc(a.name)+'</div>';
-      html+=pend.map(d=>'<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);"><div style="width:3px;height:20px;border-radius:2px;background:'+(PC2[d.prio]||'var(--text3)')+';"></div><span style="flex:1;font-size:13px;">'+esc(d.desc)+'</span>'+(d.due?'<span style="font-size:11px;color:'+(d.due<hoje?'var(--vermelha)':'var(--text3)')+';">'+fd(d.due)+'</span>':'')+'</div>').join('');
+      html+=pend.map(({d,i})=>'<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="abrirDemandaModal(\''+a.id+'\','+i+')"><div style="width:3px;height:20px;border-radius:2px;background:'+(PC2[d.prio]||'var(--text3)')+';"></div><span style="flex:1;font-size:13px;">'+esc(d.desc)+(d.updates&&d.updates.length?' <span style="font-size:10px;color:var(--text3);">💬'+d.updates.length+'</span>':'')+'</span>'+(d.due?'<span style="font-size:11px;color:'+(d.due<hoje?'var(--vermelha)':'var(--text3)')+';">'+fd(d.due)+'</span>':'')+'</div>').join('');
     });
     if(!algumaDemanda) html+='<div style="text-align:center;color:var(--text3);font-size:13px;padding:10px;">Tudo em dia! 🎉</div>';
     html+='</div></div>';
@@ -1244,7 +1245,7 @@ function openAttModal(id){
     `+'<label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:10px;"><input type="checkbox" '+(mostrarDemandasConcluidas?'checked':'')+' onchange="toggleDemandasConcluidas(\''+id+'\')"> Mostrar concluídas</label>'+`
     ${visiveis.length===0?'<p style="color:var(--text3);font-size:13px;text-align:center;padding:14px;">Nenhuma demanda.</p>':
     '<table class="data-table"><thead><tr><th>Demanda</th><th>Prazo</th><th>Status</th><th></th></tr></thead><tbody>'+
-    visiveis.map(({d,i})=>`<tr${d.s==='done'?' style="opacity:0.55;"':''}><td style="max-width:200px;${d.s==='done'?'text-decoration:line-through;':''}">${d.desc}</td><td>${fd(d.due)}</td><td><select onchange="setDemandStatus('${id}',${i},this.value)" style="font-family:var(--font-body);font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg3);color:var(--text);outline:none;"><option value="pending" ${d.s==='pending'?'selected':''}>Pendente</option><option value="done" ${d.s==='done'?'selected':''}>Concluída</option><option value="late" ${d.s==='late'?'selected':''}>Atrasada</option></select></td><td><button onclick="delDemand('${id}',${i})" style="background:none;border:none;color:var(--vermelha);cursor:pointer;font-size:12px;"><i class="fa-solid fa-trash"></i></button></td></tr>`).join('')+
+    visiveis.map(({d,i})=>`<tr${d.s==='done'?' style="opacity:0.55;"':''}><td style="max-width:200px;cursor:pointer;${d.s==='done'?'text-decoration:line-through;':''}" onclick="abrirDemandaModal('${id}',${i})">${d.desc}${d.updates&&d.updates.length?' <span style="font-size:10px;color:var(--text3);">💬'+d.updates.length+'</span>':''}</td><td>${fd(d.due)}</td><td><select onchange="setDemandStatus('${id}',${i},this.value)" style="font-family:var(--font-body);font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg3);color:var(--text);outline:none;"><option value="pending" ${d.s==='pending'?'selected':''}>Pendente</option><option value="done" ${d.s==='done'?'selected':''}>Concluída</option><option value="late" ${d.s==='late'?'selected':''}>Atrasada</option></select></td><td><button onclick="delDemand('${id}',${i})" style="background:none;border:none;color:var(--vermelha);cursor:pointer;font-size:12px;"><i class="fa-solid fa-trash"></i></button></td></tr>`).join('')+
     '</tbody></table>'}`;
   document.getElementById('modal-att').classList.add('open');
 }
@@ -1261,6 +1262,68 @@ function addDemand(){
 }
 function setDemandStatus(id,i,v){const a=ATTS.find(x=>x.id===id);if(a&&a.demands[i])a.demands[i].s=v;renderTeam();renderTeamOv();openAttModal(id);}
 function delDemand(id,i){const a=ATTS.find(x=>x.id===id);if(a){a.demands.splice(i,1);renderTeam();renderTeamOv();openAttModal(id);}}
+
+let _demandaAtiva={attId:null, idx:null};
+function abrirDemandaModal(attId, idx){
+  const a=ATTS.find(x=>x.id===attId); if(!a||!a.demands[idx]) return;
+  _demandaAtiva={attId, idx};
+  const d=a.demands[idx];
+  if(!d.updates) d.updates=[];
+  document.getElementById('dd-titulo').textContent=d.desc;
+  const PL={high:'Alta',med:'Média',low:'Baixa'};
+  const PC={high:'var(--vermelha)',med:'var(--amarela)',low:'var(--sage)'};
+  document.getElementById('dd-meta').innerHTML=
+    '<span style="font-size:11px;color:'+(PC[d.prio]||'var(--text3)')+';font-weight:700;">'+(PL[d.prio]||'')+'</span>'+
+    (d.due?' <span style="font-size:12px;color:var(--text3);"><i class="fa-regular fa-calendar fa-xs"></i> '+fd(d.due)+'</span>':'')+
+    ' <span style="font-size:11px;padding:1px 8px;border-radius:10px;background:'+(d.s==='done'?'var(--sage-light);color:var(--sage)':'var(--bg3);color:var(--text3)')+';">'+(d.s==='done'?'Concluída':'Pendente')+'</span>'+
+    (a?' <span style="font-size:11px;color:var(--text3);">· '+esc(a.name)+'</span>':'');
+  document.getElementById('dd-editar').innerHTML=
+    '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:3px;">Prazo</label><input type="date" class="form-input" style="padding:5px 8px;font-size:12.5px;" value="'+(d.due||'')+'" onchange="editarDemandaCampo(\'due\',this.value)"></div>'+
+    '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:3px;">Prioridade</label><select class="form-select" style="padding:5px 8px;font-size:12.5px;" onchange="editarDemandaCampo(\'prio\',this.value)"><option value="high"'+(d.prio==='high'?' selected':'')+'>Alta</option><option value="med"'+(d.prio==='med'?' selected':'')+'>Média</option><option value="low"'+(d.prio==='low'?' selected':'')+'>Baixa</option></select></div>'+
+    '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:3px;">Status</label><select class="form-select" style="padding:5px 8px;font-size:12.5px;" onchange="editarDemandaCampo(\'s\',this.value)"><option value="pending"'+(d.s!=='done'?' selected':'')+'>Pendente</option><option value="done"'+(d.s==='done'?' selected':'')+'>Concluída (baixa)</option></select></div>';
+  renderDemandaUpdates();
+  document.getElementById('modal-demanda-det').classList.add('open');
+}
+function editarDemandaCampo(campo, valor){
+  const a=ATTS.find(x=>x.id===_demandaAtiva.attId); if(!a) return;
+  const d=a.demands[_demandaAtiva.idx]; if(!d) return;
+  d[campo]=valor;
+  abrirDemandaModal(_demandaAtiva.attId,_demandaAtiva.idx); // re-render do meta
+  if(typeof renderTeam==='function') renderTeam();
+  if(typeof renderTeamOv==='function') renderTeamOv();
+  if(typeof saveAll==='function') saveAll();
+}
+function renderDemandaUpdates(){
+  const a=ATTS.find(x=>x.id===_demandaAtiva.attId); if(!a) return;
+  const d=a.demands[_demandaAtiva.idx]; if(!d) return;
+  const ups=d.updates||[];
+  document.getElementById('dd-updates-list').innerHTML=ups.length===0
+    ?'<div style="text-align:center;padding:14px;color:var(--text3);font-size:13px;">Nenhuma atualização ainda.</div>'
+    :ups.map((u,i)=>'<div style="padding:9px 0;border-bottom:1px solid var(--border);"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;"><span style="font-size:10.5px;color:var(--text3);">'+new Date(u.data).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</span><button onclick="removerUpdateDemanda('+i+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;"><i class="fa-solid fa-xmark"></i></button></div><div style="font-size:13px;white-space:pre-wrap;">'+esc(u.texto)+'</div></div>').reverse().join('');
+}
+function adicionarUpdateDemanda(){
+  const a=ATTS.find(x=>x.id===_demandaAtiva.attId); if(!a) return;
+  const d=a.demands[_demandaAtiva.idx]; if(!d) return;
+  const txt=document.getElementById('dd-nova-update').value.trim(); if(!txt) return;
+  if(!d.updates) d.updates=[];
+  d.updates.push({texto:txt, data:new Date().toISOString()});
+  document.getElementById('dd-nova-update').value='';
+  renderDemandaUpdates();
+  if(typeof saveAll==='function') saveAll();
+}
+function removerUpdateDemanda(i){
+  const a=ATTS.find(x=>x.id===_demandaAtiva.attId); if(!a) return;
+  const d=a.demands[_demandaAtiva.idx]; if(!d||!d.updates) return;
+  d.updates.splice(i,1); renderDemandaUpdates(); if(typeof saveAll==='function') saveAll();
+}
+function _mesAtualSal(){ return new Date().toISOString().substring(0,7); }
+function marcarPago(attId){
+  const k=attId+'_'+_mesAtualSal();
+  salPagos[k]=!salPagos[k];
+  if(typeof saveAll==='function') saveAll();
+  renderSalary();
+  showToast(salPagos[k]?'Marcado como pago!':'Baixa removida.','sage');
+}
 
 function renderPerformance(){
   const el=document.getElementById('performance-body');if(!el)return;
@@ -1320,6 +1383,11 @@ function renderSalary(){
       '<div class="salary-row"><span class="salary-label">1ª parcela (dias 01-15)</span><span class="salary-val"><input type="number" min="0" max="16" class="editable" value="'+d1+'" onchange="setWD1(\''+a.id+'\',this.value)"> plantões = '+brl(v1)+'</span></div>'+
       '<div class="salary-row"><span class="salary-label">2ª parcela (dias 16-31)</span><span class="salary-val"><input type="number" min="0" max="16" class="editable" value="'+d2+'" onchange="setWD2(\''+a.id+'\',this.value)"> plantões = '+brl(v2)+'</span></div>'+
       '<div class="salary-row total"><span class="salary-label">Total do mês</span><span class="salary-val" style="color:var(--sage);">'+brl(total)+'</span></div>'+
+      '<div style="margin-top:8px;text-align:right;">'+
+      (salPagos[a.id+'_'+_mesAtualSal()]
+        ? '<span style="font-size:11px;background:var(--sage-light);color:var(--sage);padding:3px 10px;border-radius:10px;font-weight:700;cursor:pointer;" onclick="marcarPago(\''+a.id+'\')"><i class="fa-solid fa-circle-check"></i> Pago — clique p/ desfazer</span>'
+        : '<button class="btn btn-sm" onclick="marcarPago(\''+a.id+'\')" style="font-size:11px;"><i class="fa-solid fa-money-bill-wave"></i> Dar baixa (pago)</button>')+
+      '</div>'+
       '</div>';
   }).join('');
 
@@ -2653,7 +2721,8 @@ const _PERSIST_KEYS = {
   nx_precos:()=>PRECOS_ITENS, nx_niveldx:()=>selNivelIdx,
   nx_nicolecom:()=>nicoleComissaoOverride, nx_nextatt:()=>nextAttId,
   nx_transcricoes:()=>transcricoes, nx_precoenx:()=>PRECOS_ENXOVAL,
-  nx_avaliacoes:()=>avaliacoes, nx_turnos:()=>turnos
+  nx_avaliacoes:()=>avaliacoes, nx_turnos:()=>turnos,
+  nx_salpagos:()=>salPagos
 };
 
 function saveAll(){
@@ -2668,7 +2737,7 @@ function saveAll(){
 // ─── Sincronização com o backend KV (compartilhado entre dispositivos) ───
 // Chaves que sincronizam (dados de equipe/operação). Credenciais e a lista
 // pesada de avaliações ficam SEMPRE locais.
-const SYNC_KEYS=['nx_users','nx_tasks','nx_imoveis','nx_notes','nx_compras','nx_projetos','nx_atts','nx_workP1','nx_workP2','nx_headfixo','nx_headcom','nx_headfotos','nx_kpivals','nx_kpisub','nx_taskcats','nx_catalog','nx_precos','nx_precoenx','nx_niveldx','nx_nicolecom','nx_nextatt','nx_transcricoes','nx_turnos','nx_name'];
+const SYNC_KEYS=['nx_users','nx_tasks','nx_imoveis','nx_notes','nx_compras','nx_projetos','nx_atts','nx_workP1','nx_workP2','nx_headfixo','nx_headcom','nx_headfotos','nx_kpivals','nx_kpisub','nx_taskcats','nx_catalog','nx_precos','nx_precoenx','nx_niveldx','nx_nicolecom','nx_nextatt','nx_transcricoes','nx_turnos','nx_salpagos','nx_name'];
 let _kvTimer=null;
 function _kvPushDebounced(){
   const s=window.CLAIRE_SYNC||{};
@@ -2730,6 +2799,7 @@ function loadAll(){
     v=g('nx_transcricoes'); if(Array.isArray(v)) transcricoes=v;
     v=g('nx_avaliacoes'); if(Array.isArray(v)) avaliacoes=v;
     v=g('nx_turnos');     if(Array.isArray(v)) turnos=v;
+    v=g('nx_salpagos');   if(v&&typeof v==='object') salPagos=v;
   }catch(e){ console.warn('loadAll falhou', e); }
 }
 
@@ -2864,7 +2934,7 @@ function renderTurnos(){
     if(pend) bannerHtml='<div style="background:var(--peach-light);color:var(--peach);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:14px;font-size:13px;font-weight:600;"><i class="fa-solid fa-triangle-exclamation"></i> Você tem turnos aguardando sua confirmação.</div>';
   }
   el.innerHTML=bannerHtml+attsVisiveis.map(a=>{
-    const ehProprio = ehAdmin || (cu && a.id===cu.attId);
+    const ehProprio = true; // quem enxerga o card (admin ou escopo) pode confirmar os turnos
     const tDia=['P1','P2'].map(parc=>{
       const lista=turnos.filter(t=>t.attId===a.id && t.data.startsWith(mes) && parcelaDoDia(t.data)===parc).sort((x,y)=>x.data.localeCompare(y.data));
       const confirmados=lista.filter(t=>t.confirmado).length;

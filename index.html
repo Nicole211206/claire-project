@@ -62,7 +62,7 @@ function _validarLogin(){
   try{ users=JSON.parse(localStorage.getItem('nx_users')||'[]'); }catch(e){ users=[]; }
   var u=users.find(function(x){ return (x.email||'').toLowerCase()===email && x.senha===senha; });
   if(u){
-    sessionStorage.setItem('nx_currentuser', JSON.stringify({email:u.email,nome:u.nome,perfil:u.perfil,modulos:u.modulos||[]}));
+    sessionStorage.setItem('nx_currentuser', JSON.stringify({email:u.email,nome:u.nome,perfil:u.perfil,modulos:u.modulos||[],attsPermitidos:u.attsPermitidos||[],attId:u.attId||''}));
     document.getElementById('login-overlay').style.display='none';
     document.getElementById('login-senha').value='';
     erro.textContent='';
@@ -1176,6 +1176,6 @@ function _validarLogin(){
     <div class="modal-footer"><button class="btn" onclick="closeModal('modal-gerar-escala')">Cancelar</button><button class="btn btn-rose" onclick="gerarEscala()"><i class="fa-solid fa-check"></i> Gerar</button></div>
   </div>
 </div>
-<script src="js/app.js?v=24"></script>
+<script src="js/app.js?v=25"></script>
 </body>
 </html>

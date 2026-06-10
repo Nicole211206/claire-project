@@ -85,6 +85,9 @@ let imovelsCatalog = [
   {id:'c-635', code:'WC-00635', nome:'WC-00635 - Casa do Riacho'},
 ];
 
+let manutencoes=[];
+let manutAtiva=null, manutAba='solicitacao';
+
 let tasks=[
   {id:1,text:'Verificar tempo médio de resposta',cat:'work',prio:'high',due:'2026-05-29',done:false,status:'todo'},
   {id:2,text:'Lançar KPIs de maio',cat:'work',prio:'high',due:'2026-05-31',done:false,status:'todo'},
@@ -145,6 +148,7 @@ const MODULOS_LISTA=[
   {id:'avaliacoes',label:'Acompanhamento'},{id:'tasks',label:'Tarefas'},{id:'calendar',label:'Calendário'},
   {id:'ai',label:'Assistente IA'},{id:'team',label:'Equipe'},{id:'salary',label:'Salários'},
   {id:'compras',label:'Compras'},
+  {id:'manutencao',label:'Manutenção'},
   {id:'gmail',label:'Gmail'},{id:'projetos',label:'Projetos'},{id:'reunioes',label:'Reuniões'},
   {id:'turnos',label:'Turnos'},
   {id:'extras',label:'Extras'}
@@ -378,6 +382,8 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   renderTurnos();
   renderExtras();
   sincronizarExtrasKPI();
+  renderManutencaoKanban();
+  sincronizarManutencaoKPI();
   const recEl=document.getElementById('d-recorrente');
   if(recEl)recEl.addEventListener('change',function(){document.getElementById('d-recorrencia').style.display=this.checked?'':'none';});
   carregarUsuarios();
@@ -386,7 +392,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
 });
 
 // ═══════════════════ NAV ═══════════════════
-const PT={overview:'Visão Geral',kpis:'Meus KPIs',performance:'Acompanhamento de Performance',tasks:'Tarefas',calendar:'Calendário',ai:'Assistente IA',team:'Equipe',salary:'Salários',drive:'Google Drive',onboarding:'Onboarding de Imóveis',gmail:'Gmail',notes:'Anotações',focus:'Foco',projetos:'Projetos',compras:'Registro de Compras',reunioes:'Reuniões e Transcrições',avaliacoes:'Acompanhamento',usuarios:'Usuários e Acessos',turnos:'Escala de Turnos',extras:'Serviços Extras'};
+const PT={overview:'Visão Geral',kpis:'Meus KPIs',performance:'Acompanhamento de Performance',tasks:'Tarefas',calendar:'Calendário',ai:'Assistente IA',team:'Equipe',salary:'Salários',drive:'Google Drive',onboarding:'Onboarding de Imóveis',gmail:'Gmail',notes:'Anotações',focus:'Foco',projetos:'Projetos',compras:'Registro de Compras',manutencao:'Manutenção',reunioes:'Reuniões e Transcrições',avaliacoes:'Acompanhamento',usuarios:'Usuários e Acessos',turnos:'Escala de Turnos',extras:'Serviços Extras'};
 function showPanel(id,btn){
   if(typeof podeAcessar==='function' && id!=='usuarios'){ const u=getCurrentUser(); if(u && u.perfil!=='admin' && !podeAcessar(id)){ return; } }
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
@@ -401,6 +407,7 @@ function showPanel(id,btn){
   if(id==='projetos'){renderProjetosKanban();}
   if(id==='reunioes'){renderReunioes();}
   if(id==='compras'){renderCompras();}
+  if(id==='manutencao'){renderManutencaoKanban();}
   if(id==='focus'){renderFocusInsights();}
   if(id==='performance'){renderPerformance();}
   if(id==='avaliacoes'){renderAvaliacoes();}
@@ -657,11 +664,15 @@ function renderKPIs(){
             '<div><div style="font-size:12.5px;font-weight:500;">'+it.label+'</div><div style="font-size:10.5px;color:var(--text3);">'+it.hint+'</div></div>'+
             (it.key==='extras'
               ?'<div style="text-align:center;"><div style="font-size:12px;font-weight:600;">'+(rcSub.extras.previsto?'R$ '+rcSub.extras.previsto:'—')+'</div><div style="font-size:9px;color:var(--text3);">auto (Extras)</div></div>'
+              :it.key==='manutencao'
+              ?'<div style="text-align:center;"><div style="font-size:12px;font-weight:600;">'+(rcSub.manutencao&&rcSub.manutencao.previsto?'R$ '+rcSub.manutencao.previsto:'—')+'</div><div style="font-size:9px;color:var(--text3);">auto (Manut.)</div></div>'
               :'<input type="number" class="form-input" style="padding:4px 6px;font-size:12px;text-align:center;" placeholder="0" value="'+(rcSub[it.key].previsto||'')+'" onchange="setKPIRcSub(\''+it.key+'\',\'previsto\',this.value)">')+
             (it.key==='margem'
               ?'<div style="text-align:center;"><div style="font-size:12px;font-weight:600;">'+(rcSub.margem.gasto?'R$ '+rcSub.margem.gasto:'—')+'</div><div style="font-size:9px;color:var(--text3);">auto (compras)</div></div>'
               :it.key==='extras'
               ?'<div style="text-align:center;"><div style="font-size:12px;font-weight:600;">'+(rcSub.extras.gasto?'R$ '+rcSub.extras.gasto:'—')+'</div><div style="font-size:9px;color:var(--text3);">auto (Extras)</div></div>'
+              :it.key==='manutencao'
+              ?'<div style="text-align:center;"><div style="font-size:12px;font-weight:600;">'+(rcSub.manutencao&&rcSub.manutencao.gasto?'R$ '+rcSub.manutencao.gasto:'—')+'</div><div style="font-size:9px;color:var(--text3);">auto (Manut.)</div></div>'
               :'<input type="number" class="form-input" style="padding:4px 6px;font-size:12px;text-align:center;" placeholder="0" value="'+(rcSub[it.key].gasto||'')+'" onchange="setKPIRcSub(\''+it.key+'\',\'gasto\',this.value)">')+
             '<div style="text-align:center;font-size:13px;font-weight:700;color:'+ecoColor+';">'+(eco!==null?eco+'%':'—')+'</div>'+
             '</div>';
@@ -2891,7 +2902,8 @@ const _PERSIST_KEYS = {
   nx_avaliacoes:()=>avaliacoes, nx_turnos:()=>turnos,
   nx_salpagos:()=>salPagos,
   nx_outros:()=>outrosMembros,
-  nx_extras:()=>extras
+  nx_extras:()=>extras,
+  nx_manutencoes:()=>manutencoes
 };
 
 function saveAll(){
@@ -2906,7 +2918,7 @@ function saveAll(){
 // ─── Sincronização com o backend KV (compartilhado entre dispositivos) ───
 // Chaves que sincronizam (dados de equipe/operação). Credenciais e a lista
 // pesada de avaliações ficam SEMPRE locais.
-const SYNC_KEYS=['nx_users','nx_tasks','nx_imoveis','nx_notes','nx_compras','nx_projetos','nx_atts','nx_workP1','nx_workP2','nx_headfixo','nx_headcom','nx_headfotos','nx_kpivals','nx_kpisub','nx_taskcats','nx_catalog','nx_precos','nx_precoenx','nx_niveldx','nx_nicolecom','nx_nextatt','nx_transcricoes','nx_turnos','nx_salpagos','nx_outros','nx_extras','nx_name'];
+const SYNC_KEYS=['nx_users','nx_tasks','nx_imoveis','nx_notes','nx_compras','nx_projetos','nx_atts','nx_workP1','nx_workP2','nx_headfixo','nx_headcom','nx_headfotos','nx_kpivals','nx_kpisub','nx_taskcats','nx_catalog','nx_precos','nx_precoenx','nx_niveldx','nx_nicolecom','nx_nextatt','nx_transcricoes','nx_turnos','nx_salpagos','nx_outros','nx_extras','nx_manutencoes','nx_name'];
 let _kvTimer=null;
 function _kvPushDebounced(){
   const s=window.CLAIRE_SYNC||{};
@@ -2971,6 +2983,7 @@ function loadAll(){
     v=g('nx_salpagos');   if(v&&typeof v==='object') salPagos=v;
     v=g('nx_outros');     if(Array.isArray(v)) outrosMembros=v;
     v=g('nx_extras');     if(Array.isArray(v)) extras=v;
+    v=g('nx_manutencoes'); if(Array.isArray(v)) manutencoes=v;
   }catch(e){ console.warn('loadAll falhou', e); }
 }
 
@@ -4299,6 +4312,320 @@ function renderOnboardingKanban(){
       '</div></div>'
     ).join('')+
     '</div></details>';
+}
+
+// ═══════════════════ MANUTENÇÃO ═══════════════════
+const MANUT_COLS=[
+  {id:'solicitacao',label:'Solicitação',color:'var(--peach)'},
+  {id:'andamento',label:'Em Andamento',color:'var(--sky)'},
+  {id:'pago',label:'Pago / Concluído',color:'var(--sage)'}
+];
+const MANUT_ORIGEM={proprietario:'Proprietário',equipe:'Equipe',hospede:'Hóspede'};
+const MANUT_PAGADOR={proprietario:'Proprietário',hospede:'Hóspede',wecare:'WeCare',airbnb:'Airbnb',seguro:'Seguro EasyCover'};
+
+function manutSubtotal(m){ return (m.itens||[]).reduce(function(s,it){return s+(parseFloat(it.valor)||0);},0); }
+function manutTotalComMargem(m){ const sub=manutSubtotal(m); const margem=parseFloat(m.margemPercent); return sub*(1+((isNaN(margem)?20:margem)/100)); }
+
+function abrirNovaManutencao(){
+  const m={id:Date.now(),status:'solicitacao',origem:'proprietario',imovelNome:'',dataSolicitacao:new Date().toISOString().split('T')[0],tipo:'dano',itens:[{desc:'',valor:0}],margemPercent:20,fotos:[],quemPaga:'proprietario',fornecedor:{nome:'',contato:'',email:'',pix:''},precisaComprar:false,linksItens:[],ondeEntregar:'',obsCompra:'',pagarFornecedor:false,pagFornecedor:{valor:0,nome:'',email:'',pix:'',dataPagamento:''},valorPago:0,pagoPor:'proprietario',valorGasto:0,obs:'',dataCriacao:new Date().toISOString()};
+  manutencoes.unshift(m); manutAtiva=m.id; manutAba='solicitacao';
+  abrirManutModal(m.id); renderManutencaoKanban();
+  if(typeof saveAll==='function') saveAll();
+}
+
+function abrirManutModal(id){
+  manutAtiva=id;
+  const m=manutencoes.find(function(x){return x.id===id;}); if(!m) return;
+  const nomeEl=document.getElementById('manut-imovel-nome');
+  if(nomeEl) nomeEl.textContent=m.imovelNome||'Nova Solicitação';
+  const col=MANUT_COLS.find(function(c){return c.id===m.status;});
+  const badge=document.getElementById('manut-status-badge');
+  if(badge){
+    badge.textContent=col?col.label:m.status;
+    const c=col?col.color:'var(--text3)';
+    badge.style.cssText='padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;white-space:nowrap;background:'+c+'22;color:'+c+';border:1px solid '+c+';';
+  }
+  const btnAv=document.getElementById('manut-btn-avancar');
+  if(btnAv) btnAv.style.display=m.status==='pago'?'none':'';
+  document.querySelectorAll('#manut-tabs .tab-btn').forEach(function(b){
+    b.classList.toggle('active', b.getAttribute('data-aba')===manutAba);
+  });
+  manutRenderAba(m);
+  document.getElementById('modal-manut').classList.add('open');
+}
+
+function manutMudarAba(aba,btn){
+  manutAba=aba;
+  document.querySelectorAll('#manut-tabs .tab-btn').forEach(function(b){b.classList.remove('active');});
+  if(btn) btn.classList.add('active');
+  const m=manutencoes.find(function(x){return x.id===manutAtiva;});
+  if(m) manutRenderAba(m);
+}
+
+function manutRenderAba(m){
+  const el=document.getElementById('manut-aba-content'); if(!el) return;
+  if(manutAba==='solicitacao') el.innerHTML=manutAbaSolicitacao(m);
+  else if(manutAba==='pagamento') el.innerHTML=manutAbaPagamento(m);
+  else el.innerHTML=manutAbaCompras(m);
+}
+
+function manutAbaSolicitacao(m){
+  const sub=manutSubtotal(m);
+  const margem=isNaN(parseFloat(m.margemPercent))?20:parseFloat(m.margemPercent);
+  const total=sub*(1+margem/100);
+  return '<div style="display:grid;gap:12px;">'+
+    '<div class="form-row">'+
+    '<div class="form-group"><label class="form-label">Origem</label><select class="form-select" onchange="salvarCampoManut('+m.id+',\'origem\',this.value)">'+
+      Object.keys(MANUT_ORIGEM).map(function(k){return '<option value="'+k+'"'+(m.origem===k?' selected':'')+'>'+MANUT_ORIGEM[k]+'</option>';}).join('')+
+    '</select></div>'+
+    '<div class="form-group"><label class="form-label">Tipo</label><select class="form-select" onchange="salvarCampoManut('+m.id+',\'tipo\',this.value)">'+
+      '<option value="dano"'+(m.tipo==='dano'?' selected':'')+'>Dano</option>'+
+      '<option value="desgaste"'+(m.tipo==='desgaste'?' selected':'')+'>Desgaste</option>'+
+    '</select></div></div>'+
+    '<div class="form-row">'+
+    '<div class="form-group"><label class="form-label">Imóvel</label><select class="form-select" onchange="salvarCampoManut('+m.id+',\'imovelNome\',this.value)">'+
+      '<option value="">Selecione...</option>'+
+      imovelsCatalog.map(function(c){return '<option value="'+esc(c.nome)+'"'+(m.imovelNome===c.nome?' selected':'')+'>'+esc(c.nome)+'</option>';}).join('')+
+    '</select></div>'+
+    '<div class="form-group"><label class="form-label">Data da solicitação</label><input type="date" class="form-input" value="'+esc(m.dataSolicitacao||'')+'" onchange="salvarCampoManut('+m.id+',\'dataSolicitacao\',this.value)"></div></div>'+
+    '<div class="form-group"><label class="form-label">Itens</label>'+
+    '<div style="display:grid;gap:6px;">'+
+    (m.itens||[]).map(function(it,i){
+      return '<div style="display:flex;gap:6px;align-items:center;">'+
+        '<input type="text" class="form-input" style="flex:1;" placeholder="Descrição do item..." value="'+esc(it.desc||'')+'" oninput="manutSetItem('+m.id+','+i+',\'desc\',this.value)">'+
+        '<input type="number" class="form-input" style="width:110px;" placeholder="R$ 0" value="'+(it.valor||'')+'" oninput="manutSetItem('+m.id+','+i+',\'valor\',this.value)">'+
+        '<button onclick="manutRemoverItem('+m.id+','+i+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;" title="Remover"><i class="fa-solid fa-xmark"></i></button>'+
+      '</div>';
+    }).join('')+
+    '</div>'+
+    '<button class="btn btn-sm" style="margin-top:6px;" onclick="manutAdicionarItem('+m.id+')"><i class="fa-solid fa-plus"></i> Adicionar item</button>'+
+    '<div style="margin-top:10px;background:var(--bg3);border-radius:var(--r-sm);padding:10px 12px;font-size:13px;">'+
+      '<div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:var(--text3);">Subtotal dos itens</span><span style="font-weight:600;">R$ '+sub.toFixed(2).replace('.',',')+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><span style="color:var(--text3);">Margem operacional</span><span style="display:flex;align-items:center;gap:4px;"><input type="number" class="form-input" style="width:60px;padding:3px 6px;text-align:center;" value="'+margem+'" oninput="salvarCampoManut('+m.id+',\'margemPercent\',this.value)"><span style="color:var(--text3);">%</span></span></div>'+
+      '<div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:6px;margin-top:4px;"><span style="font-weight:700;">Total</span><span style="font-weight:700;color:var(--sage);">R$ '+total.toFixed(2).replace('.',',')+'</span></div>'+
+    '</div></div>'+
+    '<div class="form-group"><label class="form-label">Fotos (JPG)</label>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">'+
+    (m.fotos||[]).map(function(f,i){
+      return '<div style="position:relative;width:80px;height:80px;border-radius:var(--r-sm);overflow:hidden;border:1px solid var(--border);">'+
+        '<img src="'+f+'" style="width:100%;height:100%;object-fit:cover;">'+
+        '<button onclick="manutRemoverFoto('+m.id+','+i+')" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);border:none;color:#fff;cursor:pointer;font-size:11px;border-radius:50%;width:20px;height:20px;">&#10005;</button>'+
+      '</div>';
+    }).join('')+
+    '</div>'+
+    '<input type="file" accept="image/*" multiple onchange="manutUploadFotos('+m.id+',event)"></div>'+
+    '<div class="form-group"><label class="form-label">Quem paga?</label><select class="form-select" onchange="salvarCampoManut('+m.id+',\'quemPaga\',this.value)">'+
+      '<option value="proprietario"'+(m.quemPaga==='proprietario'?' selected':'')+'>Proprietário</option>'+
+      '<option value="hospede"'+(m.quemPaga==='hospede'?' selected':'')+'>Hóspede</option>'+
+      '<option value="wecare"'+(m.quemPaga==='wecare'?' selected':'')+'>WeCare</option>'+
+    '</select></div>'+
+    '<div class="form-group"><label class="form-label">Observações</label><textarea class="form-input" rows="3" placeholder="Detalhes da solicitação..." oninput="salvarCampoManut('+m.id+',\'obs\',this.value)">'+esc(m.obs||'')+'</textarea></div>'+
+    '</div>';
+}
+
+function manutAbaPagamento(m){
+  const pago=parseFloat(m.valorPago)||0;
+  const gasto=parseFloat(m.valorGasto)||0;
+  const economia=pago-gasto;
+  return '<div style="display:grid;gap:12px;">'+
+    '<div style="font-size:12px;color:var(--text3);background:var(--bg3);border-radius:var(--r-sm);padding:8px 12px;">Estes valores alimentam o KPI de Redução de Custos (recebido vs. gasto).</div>'+
+    '<div class="form-row">'+
+    '<div class="form-group"><label class="form-label">Valor Pago (R$)</label><input type="number" class="form-input" value="'+(m.valorPago||'')+'" placeholder="0" oninput="salvarCampoManut('+m.id+',\'valorPago\',this.value)"></div>'+
+    '<div class="form-group"><label class="form-label">Pago por</label><select class="form-select" onchange="salvarCampoManut('+m.id+',\'pagoPor\',this.value)">'+
+      Object.keys(MANUT_PAGADOR).map(function(k){return '<option value="'+k+'"'+(m.pagoPor===k?' selected':'')+'>'+MANUT_PAGADOR[k]+'</option>';}).join('')+
+    '</select></div></div>'+
+    '<div class="form-group"><label class="form-label">Valor Gasto (R$)</label><input type="number" class="form-input" value="'+(m.valorGasto||'')+'" placeholder="0" oninput="salvarCampoManut('+m.id+',\'valorGasto\',this.value)"></div>'+
+    '<div style="background:var(--bg3);border-radius:var(--r-sm);padding:10px 12px;display:flex;justify-content:space-between;font-size:13px;"><span style="font-weight:700;">Economia (pago - gasto)</span><span style="font-weight:700;color:'+(economia>=0?'var(--sage)':'var(--vermelha)')+';">R$ '+economia.toFixed(2).replace('.',',')+'</span></div>'+
+    '</div>';
+}
+
+function manutAbaCompras(m){
+  return '<div style="display:grid;gap:14px;">'+
+    '<div class="form-group"><label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;"><input type="checkbox" '+(m.precisaComprar?'checked':'')+' onchange="manutToggle('+m.id+',\'precisaComprar\',this.checked)"> Precisa comprar itens?</label></div>'+
+    (m.precisaComprar?
+      '<div style="border-left:2px solid var(--sky);padding-left:12px;display:grid;gap:8px;">'+
+      '<label class="form-label">Links de itens</label>'+
+      '<div style="display:grid;gap:6px;">'+
+      (m.linksItens||[]).map(function(li,i){
+        return '<div style="display:flex;gap:6px;align-items:center;">'+
+          '<input type="text" class="form-input" style="flex:1;" placeholder="Link do item..." value="'+esc(li.link||'')+'" oninput="manutSetLink('+m.id+','+i+',\'link\',this.value)">'+
+          '<input type="text" class="form-input" style="width:150px;" placeholder="Obs (voltagem/cor)" value="'+esc(li.obs||'')+'" oninput="manutSetLink('+m.id+','+i+',\'obs\',this.value)">'+
+          '<button onclick="manutRemoverLink('+m.id+','+i+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;"><i class="fa-solid fa-xmark"></i></button>'+
+        '</div>';
+      }).join('')+
+      '</div>'+
+      '<button class="btn btn-sm" style="justify-self:start;" onclick="manutAdicionarLink('+m.id+')"><i class="fa-solid fa-plus"></i> Adicionar item</button>'+
+      '<div class="form-group"><label class="form-label">Onde entregar</label><input type="text" class="form-input" value="'+esc(m.ondeEntregar||'')+'" placeholder="Endereço de entrega..." oninput="salvarCampoManut('+m.id+',\'ondeEntregar\',this.value)"></div>'+
+      '<div class="form-group"><label class="form-label">Observações da compra</label><textarea class="form-input" rows="2" oninput="salvarCampoManut('+m.id+',\'obsCompra\',this.value)">'+esc(m.obsCompra||'')+'</textarea></div>'+
+      '</div>':'')+
+    '<div class="form-group"><label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;"><input type="checkbox" '+(m.pagarFornecedor?'checked':'')+' onchange="manutToggle('+m.id+',\'pagarFornecedor\',this.checked)"> Pagar fornecedor?</label></div>'+
+    (m.pagarFornecedor?
+      '<div style="border-left:2px solid var(--peach);padding-left:12px;display:grid;gap:8px;">'+
+      '<div class="form-row">'+
+      '<div class="form-group"><label class="form-label">Nome do fornecedor</label><input type="text" class="form-input" value="'+esc(m.pagFornecedor.nome||'')+'" oninput="salvarCampoManutNested('+m.id+',\'pagFornecedor\',\'nome\',this.value)"></div>'+
+      '<div class="form-group"><label class="form-label">Valor (R$)</label><input type="number" class="form-input" value="'+(m.pagFornecedor.valor||'')+'" oninput="salvarCampoManutNested('+m.id+',\'pagFornecedor\',\'valor\',this.value)"></div></div>'+
+      '<div class="form-row">'+
+      '<div class="form-group"><label class="form-label">Email</label><input type="text" class="form-input" value="'+esc(m.pagFornecedor.email||'')+'" oninput="salvarCampoManutNested('+m.id+',\'pagFornecedor\',\'email\',this.value)"></div>'+
+      '<div class="form-group"><label class="form-label">Chave PIX</label><input type="text" class="form-input" value="'+esc(m.pagFornecedor.pix||'')+'" oninput="salvarCampoManutNested('+m.id+',\'pagFornecedor\',\'pix\',this.value)"></div></div>'+
+      '<div class="form-group"><label class="form-label">Data de pagamento</label><input type="date" class="form-input" value="'+esc(m.pagFornecedor.dataPagamento||'')+'" onchange="salvarCampoManutNested('+m.id+',\'pagFornecedor\',\'dataPagamento\',this.value)"></div>'+
+      '</div>':'')+
+    '<div class="form-group" style="border-top:1px solid var(--border);padding-top:12px;"><label class="form-label">Fornecedor (geral)</label>'+
+    '<div class="form-row">'+
+    '<div class="form-group"><input type="text" class="form-input" placeholder="Nome" value="'+esc(m.fornecedor.nome||'')+'" oninput="salvarCampoManutNested('+m.id+',\'fornecedor\',\'nome\',this.value)"></div>'+
+    '<div class="form-group"><input type="text" class="form-input" placeholder="Contato" value="'+esc(m.fornecedor.contato||'')+'" oninput="salvarCampoManutNested('+m.id+',\'fornecedor\',\'contato\',this.value)"></div></div>'+
+    '<div class="form-row">'+
+    '<div class="form-group"><input type="text" class="form-input" placeholder="Email" value="'+esc(m.fornecedor.email||'')+'" oninput="salvarCampoManutNested('+m.id+',\'fornecedor\',\'email\',this.value)"></div>'+
+    '<div class="form-group"><input type="text" class="form-input" placeholder="Chave PIX" value="'+esc(m.fornecedor.pix||'')+'" oninput="salvarCampoManutNested('+m.id+',\'fornecedor\',\'pix\',this.value)"></div></div></div>'+
+    '<button class="btn btn-rose" style="justify-self:start;" onclick="manutGerarTarefa('+m.id+')"><i class="fa-solid fa-list-check"></i> Gerar tarefa pra mim (Nicole)</button>'+
+    '</div>';
+}
+
+function manutGerarTarefa(id){
+  const m=manutencoes.find(function(x){return x.id===id;}); if(!m) return;
+  let desc='Manutenção'+(m.imovelNome?' '+m.imovelNome:'')+': ';
+  const acoes=[]; if(m.precisaComprar) acoes.push('comprar itens'); if(m.pagarFornecedor) acoes.push('pagar fornecedor '+(m.pagFornecedor.nome||m.fornecedor.nome||''));
+  desc+=acoes.join(' e ')||'providência';
+  tasks.unshift({id:Date.now(),text:desc,cat:'work',prio:'high',due:m.pagarFornecedor&&m.pagFornecedor.dataPagamento?m.pagFornecedor.dataPagamento:'',hora:'',done:false,status:'todo',updates:[]});
+  if(typeof renderTasks==='function') renderTasks(); if(typeof renderKanban==='function') renderKanban(); if(typeof saveAll==='function') saveAll();
+  showToast('Tarefa criada pra você!','sage');
+}
+
+function salvarCampoManut(id,campo,valor){
+  const m=manutencoes.find(function(x){return x.id===id;}); if(!m) return;
+  m[campo]=valor;
+  if(typeof saveAll==='function') saveAll();
+  renderManutencaoKanban();
+  if(campo==='valorPago'||campo==='valorGasto') sincronizarManutencaoKPI();
+  if(campo==='imovelNome'){const el=document.getElementById('manut-imovel-nome');if(el)el.textContent=m.imovelNome||'Nova Solicitação';}
+}
+
+function salvarCampoManutNested(id,obj,campo,valor){
+  const m=manutencoes.find(function(x){return x.id===id;}); if(!m) return;
+  if(!m[obj])m[obj]={}; m[obj][campo]=valor;
+  if(typeof saveAll==='function') saveAll();
+}
+
+function manutToggle(id,campo,valor){
+  const m=manutencoes.find(function(x){return x.id===id;}); if(!m) return;
+  m[campo]=valor;
+  if(typeof saveAll==='function') saveAll();
+  manutRenderAba(m);
+}
+
+function manutSetItem(id,i,campo,valor){
+  const m=manutencoes.find(function(x){return x.id===id;}); if(!m||!m.itens[i]) return;
+  m.itens[i][campo]=campo==='valor'?(parseFloat(valor)||0):valor;
+  if(typeof saveAll==='function') saveAll();
+  renderManutencaoKanban();
+}
+function manutAdicionarItem(id){
+  const m=manutencoes.find(function(x){return x.id===id;}); if(!m) return;
+  if(!m.itens)m.itens=[]; m.itens.push({desc:'',valor:0});
+  if(typeof saveAll==='function') saveAll();
+  manutRenderAba(m);
+}
+function manutRemoverItem(id,i){
+  const m=manutencoes.find(function(x){return x.id===id;}); if(!m) return;
+  m.itens.splice(i,1);
+  if(typeof saveAll==='function') saveAll();
+  manutRenderAba(m); renderManutencaoKanban();
+}
+
+function manutUploadFotos(id,event){
+  const files=event.target.files; if(!files||!files.length) return;
+  const m=manutencoes.find(function(x){return x.id===id;}); if(!m) return;
+  if(!m.fotos)m.fotos=[];
+  let pend=files.length;
+  Array.prototype.forEach.call(files,function(file){
+    _lerImagemReduzida(file,function(dataUrl){
+      m.fotos.push(dataUrl); pend--;
+      if(pend<=0){ if(typeof saveAll==='function') saveAll(); manutRenderAba(m); }
+    });
+  });
+  event.target.value='';
+}
+function manutRemoverFoto(id,i){
+  const m=manutencoes.find(function(x){return x.id===id;}); if(!m) return;
+  m.fotos.splice(i,1);
+  if(typeof saveAll==='function') saveAll();
+  manutRenderAba(m);
+}
+
+function manutSetLink(id,i,campo,valor){
+  const m=manutencoes.find(function(x){return x.id===id;}); if(!m||!m.linksItens[i]) return;
+  m.linksItens[i][campo]=valor;
+  if(typeof saveAll==='function') saveAll();
+}
+function manutAdicionarLink(id){
+  const m=manutencoes.find(function(x){return x.id===id;}); if(!m) return;
+  if(!m.linksItens)m.linksItens=[]; m.linksItens.push({link:'',obs:''});
+  if(typeof saveAll==='function') saveAll();
+  manutRenderAba(m);
+}
+function manutRemoverLink(id,i){
+  const m=manutencoes.find(function(x){return x.id===id;}); if(!m) return;
+  m.linksItens.splice(i,1);
+  if(typeof saveAll==='function') saveAll();
+  manutRenderAba(m);
+}
+
+function manutAvancarFase(){
+  const m=manutencoes.find(function(x){return x.id===manutAtiva;}); if(!m) return;
+  const ordem=['solicitacao','andamento','pago'];
+  const i=ordem.indexOf(m.status);
+  if(i<ordem.length-1){
+    m.status=ordem[i+1];
+    if(typeof saveAll==='function') saveAll();
+    abrirManutModal(m.id); renderManutencaoKanban();
+    if(m.status==='pago') sincronizarManutencaoKPI();
+  }
+}
+
+function apagarManutencao(){
+  const m=manutencoes.find(function(x){return x.id===manutAtiva;}); if(!m) return;
+  if(!confirm('Apagar esta solicitação?')) return;
+  manutencoes=manutencoes.filter(function(x){return x.id!==manutAtiva;});
+  closeModal('modal-manut');
+  renderManutencaoKanban();
+  if(typeof saveAll==='function') saveAll();
+  sincronizarManutencaoKPI();
+}
+
+function sincronizarManutencaoKPI(){
+  const recebido=manutencoes.reduce(function(s,m){return s+(parseFloat(m.valorPago)||0);},0);
+  const gasto=manutencoes.reduce(function(s,m){return s+(parseFloat(m.valorGasto)||0);},0);
+  if(!kpiSubVals.rc) kpiSubVals.rc={limpeza:{previsto:'',gasto:''},manutencao:{previsto:'',gasto:''},setup:{previsto:'',gasto:''},margem:{previsto:'',gasto:''},extras:{previsto:'',gasto:''}};
+  if(!kpiSubVals.rc.manutencao) kpiSubVals.rc.manutencao={previsto:'',gasto:''};
+  kpiSubVals.rc.manutencao.previsto = recebido>0?recebido.toFixed(2):'';
+  kpiSubVals.rc.manutencao.gasto = gasto>0?gasto.toFixed(2):'';
+  const itens=['limpeza','manutencao','setup','margem','extras'];
+  const economias=itens.map(function(it){if(!kpiSubVals.rc[it])return null;const p=parseFloat(kpiSubVals.rc[it].previsto),g=parseFloat(kpiSubVals.rc[it].gasto);if(!p||isNaN(p)||isNaN(g))return null;return ((p-g)/p)*100;}).filter(function(x){return x!==null;});
+  kpiVals.rc = economias.length>0?(economias.reduce(function(s,x){return s+x;},0)/economias.length).toFixed(2):null;
+  if(typeof saveAll==='function') saveAll();
+  if(typeof renderKPIs==='function') renderKPIs();
+}
+
+function renderManutencaoKanban(){
+  const el=document.getElementById('manutencao-kanban'); if(!el) return;
+  el.innerHTML=MANUT_COLS.map(function(col){
+    const cards=manutencoes.filter(function(m){return m.status===col.id;});
+    return '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:8px;min-height:140px;">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'+
+      '<div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:'+col.color+';">'+col.label+'</div>'+
+      '<div style="font-size:11px;background:var(--bg3);padding:1px 6px;border-radius:10px;color:var(--text3);">'+cards.length+'</div></div>'+
+      cards.map(function(m){
+        const total=manutTotalComMargem(m);
+        const cardOpacity=m.status==='pago'?'opacity:0.6;':'';
+        return '<div onclick="abrirManutModal('+m.id+')" style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:9px;margin-bottom:6px;cursor:pointer;'+cardOpacity+'transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'var(--bg3)\'">'+
+          '<div style="font-size:13px;font-weight:600;margin-bottom:3px;">'+esc(m.imovelNome||'(sem imóvel)')+'</div>'+
+          '<div style="font-size:11px;color:var(--text3);margin-bottom:5px;">'+(MANUT_ORIGEM[m.origem]||m.origem)+' · '+(m.tipo==='dano'?'Dano':'Desgaste')+'</div>'+
+          '<div style="display:flex;justify-content:space-between;align-items:center;">'+
+          '<span style="font-size:9.5px;padding:1px 6px;border-radius:8px;background:var(--sky-light);color:var(--sky);font-weight:600;">'+(MANUT_PAGADOR[m.quemPaga]||m.quemPaga)+'</span>'+
+          '<span style="font-size:12px;font-weight:700;color:var(--sage);">R$ '+total.toFixed(2).replace('.',',')+'</span>'+
+          '</div></div>';
+      }).join('')+
+      '</div>';
+  }).join('');
 }
 
 // ═══════════════════ PROJETOS ═══════════════════

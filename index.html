@@ -135,6 +135,7 @@ function _validarLogin(){
     <button class="nav-item" onclick="showPanel('salary',this)"><i class="fa-solid fa-money-bill-wave"></i> Salários</button>
     <button class="nav-item" onclick="showPanel('turnos',this)"><i class="fa-solid fa-calendar-week"></i> Turnos</button>
     <button class="nav-item" onclick="showPanel('compras',this)"><i class="fa-solid fa-cart-shopping"></i> Compras</button>
+    <button class="nav-item" onclick="showPanel('manutencao',this)"><i class="fa-solid fa-screwdriver-wrench"></i> Manutenção</button>
     <button class="nav-item" onclick="showPanel('extras',this)"><i class="fa-solid fa-sack-dollar"></i> Extras</button>
     <button class="nav-item" onclick="showPanel('gmail',this)"><i class="fa-regular fa-envelope"></i> Gmail <span class="nav-badge" id="gmail-badge" style="display:none;">0</span></button>
     <div class="nav-section">Projetos</div>
@@ -617,6 +618,15 @@ function _validarLogin(){
       <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;overflow-x:auto;" id="onboarding-kanban"></div>
     </div>
 
+    <!-- ── MANUTENÇÃO ── -->
+    <div class="panel" id="panel-manutencao">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+        <div><h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Manutenção</h2><p style="color:var(--text3);font-size:13px;margin-top:2px;">Solicitações de manutenção e reparos</p></div>
+        <button class="btn btn-rose" onclick="abrirNovaManutencao()"><i class="fa-solid fa-plus"></i> Nova Solicitação</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;" id="manutencao-kanban"></div>
+    </div>
+
     <!-- ── PROJETOS ── -->
     <div class="panel" id="panel-projetos">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
@@ -945,6 +955,27 @@ function _validarLogin(){
   </div>
 </div>
 
+<div class="modal-overlay" id="modal-manut">
+  <div class="modal" style="width:760px;max-height:92vh;overflow-y:auto;">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+      <div id="manut-imovel-nome" style="flex:1;font-size:18px;font-weight:700;font-family:var(--font-display);"></div>
+      <span id="manut-status-badge"></span>
+      <button onclick="closeModal('modal-manut')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;padding:4px;"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:16px;border-bottom:1px solid var(--border);padding-bottom:12px;" id="manut-tabs">
+      <button class="tab-btn active" data-aba="solicitacao" onclick="manutMudarAba('solicitacao',this)">Solicitação</button>
+      <button class="tab-btn" data-aba="pagamento" onclick="manutMudarAba('pagamento',this)">Pagamento</button>
+      <button class="tab-btn" data-aba="compras" onclick="manutMudarAba('compras',this)">Compras/Fornecedor</button>
+    </div>
+    <div id="manut-aba-content" style="min-height:320px;"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;padding-top:12px;border-top:1px solid var(--border);">
+      <button class="btn" onclick="apagarManutencao()" style="color:var(--vermelha);border-color:var(--vermelha);margin-right:auto;"><i class="fa-solid fa-trash"></i> Apagar</button>
+      <button class="btn" onclick="closeModal('modal-manut')">Fechar</button>
+      <button class="btn btn-rose" id="manut-btn-avancar" onclick="manutAvancarFase()"><i class="fa-solid fa-arrow-right"></i> Avançar Fase</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal Projeto -->
 <div class="modal-overlay" id="modal-projeto">
   <div class="modal" style="width:780px;max-height:92vh;overflow-y:auto;">
@@ -1249,6 +1280,6 @@ function _validarLogin(){
     <div class="modal-footer"><button class="btn" onclick="closeModal('modal-extra')">Cancelar</button><button class="btn btn-rose" onclick="salvarExtra()"><i class="fa-solid fa-check"></i> Salvar</button></div>
   </div>
 </div>
-<script src="js/app.js?v=30"></script>
+<script src="js/app.js?v=31"></script>
 </body>
 </html>

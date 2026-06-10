@@ -105,6 +105,7 @@ let turnos=[]; // {id, data:'YYYY-MM-DD', turno:'dia'|'noite', attId, confirmado
 let turnosMesSel=''; // mês selecionado no admin (YYYY-MM)
 let salPagos={}; // { 'attId_2026-06': true }
 let outrosMembros=[]; // {id, nome, cargo, fixo, comissao}
+let extras=[]; // {id, data, descricao, imovelNome, cobrado, gasto, obs}
 let projetos=[];
 let transcricoes=[];
 let transcricaoAtiva=null;
@@ -145,7 +146,8 @@ const MODULOS_LISTA=[
   {id:'ai',label:'Assistente IA'},{id:'team',label:'Equipe'},{id:'salary',label:'Salários'},
   {id:'compras',label:'Compras'},
   {id:'gmail',label:'Gmail'},{id:'projetos',label:'Projetos'},{id:'reunioes',label:'Reuniões'},
-  {id:'turnos',label:'Turnos'}
+  {id:'turnos',label:'Turnos'},
+  {id:'extras',label:'Extras'}
 ];
 function getMinhaAtt(){ const u=getCurrentUser(); if(!u||!u.attId) return null; return ATTS.find(a=>a.id===u.attId)||null; }
 function getCurrentUser(){ try{ return JSON.parse(sessionStorage.getItem('nx_currentuser')||'null'); }catch(e){ return null; } }
@@ -374,6 +376,8 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   renderPerformance();
   renderAvaliacoes();
   renderTurnos();
+  renderExtras();
+  sincronizarExtrasKPI();
   const recEl=document.getElementById('d-recorrente');
   if(recEl)recEl.addEventListener('change',function(){document.getElementById('d-recorrencia').style.display=this.checked?'':'none';});
   carregarUsuarios();
@@ -382,7 +386,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
 });
 
 // ═══════════════════ NAV ═══════════════════
-const PT={overview:'Visão Geral',kpis:'Meus KPIs',performance:'Acompanhamento de Performance',tasks:'Tarefas',calendar:'Calendário',ai:'Assistente IA',team:'Equipe',salary:'Salários',drive:'Google Drive',onboarding:'Onboarding de Imóveis',gmail:'Gmail',notes:'Anotações',focus:'Foco',projetos:'Projetos',compras:'Registro de Compras',reunioes:'Reuniões e Transcrições',avaliacoes:'Acompanhamento',usuarios:'Usuários e Acessos',turnos:'Escala de Turnos'};
+const PT={overview:'Visão Geral',kpis:'Meus KPIs',performance:'Acompanhamento de Performance',tasks:'Tarefas',calendar:'Calendário',ai:'Assistente IA',team:'Equipe',salary:'Salários',drive:'Google Drive',onboarding:'Onboarding de Imóveis',gmail:'Gmail',notes:'Anotações',focus:'Foco',projetos:'Projetos',compras:'Registro de Compras',reunioes:'Reuniões e Transcrições',avaliacoes:'Acompanhamento',usuarios:'Usuários e Acessos',turnos:'Escala de Turnos',extras:'Serviços Extras'};
 function showPanel(id,btn){
   if(typeof podeAcessar==='function' && id!=='usuarios'){ const u=getCurrentUser(); if(u && u.perfil!=='admin' && !podeAcessar(id)){ return; } }
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
@@ -404,6 +408,7 @@ function showPanel(id,btn){
   if(id==='team'){renderTeam();}
   if(id==='salary'){renderSalary();}
   if(id==='kpis'){renderKPIs();}
+  if(id==='extras'){renderExtras();}
 }
 
 function contarDemandasAtrasadas(){
@@ -626,15 +631,17 @@ function renderKPIs(){
           :'')+
         '</div>';
     } else if(k.id==='rc'){
-      const rcSub=kpiSubVals.rc||{limpeza:{previsto:'',gasto:''},manutencao:{previsto:'',gasto:''},setup:{previsto:'',gasto:''},margem:{previsto:'',gasto:''}};
+      const rcSub=kpiSubVals.rc||{limpeza:{previsto:'',gasto:''},manutencao:{previsto:'',gasto:''},setup:{previsto:'',gasto:''},margem:{previsto:'',gasto:''},extras:{previsto:'',gasto:''}};
+      if(!rcSub.extras)rcSub.extras={previsto:'',gasto:''};
       const rcItens=[
         {key:'limpeza',    label:'Limpeza',             hint:'Pago pelo hóspede — valor cobrado vs. custo real'},
         {key:'manutencao', label:'Manutenção',          hint:'Pago pelo proprietário/hóspede — cobrado vs. custo'},
         {key:'setup',      label:'On-boarding (Setup)', hint:'Taxa de setup — valor cobrado vs. custo de implementação'},
         {key:'margem',     label:'Margem Operacional',  hint:'1% da Receita Líquida — previsto vs. despesas reais'},
+        {key:'extras',     label:'Serviços Extras',     hint:'Valor cobrado vs. custo dos serviços extras (automático)'},
       ];
       const calcEco=(key)=>{const p=parseFloat(rcSub[key].previsto),g2=parseFloat(rcSub[key].gasto);return(p>0&&!isNaN(g2))?((p-g2)/p*100).toFixed(1):null;};
-      const allEcos=['limpeza','manutencao','setup','margem'].map(calcEco).filter(x=>x!==null);
+      const allEcos=['limpeza','manutencao','setup','margem','extras'].map(calcEco).filter(x=>x!==null);
       const med=allEcos.length>0?(allEcos.reduce((a,b)=>a+parseFloat(b),0)/allEcos.length).toFixed(1):null;
       inputHTML='<div style="margin-top:10px;">'+
         '<div style="display:grid;grid-template-columns:1fr 90px 90px 70px;gap:4px;margin-bottom:4px;padding:4px 0;border-bottom:2px solid var(--border);">'+
@@ -648,9 +655,13 @@ function renderKPIs(){
           const ecoColor=eco===null?'var(--text3)':parseFloat(eco)>=10?'var(--sage)':parseFloat(eco)>=0?'var(--amarela)':'var(--vermelha)';
           return '<div style="display:grid;grid-template-columns:1fr 90px 90px 70px;gap:4px;padding:5px 0;border-bottom:1px solid var(--border);align-items:center;">'+
             '<div><div style="font-size:12.5px;font-weight:500;">'+it.label+'</div><div style="font-size:10.5px;color:var(--text3);">'+it.hint+'</div></div>'+
-            '<input type="number" class="form-input" style="padding:4px 6px;font-size:12px;text-align:center;" placeholder="0" value="'+(rcSub[it.key].previsto||'')+'" onchange="setKPIRcSub(\''+it.key+'\',\'previsto\',this.value)">'+
+            (it.key==='extras'
+              ?'<div style="text-align:center;"><div style="font-size:12px;font-weight:600;">'+(rcSub.extras.previsto?'R$ '+rcSub.extras.previsto:'—')+'</div><div style="font-size:9px;color:var(--text3);">auto (Extras)</div></div>'
+              :'<input type="number" class="form-input" style="padding:4px 6px;font-size:12px;text-align:center;" placeholder="0" value="'+(rcSub[it.key].previsto||'')+'" onchange="setKPIRcSub(\''+it.key+'\',\'previsto\',this.value)">')+
             (it.key==='margem'
               ?'<div style="text-align:center;"><div style="font-size:12px;font-weight:600;">'+(rcSub.margem.gasto?'R$ '+rcSub.margem.gasto:'—')+'</div><div style="font-size:9px;color:var(--text3);">auto (compras)</div></div>'
+              :it.key==='extras'
+              ?'<div style="text-align:center;"><div style="font-size:12px;font-weight:600;">'+(rcSub.extras.gasto?'R$ '+rcSub.extras.gasto:'—')+'</div><div style="font-size:9px;color:var(--text3);">auto (Extras)</div></div>'
               :'<input type="number" class="form-input" style="padding:4px 6px;font-size:12px;text-align:center;" placeholder="0" value="'+(rcSub[it.key].gasto||'')+'" onchange="setKPIRcSub(\''+it.key+'\',\'gasto\',this.value)">')+
             '<div style="text-align:center;font-size:13px;font-weight:700;color:'+ecoColor+';">'+(eco!==null?eco+'%':'—')+'</div>'+
             '</div>';
@@ -703,9 +714,10 @@ function setKPISub(id,subKey,value){
 }
 
 function setKPIRcSub(item,campo,valor){
-  if(!kpiSubVals.rc)kpiSubVals.rc={limpeza:{previsto:'',gasto:''},manutencao:{previsto:'',gasto:''},setup:{previsto:'',gasto:''},margem:{previsto:'',gasto:''}};
+  if(!kpiSubVals.rc)kpiSubVals.rc={limpeza:{previsto:'',gasto:''},manutencao:{previsto:'',gasto:''},setup:{previsto:'',gasto:''},margem:{previsto:'',gasto:''},extras:{previsto:'',gasto:''}};
+  if(!kpiSubVals.rc.extras)kpiSubVals.rc.extras={previsto:'',gasto:''};
   kpiSubVals.rc[item][campo]=valor;
-  const itens=['limpeza','manutencao','setup','margem'];
+  const itens=['limpeza','manutencao','setup','margem','extras'];
   const economias=itens.map(it=>{
     const prev=parseFloat(kpiSubVals.rc[it].previsto);
     const gasto=parseFloat(kpiSubVals.rc[it].gasto);
@@ -732,6 +744,58 @@ function sincronizarMargemKPI(){
   }).filter(x=>x!==null);
   kpiVals.rc = economias.length>0 ? (economias.reduce((s,x)=>s+x,0)/economias.length).toFixed(2) : null;
   if(typeof renderKPIs==='function') renderKPIs();
+}
+
+function sincronizarExtrasKPI(){
+  const totalCobrado=extras.reduce((s,e)=>s+(parseFloat(e.cobrado)||0),0);
+  const totalGasto=extras.reduce((s,e)=>s+(parseFloat(e.gasto)||0),0);
+  if(!kpiSubVals.rc) kpiSubVals.rc={limpeza:{previsto:'',gasto:''},manutencao:{previsto:'',gasto:''},setup:{previsto:'',gasto:''},margem:{previsto:'',gasto:''},extras:{previsto:'',gasto:''}};
+  if(!kpiSubVals.rc.extras) kpiSubVals.rc.extras={previsto:'',gasto:''};
+  kpiSubVals.rc.extras.previsto = totalCobrado>0?totalCobrado.toFixed(2):'';
+  kpiSubVals.rc.extras.gasto = totalGasto>0?totalGasto.toFixed(2):'';
+  const itens=['limpeza','manutencao','setup','margem','extras'];
+  const economias=itens.map(it=>{const p=parseFloat(kpiSubVals.rc[it].previsto),g=parseFloat(kpiSubVals.rc[it].gasto);if(!p||isNaN(p)||isNaN(g))return null;return ((p-g)/p)*100;}).filter(x=>x!==null);
+  kpiVals.rc = economias.length>0?(economias.reduce((s,x)=>s+x,0)/economias.length).toFixed(2):null;
+  if(typeof renderKPIs==='function') renderKPIs();
+}
+
+// ═══════════════════ SERVIÇOS EXTRAS ═══════════════════
+let _extraEditId=null;
+function _preencherSelectImoveisExtra(){
+  const sel=document.getElementById('ex-imovel'); if(!sel) return;
+  sel.innerHTML='<option value="">— Geral —</option>'+imovelsCatalog.map(im=>'<option value="'+esc(im.nome)+'">'+esc(im.nome)+'</option>').join('');
+}
+function abrirNovoExtra(){
+  _extraEditId=null;
+  document.getElementById('extra-modal-title').textContent='Novo Serviço Extra';
+  document.getElementById('ex-data').value=new Date().toISOString().split('T')[0];
+  document.getElementById('ex-desc').value=''; document.getElementById('ex-cobrado').value=''; document.getElementById('ex-gasto').value=''; document.getElementById('ex-obs').value='';
+  _preencherSelectImoveisExtra();
+  document.getElementById('modal-extra').classList.add('open');
+}
+function abrirEditarExtra(id){
+  const e=extras.find(x=>x.id===id); if(!e) return; _extraEditId=id;
+  document.getElementById('extra-modal-title').textContent='Editar Serviço Extra';
+  document.getElementById('ex-data').value=e.data||''; document.getElementById('ex-desc').value=e.descricao||''; document.getElementById('ex-cobrado').value=e.cobrado||''; document.getElementById('ex-gasto').value=e.gasto||''; document.getElementById('ex-obs').value=e.obs||'';
+  _preencherSelectImoveisExtra(); document.getElementById('ex-imovel').value=e.imovelNome||'';
+  document.getElementById('modal-extra').classList.add('open');
+}
+function salvarExtra(){
+  const desc=document.getElementById('ex-desc').value.trim(); if(!desc){ showToast('Informe o serviço.','peach'); return; }
+  const obj={id:_extraEditId||Date.now(), data:document.getElementById('ex-data').value, descricao:desc, imovelNome:document.getElementById('ex-imovel').value, cobrado:parseFloat(document.getElementById('ex-cobrado').value)||0, gasto:parseFloat(document.getElementById('ex-gasto').value)||0, obs:document.getElementById('ex-obs').value.trim()};
+  if(_extraEditId){ const i=extras.findIndex(x=>x.id===_extraEditId); if(i>=0) extras[i]=obj; } else extras.unshift(obj);
+  closeModal('modal-extra'); if(typeof saveAll==='function') saveAll(); sincronizarExtrasKPI(); renderExtras(); showToast('Extra salvo!','sage');
+}
+function deletarExtra(id){ if(!confirm('Apagar este extra?')) return; extras=extras.filter(x=>x.id!==id); if(typeof saveAll==='function') saveAll(); sincronizarExtrasKPI(); renderExtras(); }
+function renderExtras(){
+  const tb=document.getElementById('extras-tbody'); if(!tb) return;
+  const tc=extras.reduce((s,e)=>s+(parseFloat(e.cobrado)||0),0), tg=extras.reduce((s,e)=>s+(parseFloat(e.gasto)||0),0);
+  const res=document.getElementById('extras-resumo');
+  if(res) res.innerHTML=[{l:'Total Cobrado',v:brl(tc),c:'sage',i:'fa-arrow-down'},{l:'Total Custo',v:brl(tg),c:'rose',i:'fa-arrow-up'},{l:'Margem',v:brl(tc-tg),c:'gold',i:'fa-coins'}].map(x=>'<div class="metric-card '+x.c+'"><div class="metric-icon '+x.c+'"><i class="fa-solid '+x.i+'"></i></div><div class="metric-value" style="font-size:22px;">'+x.v+'</div><div class="metric-label">'+x.l+'</div></div>').join('');
+  tb.innerHTML=extras.length===0?'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3);">Nenhum serviço extra. Clique em "Novo Extra".</td></tr>':extras.map(e=>{
+    const margem=(parseFloat(e.cobrado)||0)-(parseFloat(e.gasto)||0);
+    return '<tr><td style="white-space:nowrap;">'+(e.data?e.data.split('-').reverse().join('/'):'—')+'</td><td>'+esc(e.descricao)+'</td><td style="font-size:12px;">'+esc(e.imovelNome||'—')+'</td><td>'+brl(e.cobrado)+'</td><td>'+brl(e.gasto)+'</td><td style="color:var(--sage);font-weight:600;">'+brl(margem)+'</td><td style="font-size:11px;color:var(--text3);">'+esc(e.obs||'')+'</td><td style="white-space:nowrap;"><button onclick="abrirEditarExtra('+e.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-pen"></i></button><button onclick="deletarExtra('+e.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-trash"></i></button></td></tr>';
+  }).join('');
 }
 
 // ═══════════════════ TASKS ═══════════════════
@@ -2826,7 +2890,8 @@ const _PERSIST_KEYS = {
   nx_transcricoes:()=>transcricoes, nx_precoenx:()=>PRECOS_ENXOVAL,
   nx_avaliacoes:()=>avaliacoes, nx_turnos:()=>turnos,
   nx_salpagos:()=>salPagos,
-  nx_outros:()=>outrosMembros
+  nx_outros:()=>outrosMembros,
+  nx_extras:()=>extras
 };
 
 function saveAll(){
@@ -2841,7 +2906,7 @@ function saveAll(){
 // ─── Sincronização com o backend KV (compartilhado entre dispositivos) ───
 // Chaves que sincronizam (dados de equipe/operação). Credenciais e a lista
 // pesada de avaliações ficam SEMPRE locais.
-const SYNC_KEYS=['nx_users','nx_tasks','nx_imoveis','nx_notes','nx_compras','nx_projetos','nx_atts','nx_workP1','nx_workP2','nx_headfixo','nx_headcom','nx_headfotos','nx_kpivals','nx_kpisub','nx_taskcats','nx_catalog','nx_precos','nx_precoenx','nx_niveldx','nx_nicolecom','nx_nextatt','nx_transcricoes','nx_turnos','nx_salpagos','nx_outros','nx_name'];
+const SYNC_KEYS=['nx_users','nx_tasks','nx_imoveis','nx_notes','nx_compras','nx_projetos','nx_atts','nx_workP1','nx_workP2','nx_headfixo','nx_headcom','nx_headfotos','nx_kpivals','nx_kpisub','nx_taskcats','nx_catalog','nx_precos','nx_precoenx','nx_niveldx','nx_nicolecom','nx_nextatt','nx_transcricoes','nx_turnos','nx_salpagos','nx_outros','nx_extras','nx_name'];
 let _kvTimer=null;
 function _kvPushDebounced(){
   const s=window.CLAIRE_SYNC||{};
@@ -2905,6 +2970,7 @@ function loadAll(){
     v=g('nx_turnos');     if(Array.isArray(v)) turnos=v;
     v=g('nx_salpagos');   if(v&&typeof v==='object') salPagos=v;
     v=g('nx_outros');     if(Array.isArray(v)) outrosMembros=v;
+    v=g('nx_extras');     if(Array.isArray(v)) extras=v;
   }catch(e){ console.warn('loadAll falhou', e); }
 }
 

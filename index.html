@@ -135,6 +135,7 @@ function _validarLogin(){
     <button class="nav-item" onclick="showPanel('salary',this)"><i class="fa-solid fa-money-bill-wave"></i> Salários</button>
     <button class="nav-item" onclick="showPanel('turnos',this)"><i class="fa-solid fa-calendar-week"></i> Turnos</button>
     <button class="nav-item" onclick="showPanel('compras',this)"><i class="fa-solid fa-cart-shopping"></i> Compras</button>
+    <button class="nav-item" onclick="showPanel('extras',this)"><i class="fa-solid fa-sack-dollar"></i> Extras</button>
     <button class="nav-item" onclick="showPanel('gmail',this)"><i class="fa-regular fa-envelope"></i> Gmail <span class="nav-badge" id="gmail-badge" style="display:none;">0</span></button>
     <div class="nav-section">Projetos</div>
     <button class="nav-item" onclick="showPanel('projetos',this)"><i class="fa-solid fa-folder-open"></i> Projetos</button>
@@ -561,6 +562,16 @@ function _validarLogin(){
     </div>
   </div>
 </div>
+
+    <!-- ── SERVIÇOS EXTRAS ── -->
+    <div class="panel" id="panel-extras">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+        <div><h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Serviços Extras</h2><p style="color:var(--text3);font-size:13px;margin-top:2px;">Serviços cobrados (foto extra, etc.) · alimenta o KPI de Redução de Custos</p></div>
+        <button class="btn btn-rose" onclick="abrirNovoExtra()"><i class="fa-solid fa-plus"></i> Novo Extra</button>
+      </div>
+      <div class="metrics-grid" id="extras-resumo" style="margin-bottom:16px;"></div>
+      <div class="card"><div style="overflow-x:auto;"><table class="data-table"><thead><tr><th>Data</th><th>Serviço</th><th>Imóvel</th><th>Cobrado</th><th>Custo</th><th>Margem</th><th>Obs</th><th></th></tr></thead><tbody id="extras-tbody"></tbody></table></div></div>
+    </div>
 
     <!-- ── GMAIL ── -->
     <div class="panel" id="panel-gmail">
@@ -1222,6 +1233,22 @@ function _validarLogin(){
     <div class="modal-footer"><button class="btn" onclick="closeModal('modal-outro-membro')">Cancelar</button><button class="btn btn-rose" onclick="salvarOutroMembro()"><i class="fa-solid fa-check"></i> Salvar</button></div>
   </div>
 </div>
-<script src="js/app.js?v=29"></script>
+<div class="modal-overlay" id="modal-extra">
+  <div class="modal" style="width:520px;">
+    <div class="modal-title" id="extra-modal-title">Novo Serviço Extra</div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Data</label><input type="date" class="form-input" id="ex-data"></div>
+      <div class="form-group"><label class="form-label">Imóvel</label><select class="form-select" id="ex-imovel"></select></div>
+    </div>
+    <div class="form-group"><label class="form-label">Serviço</label><input type="text" class="form-input" id="ex-desc" placeholder="Ex: Renovação de fotos"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Valor Cobrado (R$)</label><input type="number" class="form-input" id="ex-cobrado" placeholder="385"></div>
+      <div class="form-group"><label class="form-label">Custo / Gasto (R$)</label><input type="number" class="form-input" id="ex-gasto" placeholder="350"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Observações</label><textarea class="form-input" id="ex-obs" rows="2"></textarea></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-extra')">Cancelar</button><button class="btn btn-rose" onclick="salvarExtra()"><i class="fa-solid fa-check"></i> Salvar</button></div>
+  </div>
+</div>
+<script src="js/app.js?v=30"></script>
 </body>
 </html>

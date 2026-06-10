@@ -344,6 +344,10 @@ function _validarLogin(){
       </div>
       <div id="task-cal-view">
         <div class="card"><div class="card-body">
+          <div class="tab-bar" style="margin-bottom:10px;display:inline-flex;">
+            <button class="tab-btn active" id="tcalview-mes" onclick="setTcalView('mes',this)">Mês</button>
+            <button class="tab-btn" id="tcalview-semana" onclick="setTcalView('semana',this)">Semana</button>
+          </div>
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
             <div style="font-family:var(--font-display);font-size:16px;font-weight:600;" id="tcal-label"></div>
             <div style="display:flex;gap:6px;"><button class="btn btn-sm" onclick="tcalMudarMes(-1)"><i class="fa-solid fa-chevron-left"></i></button><button class="btn btn-sm" onclick="tcalMudarMes(1)"><i class="fa-solid fa-chevron-right"></i></button></div>
@@ -735,7 +739,10 @@ function _validarLogin(){
       <div class="form-group"><label class="form-label">Prioridade</label><select class="form-select" id="t-prio"><option value="high">Alta</option><option value="med">Média</option><option value="low">Baixa</option></select></div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Data</label><input type="date" class="form-input" id="t-date"></div>
+      <div class="form-group"><label class="form-label">Data de início</label><input type="date" class="form-input" id="t-inicio"></div>
+      <div class="form-group"><label class="form-label">Prazo / Entrega</label><input type="date" class="form-input" id="t-date"></div>
+    </div>
+    <div class="form-row">
       <div class="form-group"><label class="form-label">Hora (opcional)</label><input type="time" class="form-input" id="t-hora"></div>
     </div>
     <!-- Recorrência -->
@@ -1286,6 +1293,6 @@ function _validarLogin(){
     <div class="modal-footer"><button class="btn" onclick="closeModal('modal-extra')">Cancelar</button><button class="btn btn-rose" onclick="salvarExtra()"><i class="fa-solid fa-check"></i> Salvar</button></div>
   </div>
 </div>
-<script src="js/app.js?v=34"></script>
+<script src="js/app.js?v=35"></script>
 </body>
 </html>

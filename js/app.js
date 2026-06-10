@@ -963,6 +963,7 @@ function abrirDetalheTask(id){
     '<span style="font-size:12px;color:'+(t.prio==='high'?'var(--vermelha)':t.prio==='med'?'var(--amarela)':'var(--sage)')+';">'+
     (t.prio==='high'?'Alta':t.prio==='med'?'Média':'Baixa')+'</span>';
   document.getElementById('td-editar').innerHTML=
+    '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:3px;">Início</label><input type="date" class="form-input" style="padding:5px 8px;font-size:12.5px;" value="'+(t.dataInicio||'')+'" onchange="editarTaskCampo('+t.id+',\'dataInicio\',this.value)"></div>'+
     '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:3px;">Prazo</label><input type="date" class="form-input" style="padding:5px 8px;font-size:12.5px;" value="'+(t.due||'')+'" onchange="editarTaskCampo('+t.id+',\'due\',this.value)"></div>'+
     '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:3px;">Prioridade</label><select class="form-select" style="padding:5px 8px;font-size:12.5px;" onchange="editarTaskCampo('+t.id+',\'prio\',this.value)"><option value="high"'+(t.prio==='high'?' selected':'')+'>Alta</option><option value="med"'+(t.prio==='med'?' selected':'')+'>Média</option><option value="low"'+(t.prio==='low'?' selected':'')+'>Baixa</option></select></div>'+
     '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:3px;">Categoria</label><select class="form-select" style="padding:5px 8px;font-size:12.5px;" onchange="editarTaskCampo('+t.id+',\'cat\',this.value)">'+taskCats.map(c=>'<option value="'+c.id+'"'+(t.cat===c.id?' selected':'')+'>'+c.label+'</option>').join('')+'</select></div>';
@@ -1044,40 +1045,80 @@ function delTask(id){tasks=tasks.filter(t=>t.id!==id);renderTasks();renderKanban
 function filterTasks(v){renderTasks(v);}
 function switchView(v,btn){document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');document.getElementById('task-cal-view').style.display=v==='cal'?'':'none';document.getElementById('task-kanban-view').style.display=v==='kanban'?'':'none';if(v==='cal')renderTaskCalendar();}
 let tcalM=new Date().getMonth(), tcalY=new Date().getFullYear();
-function tcalMudarMes(d){ tcalM+=d; if(tcalM>11){tcalM=0;tcalY++;} if(tcalM<0){tcalM=11;tcalY--;} renderTaskCalendar(); }
+let tcalView='mes';
+let tcalRef=new Date();
+function setTcalView(modo,btn){ tcalView=modo; document.querySelectorAll('#tcalview-mes,#tcalview-semana').forEach(b=>b.classList.remove('active')); if(btn)btn.classList.add('active'); renderTaskCalendar(); }
+function tcalMudarMes(d){ if(tcalView==='semana'){ tcalRef.setDate(tcalRef.getDate()+d*7); } else { tcalM+=d; if(tcalM>11){tcalM=0;tcalY++;} if(tcalM<0){tcalM=11;tcalY--;} } renderTaskCalendar(); }
+
+function _tarefaNoDia(t, ds){
+  const fim=t.due||t.dataInicio; const ini=t.dataInicio||t.due;
+  if(!ini||!fim) return false;
+  const a=ini<fim?ini:fim, b=ini<fim?fim:ini;
+  return ds>=a && ds<=b;
+}
+function _chipTarefa(t, ds){
+  const cat=getCatInfo(t.cat); const ini=t.dataInicio||t.due;
+  const ehInicio=(ds===ini); const projNome=(t.projetoNome||'Projeto'); const ehProj=!!t.projetoId;
+  const marca=ehInicio?'► ':'· ';
+  return '<div onclick="abrirDetalheTask('+t.id+')" title="'+esc(t.text)+(ehProj?(' · '+esc(projNome)):'')+'" style="cursor:pointer;font-size:10px;padding:2px 4px;margin-bottom:2px;border-radius:3px;background:'+cat.color+'22;border-left:3px solid '+(ehProj?'var(--lavender)':cat.color)+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+marca+(ehProj?'📁 ':'')+esc(t.text)+'</div>';
+}
+function _extraChip(ex, ds){
+  return '<div onclick="abrirEditarExtra('+ex.id+')" title="'+esc(ex.descricao||'')+(ex.dataPagamento===ds?' · pagamento':' · execução')+'" style="cursor:pointer;font-size:10px;padding:2px 4px;margin-bottom:2px;border-radius:3px;background:var(--gold)22;border-left:2px solid var(--gold);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">💰 '+esc(ex.descricao||'Extra')+'</div>';
+}
+function _legendaTcal(){
+  return '<div style="margin-top:10px;font-size:11px;color:var(--text3);display:flex;gap:14px;flex-wrap:wrap;"><span>► início · dia intermediário</span><span><span style="display:inline-block;width:10px;height:10px;border-left:3px solid var(--lavender);"></span> 📁 Tarefa de projeto</span><span><span style="display:inline-block;width:10px;height:10px;border-left:3px solid var(--gold);"></span> 💰 Extra (execução/pagamento)</span><span>Clique numa tarefa para abrir os detalhes</span></div>';
+}
+function _dsFromDate(dt){ return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0'); }
 function renderTaskCalendar(){
   const grid=document.getElementById('tcal-grid'); if(!grid) return;
   const meses=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-  const lbl=document.getElementById('tcal-label'); if(lbl) lbl.textContent=meses[tcalM]+' '+tcalY;
-  const primeiroDia=new Date(tcalY,tcalM,1).getDay();
-  const totalDias=new Date(tcalY,tcalM+1,0).getDate();
-  const hoje=new Date(); const hojeStr=hoje.toISOString().split('T')[0];
+  const lbl=document.getElementById('tcal-label');
+  const hoje=new Date(); const hojeStr=_dsFromDate(hoje);
   const dns=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-  let html='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;">';
-  dns.forEach(d=>{ html+='<div style="font-size:10px;text-transform:uppercase;color:var(--text3);text-align:center;font-weight:700;padding:4px 0;">'+d+'</div>'; });
-  for(let i=0;i<primeiroDia;i++){ html+='<div></div>'; }
-  for(let dia=1;dia<=totalDias;dia++){
-    const ds=tcalY+'-'+String(tcalM+1).padStart(2,'0')+'-'+String(dia).padStart(2,'0');
-    const ehHoje=ds===hojeStr;
-    const doDia=tasks.filter(t=>!t.done && t.due===ds);
-    const extrasDia=(typeof extras!=='undefined'?extras:[]).filter(function(ex){return ex.dataExecucao===ds || ex.dataPagamento===ds;});
-    html+='<div style="min-height:84px;border:1px solid '+(ehHoje?'var(--rose)':'var(--border)')+';border-radius:var(--r-sm);padding:5px;background:var(--bg2);overflow:hidden;">'+
-      '<div style="font-size:11px;font-weight:700;'+(ehHoje?'color:var(--rose);':'color:var(--text3);')+'margin-bottom:3px;">'+dia+'</div>'+
-      doDia.slice(0,4).map(t=>{
-        const cat=getCatInfo(t.cat);
-        const ehProj=!!t.projetoId;
-        const projNome=(t.projetoNome||'Projeto');
-        return '<div onclick="abrirDetalheTask('+t.id+')" title="'+esc(t.text)+(ehProj?(' · '+esc(projNome)):'')+'" style="cursor:pointer;font-size:10px;padding:2px 4px;margin-bottom:2px;border-radius:3px;background:'+cat.color+'22;border-left:2px solid '+(ehProj?'var(--lavender)':cat.color)+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(ehProj?'📁 ':'')+esc(t.text)+'</div>';
-      }).join('')+
-      (doDia.length>4?'<div style="font-size:9px;color:var(--text3);">+'+(doDia.length-4)+'</div>':'')+
-      extrasDia.map(function(ex){
-        return '<div onclick="abrirEditarExtra('+ex.id+')" title="'+esc(ex.descricao||'')+(ex.dataPagamento===ds?' · pagamento':' · execução')+'" style="cursor:pointer;font-size:10px;padding:2px 4px;margin-bottom:2px;border-radius:3px;background:var(--gold)22;border-left:2px solid var(--gold);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">💰 '+esc(ex.descricao||'Extra')+'</div>';
-      }).join('')+
-      '</div>';
+  const todasExtras=(typeof extras!=='undefined'?extras:[]);
+  let html='';
+  if(tcalView==='semana'){
+    const base=new Date(tcalRef); const ini=new Date(base); ini.setDate(base.getDate()-base.getDay());
+    const fimSem=new Date(ini); fimSem.setDate(ini.getDate()+6);
+    const fmt=function(dt){ return String(dt.getDate()).padStart(2,'0')+'/'+String(dt.getMonth()+1).padStart(2,'0'); };
+    if(lbl) lbl.textContent='Semana de '+fmt(ini)+' a '+fmt(fimSem);
+    html='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;">';
+    for(let i=0;i<7;i++){
+      const dt=new Date(ini); dt.setDate(ini.getDate()+i);
+      const ds=_dsFromDate(dt); const ehHoje=ds===hojeStr;
+      const doDia=tasks.filter(t=>!t.done && _tarefaNoDia(t,ds));
+      const extrasDia=todasExtras.filter(function(ex){return ex.dataExecucao===ds || ex.dataPagamento===ds;});
+      html+='<div style="min-height:160px;border:1px solid '+(ehHoje?'var(--rose)':'var(--border)')+';border-radius:var(--r-sm);padding:6px;background:var(--bg2);overflow:hidden;">'+
+        '<div style="font-size:11px;font-weight:700;'+(ehHoje?'color:var(--rose);':'color:var(--text3);')+'margin-bottom:5px;">'+dns[i]+' '+dt.getDate()+'</div>'+
+        doDia.map(function(t){return _chipTarefa(t,ds);}).join('')+
+        extrasDia.map(function(ex){return _extraChip(ex,ds);}).join('')+
+        '</div>';
+    }
+    html+='</div>';
+    html+=_legendaTcal();
+  } else {
+    if(lbl) lbl.textContent=meses[tcalM]+' '+tcalY;
+    const primeiroDia=new Date(tcalY,tcalM,1).getDay();
+    const totalDias=new Date(tcalY,tcalM+1,0).getDate();
+    html='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;">';
+    dns.forEach(d=>{ html+='<div style="font-size:10px;text-transform:uppercase;color:var(--text3);text-align:center;font-weight:700;padding:4px 0;">'+d+'</div>'; });
+    for(let i=0;i<primeiroDia;i++){ html+='<div></div>'; }
+    for(let dia=1;dia<=totalDias;dia++){
+      const ds=tcalY+'-'+String(tcalM+1).padStart(2,'0')+'-'+String(dia).padStart(2,'0');
+      const ehHoje=ds===hojeStr;
+      const doDia=tasks.filter(t=>!t.done && _tarefaNoDia(t,ds));
+      const extrasDia=todasExtras.filter(function(ex){return ex.dataExecucao===ds || ex.dataPagamento===ds;});
+      html+='<div style="min-height:84px;border:1px solid '+(ehHoje?'var(--rose)':'var(--border)')+';border-radius:var(--r-sm);padding:5px;background:var(--bg2);overflow:hidden;">'+
+        '<div style="font-size:11px;font-weight:700;'+(ehHoje?'color:var(--rose);':'color:var(--text3);')+'margin-bottom:3px;">'+dia+'</div>'+
+        doDia.slice(0,4).map(function(t){return _chipTarefa(t,ds);}).join('')+
+        (doDia.length>4?'<div style="font-size:9px;color:var(--text3);">+'+(doDia.length-4)+'</div>':'')+
+        extrasDia.map(function(ex){return _extraChip(ex,ds);}).join('')+
+        '</div>';
+    }
+    html+='</div>';
+    html+=_legendaTcal();
   }
-  html+='</div>';
-  html+='<div style="margin-top:10px;font-size:11px;color:var(--text3);display:flex;gap:14px;"><span><span style="display:inline-block;width:10px;height:10px;border-left:3px solid var(--lavender);"></span> 📁 Tarefa de projeto</span><span><span style="display:inline-block;width:10px;height:10px;border-left:3px solid var(--gold);"></span> 💰 Extra (execução/pagamento)</span><span>Clique numa tarefa para abrir os detalhes</span></div>';
-  const semData=tasks.filter(t=>!t.done && !t.due);
+  const semData=tasks.filter(t=>!t.done && !t.due && !t.dataInicio);
   if(semData.length>0){
     html+='<div style="margin-top:16px;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:8px;">📋 Sem data / A agendar ('+semData.length+')</div>';
     html+=semData.map(function(t){var cat=getCatInfo(t.cat);return '<div onclick="abrirDetalheTask('+t.id+')" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);"><span style="width:8px;height:8px;border-radius:50%;background:'+cat.color+';flex-shrink:0;"></span><span style="flex:1;font-size:13px;">'+esc(t.text)+'</span><span style="font-size:10px;color:'+cat.color+';">'+cat.label+'</span></div>';}).join('');
@@ -1194,6 +1235,7 @@ function calcProximaDue(due, tipo) {
 
 function openAddTask(){
   document.getElementById('t-title').value='';
+  document.getElementById('t-inicio').value='';
   document.getElementById('t-date').value=new Date().toISOString().split('T')[0];
   document.getElementById('t-hora').value='';
   document.getElementById('t-recorrencia').value='';
@@ -1213,6 +1255,7 @@ function addTask(){
     id:Date.now(),text,
     cat:document.getElementById('t-cat').value,
     prio:document.getElementById('t-prio').value,
+    dataInicio:document.getElementById('t-inicio').value,
     due,hora,done:false,status:'todo',
     recorrente:!!recorrencia,
     tipoRecorrencia:recorrencia||null,

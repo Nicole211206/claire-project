@@ -141,11 +141,10 @@ function setAvView(modo,btn){
 let usuarios=[]; // gerenciados pelo admin (espelha localStorage nx_users)
 const MODULOS_LISTA=[
   {id:'overview',label:'Visão Geral'},{id:'kpis',label:'Meus KPIs'},{id:'performance',label:'Performance'},
-  {id:'avaliacoes',label:'Avaliações'},{id:'tasks',label:'Tarefas'},{id:'calendar',label:'Calendário'},
+  {id:'avaliacoes',label:'Acompanhamento'},{id:'tasks',label:'Tarefas'},{id:'calendar',label:'Calendário'},
   {id:'ai',label:'Assistente IA'},{id:'team',label:'Equipe'},{id:'salary',label:'Salários'},
-  {id:'drive',label:'Google Drive'},{id:'onboarding',label:'Onboarding'},{id:'compras',label:'Compras'},
+  {id:'compras',label:'Compras'},
   {id:'gmail',label:'Gmail'},{id:'projetos',label:'Projetos'},{id:'reunioes',label:'Reuniões'},
-  {id:'notes',label:'Anotações'},{id:'focus',label:'Foco'},
   {id:'turnos',label:'Turnos'}
 ];
 function getMinhaAtt(){ const u=getCurrentUser(); if(!u||!u.attId) return null; return ATTS.find(a=>a.id===u.attId)||null; }
@@ -358,6 +357,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   renderTaskCatSelect();
   renderTasks();
   renderKanban();
+  renderTaskCalendar();
   renderCal();
   renderAgenda();
   renderTeam();
@@ -382,7 +382,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
 });
 
 // ═══════════════════ NAV ═══════════════════
-const PT={overview:'Visão Geral',kpis:'Meus KPIs',performance:'Acompanhamento de Performance',tasks:'Tarefas',calendar:'Calendário',ai:'Assistente IA',team:'Equipe',salary:'Salários',drive:'Google Drive',onboarding:'Onboarding de Imóveis',gmail:'Gmail',notes:'Anotações',focus:'Foco',projetos:'Projetos',compras:'Registro de Compras',reunioes:'Reuniões e Transcrições',avaliacoes:'Avaliações de Hóspedes',usuarios:'Usuários e Acessos',turnos:'Escala de Turnos'};
+const PT={overview:'Visão Geral',kpis:'Meus KPIs',performance:'Acompanhamento de Performance',tasks:'Tarefas',calendar:'Calendário',ai:'Assistente IA',team:'Equipe',salary:'Salários',drive:'Google Drive',onboarding:'Onboarding de Imóveis',gmail:'Gmail',notes:'Anotações',focus:'Foco',projetos:'Projetos',compras:'Registro de Compras',reunioes:'Reuniões e Transcrições',avaliacoes:'Acompanhamento',usuarios:'Usuários e Acessos',turnos:'Escala de Turnos'};
 function showPanel(id,btn){
   if(typeof podeAcessar==='function' && id!=='usuarios'){ const u=getCurrentUser(); if(u && u.perfil!=='admin' && !podeAcessar(id)){ return; } }
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
@@ -792,6 +792,7 @@ function renderTasks(f){
   document.getElementById('tasks-badge').textContent=p;
   document.getElementById('ov-tasks').textContent=p;
   renderOvAgenda();
+  renderTaskCalendar();
 }
 
 function renderTaskFilterSel(){
@@ -937,7 +938,39 @@ function toggleTask(id){
 }
 function delTask(id){tasks=tasks.filter(t=>t.id!==id);renderTasks();renderKanban();fillFocusSel();}
 function filterTasks(v){renderTasks(v);}
-function switchView(v,btn){document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');document.getElementById('task-list-view').style.display=v==='list'?'':'none';document.getElementById('task-kanban-view').style.display=v==='kanban'?'':'none';}
+function switchView(v,btn){document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');document.getElementById('task-cal-view').style.display=v==='cal'?'':'none';document.getElementById('task-kanban-view').style.display=v==='kanban'?'':'none';if(v==='cal')renderTaskCalendar();}
+let tcalM=new Date().getMonth(), tcalY=new Date().getFullYear();
+function tcalMudarMes(d){ tcalM+=d; if(tcalM>11){tcalM=0;tcalY++;} if(tcalM<0){tcalM=11;tcalY--;} renderTaskCalendar(); }
+function renderTaskCalendar(){
+  const grid=document.getElementById('tcal-grid'); if(!grid) return;
+  const meses=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const lbl=document.getElementById('tcal-label'); if(lbl) lbl.textContent=meses[tcalM]+' '+tcalY;
+  const primeiroDia=new Date(tcalY,tcalM,1).getDay();
+  const totalDias=new Date(tcalY,tcalM+1,0).getDate();
+  const hoje=new Date(); const hojeStr=hoje.toISOString().split('T')[0];
+  const dns=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  let html='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;">';
+  dns.forEach(d=>{ html+='<div style="font-size:10px;text-transform:uppercase;color:var(--text3);text-align:center;font-weight:700;padding:4px 0;">'+d+'</div>'; });
+  for(let i=0;i<primeiroDia;i++){ html+='<div></div>'; }
+  for(let dia=1;dia<=totalDias;dia++){
+    const ds=tcalY+'-'+String(tcalM+1).padStart(2,'0')+'-'+String(dia).padStart(2,'0');
+    const ehHoje=ds===hojeStr;
+    const doDia=tasks.filter(t=>!t.done && t.due===ds);
+    html+='<div style="min-height:84px;border:1px solid '+(ehHoje?'var(--rose)':'var(--border)')+';border-radius:var(--r-sm);padding:5px;background:var(--bg2);overflow:hidden;">'+
+      '<div style="font-size:11px;font-weight:700;'+(ehHoje?'color:var(--rose);':'color:var(--text3);')+'margin-bottom:3px;">'+dia+'</div>'+
+      doDia.slice(0,4).map(t=>{
+        const cat=getCatInfo(t.cat);
+        const ehProj=!!t.projetoId;
+        const projNome=(t.projetoNome||'Projeto');
+        return '<div onclick="abrirDetalheTask('+t.id+')" title="'+esc(t.text)+(ehProj?(' · '+esc(projNome)):'')+'" style="cursor:pointer;font-size:10px;padding:2px 4px;margin-bottom:2px;border-radius:3px;background:'+cat.color+'22;border-left:2px solid '+(ehProj?'var(--lavender)':cat.color)+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(ehProj?'📁 ':'')+esc(t.text)+'</div>';
+      }).join('')+
+      (doDia.length>4?'<div style="font-size:9px;color:var(--text3);">+'+(doDia.length-4)+'</div>':'')+
+      '</div>';
+  }
+  html+='</div>';
+  html+='<div style="margin-top:10px;font-size:11px;color:var(--text3);display:flex;gap:14px;"><span><span style="display:inline-block;width:10px;height:10px;border-left:3px solid var(--lavender);"></span> 📁 Tarefa de projeto</span><span>Clique numa tarefa para abrir os detalhes</span></div>';
+  grid.innerHTML=html;
+}
 
 let _kanbanDragId=null;
 

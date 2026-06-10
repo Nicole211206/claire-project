@@ -126,7 +126,7 @@ function _validarLogin(){
     <button class="nav-item active" onclick="showPanel('overview',this)"><i class="fa-solid fa-gauge-simple-high"></i> Visão Geral</button>
     <button class="nav-item" onclick="showPanel('kpis',this)"><i class="fa-solid fa-chart-line"></i> Meus KPIs</button>
     <button class="nav-item" onclick="showPanel('performance',this)"><i class="fa-solid fa-chart-column"></i> Performance</button>
-    <button class="nav-item" onclick="showPanel('avaliacoes',this)"><i class="fa-solid fa-star"></i> Avaliações</button>
+    <button class="nav-item" onclick="showPanel('avaliacoes',this)"><i class="fa-solid fa-star"></i> Acompanhamento</button>
     <button class="nav-item" onclick="showPanel('tasks',this)"><i class="fa-solid fa-list-check"></i> Tarefas <span class="nav-badge" id="tasks-badge">0</span></button>
     <button class="nav-item" onclick="showPanel('calendar',this)"><i class="fa-regular fa-calendar-days"></i> Calendário</button>
     <button class="nav-item" onclick="showPanel('ai',this)"><i class="fa-solid fa-wand-magic-sparkles"></i> Assistente IA</button>
@@ -134,15 +134,11 @@ function _validarLogin(){
     <button class="nav-item" onclick="showPanel('team',this)"><i class="fa-solid fa-users"></i> Equipe</button>
     <button class="nav-item" onclick="showPanel('salary',this)"><i class="fa-solid fa-money-bill-wave"></i> Salários</button>
     <button class="nav-item" onclick="showPanel('turnos',this)"><i class="fa-solid fa-calendar-week"></i> Turnos</button>
-    <button class="nav-item" onclick="showPanel('drive',this)"><i class="fa-brands fa-google-drive"></i> Google Drive</button>
-    <button class="nav-item" onclick="showPanel('onboarding',this)"><i class="fa-solid fa-house-flag"></i> Onboarding</button>
     <button class="nav-item" onclick="showPanel('compras',this)"><i class="fa-solid fa-cart-shopping"></i> Compras</button>
     <button class="nav-item" onclick="showPanel('gmail',this)"><i class="fa-regular fa-envelope"></i> Gmail <span class="nav-badge" id="gmail-badge" style="display:none;">0</span></button>
     <div class="nav-section">Projetos</div>
     <button class="nav-item" onclick="showPanel('projetos',this)"><i class="fa-solid fa-folder-open"></i> Projetos</button>
     <button class="nav-item" onclick="showPanel('reunioes',this)"><i class="fa-solid fa-microphone-lines"></i> Reuniões</button>
-    <button class="nav-item" onclick="showPanel('notes',this)"><i class="fa-regular fa-note-sticky"></i> Anotações</button>
-    <button class="nav-item" onclick="showPanel('focus',this)"><i class="fa-regular fa-clock"></i> Foco</button>
     <div class="nav-section" id="navsec-admin">Administração</div>
     <button class="nav-item" id="nav-usuarios" onclick="showPanelUsuarios(this)"><i class="fa-solid fa-users-gear"></i> Usuários</button>
   </div>
@@ -302,7 +298,7 @@ function _validarLogin(){
     <div class="panel" id="panel-avaliacoes">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
         <div>
-          <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Avaliações de Hóspedes</h2>
+          <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Acompanhamento</h2>
           <p style="color:var(--text3);font-size:13px;margin-top:2px;">Sincronizado com o Hostaway · alimenta o KPI de avaliações</p>
         </div>
         <div style="display:flex;gap:8px;">
@@ -332,7 +328,7 @@ function _validarLogin(){
     <!-- ── TAREFAS ── -->
     <div class="panel" id="panel-tasks">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
-        <div class="tab-bar"><button class="tab-btn active" onclick="switchView('list',this)">Lista</button><button class="tab-btn" onclick="switchView('kanban',this)">Kanban</button></div>
+        <div class="tab-bar"><button class="tab-btn active" onclick="switchView('cal',this)">Calendário</button><button class="tab-btn" onclick="switchView('kanban',this)">Kanban</button></div>
         <select class="form-select" style="width:auto;padding:6px 10px;font-size:12.5px;" id="task-filter-sel" onchange="filterTasks(this.value)"></select>
         <select class="form-select" style="width:auto;padding:6px 10px;font-size:12.5px;" id="task-sort-prazo" onchange="renderTasks();renderKanban();">
           <option value="">Sem ordenar</option>
@@ -344,7 +340,15 @@ function _validarLogin(){
         <button class="btn btn-sm" onclick="abrirGerenciarCats()" title="Gerenciar categorias" style="padding:6px 10px;"><i class="fa-solid fa-tags"></i></button>
         <button class="btn btn-rose" style="margin-left:auto;" onclick="openAddTask()"><i class="fa-solid fa-plus"></i> Nova Tarefa</button>
       </div>
-      <div id="task-list-view"><div class="card"><div class="card-body" id="all-tasks-list" style="padding:6px 14px;"></div></div></div>
+      <div id="task-cal-view">
+        <div class="card"><div class="card-body">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+            <div style="font-family:var(--font-display);font-size:16px;font-weight:600;" id="tcal-label"></div>
+            <div style="display:flex;gap:6px;"><button class="btn btn-sm" onclick="tcalMudarMes(-1)"><i class="fa-solid fa-chevron-left"></i></button><button class="btn btn-sm" onclick="tcalMudarMes(1)"><i class="fa-solid fa-chevron-right"></i></button></div>
+          </div>
+          <div id="tcal-grid"></div>
+        </div></div>
+      </div>
       <div id="task-kanban-view" style="display:none;"><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;" id="kanban-board"></div></div>
     </div>
 
@@ -1218,6 +1222,6 @@ function _validarLogin(){
     <div class="modal-footer"><button class="btn" onclick="closeModal('modal-outro-membro')">Cancelar</button><button class="btn btn-rose" onclick="salvarOutroMembro()"><i class="fa-solid fa-check"></i> Salvar</button></div>
   </div>
 </div>
-<script src="js/app.js?v=28"></script>
+<script src="js/app.js?v=29"></script>
 </body>
 </html>

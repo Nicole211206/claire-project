@@ -875,7 +875,8 @@ function renderTasks(f){
   let list=f==='all'?tasks:tasks.filter(t=>t.cat===f);
   list=filtrarSequenciaProjetos(list);
   list=aplicarFiltroPrazo(list);
-  document.getElementById('all-tasks-list').innerHTML=list.map(t=>{
+  const _listaEl=document.getElementById('all-tasks-list');
+  if(_listaEl) _listaEl.innerHTML=list.map(t=>{
     const cat=getCatInfo(t.cat);
     return '<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);'+(t.done?'opacity:0.5;':'')+'">'+
       '<div style="width:3px;height:36px;border-radius:2px;background:'+(PC[t.prio]||'var(--text3)')+';flex-shrink:0;margin-top:2px;"></div>'+

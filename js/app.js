@@ -770,30 +770,47 @@ function sincronizarExtrasKPI(){
   if(typeof renderKPIs==='function') renderKPIs();
 }
 
+// ═══════════════════ HELPER ARQUIVO → BASE64 ═══════════════════
+function _lerArquivoBase64(file, cb){ const r=new FileReader(); r.onload=function(e){ cb(e.target.result, file.name); }; r.readAsDataURL(file); }
+function abrirAnexo(dataUrl){ if(!dataUrl) return; const w=window.open(); if(w){ w.document.write('<iframe src="'+dataUrl+'" style="width:100%;height:100%;border:0;"></iframe>'); } }
+
 // ═══════════════════ SERVIÇOS EXTRAS ═══════════════════
 let _extraEditId=null;
+let _extraAnexoTmp=null;
+function _extraOnAnexo(input){ if(!input.files||!input.files[0]) return; _lerArquivoBase64(input.files[0],function(dataUrl){ _extraAnexoTmp=dataUrl; var st=document.getElementById('ex-anexo-status'); if(st) st.innerHTML='anexo carregado ✓ <button type="button" onclick="abrirAnexo(_extraAnexoTmp)" style="background:none;border:none;color:var(--rose);cursor:pointer;font-size:12px;">abrir</button>'; }); }
 function _preencherSelectImoveisExtra(){
   const sel=document.getElementById('ex-imovel'); if(!sel) return;
   sel.innerHTML='<option value="">— Geral —</option>'+imovelsCatalog.map(im=>'<option value="'+esc(im.nome)+'">'+esc(im.nome)+'</option>').join('');
 }
+function _extraSetAnexoStatus(dataUrl){
+  var st=document.getElementById('ex-anexo-status'); if(!st) return;
+  st.innerHTML=dataUrl?('anexo carregado ✓ <button type="button" onclick="abrirAnexo(_extraAnexoTmp)" style="background:none;border:none;color:var(--rose);cursor:pointer;font-size:12px;">abrir</button>'):'';
+}
 function abrirNovoExtra(){
-  _extraEditId=null;
+  _extraEditId=null; _extraAnexoTmp=null;
   document.getElementById('extra-modal-title').textContent='Novo Serviço Extra';
   document.getElementById('ex-data').value=new Date().toISOString().split('T')[0];
   document.getElementById('ex-desc').value=''; document.getElementById('ex-cobrado').value=''; document.getElementById('ex-gasto').value=''; document.getElementById('ex-obs').value='';
+  document.getElementById('ex-dataexec').value=''; document.getElementById('ex-datapag').value=''; document.getElementById('ex-pago').checked=false;
+  var fi=document.getElementById('ex-anexo'); if(fi) fi.value='';
+  _extraSetAnexoStatus(null);
   _preencherSelectImoveisExtra();
   document.getElementById('modal-extra').classList.add('open');
 }
 function abrirEditarExtra(id){
-  const e=extras.find(x=>x.id===id); if(!e) return; _extraEditId=id;
+  const e=extras.find(x=>x.id===id); if(!e) return; _extraEditId=id; _extraAnexoTmp=e.anexo||null;
   document.getElementById('extra-modal-title').textContent='Editar Serviço Extra';
-  document.getElementById('ex-data').value=e.data||''; document.getElementById('ex-desc').value=e.descricao||''; document.getElementById('ex-cobrado').value=e.cobrado||''; document.getElementById('ex-gasto').value=e.gasto||''; document.getElementById('ex-obs').value=e.obs||'';
+  document.getElementById('ex-data').value=e.dataSolicitacao||e.data||''; document.getElementById('ex-desc').value=e.descricao||''; document.getElementById('ex-cobrado').value=e.cobrado||''; document.getElementById('ex-gasto').value=e.gasto||''; document.getElementById('ex-obs').value=e.obs||'';
+  document.getElementById('ex-dataexec').value=e.dataExecucao||''; document.getElementById('ex-datapag').value=e.dataPagamento||''; document.getElementById('ex-pago').checked=!!e.pago;
+  var fi=document.getElementById('ex-anexo'); if(fi) fi.value='';
+  _extraSetAnexoStatus(_extraAnexoTmp);
   _preencherSelectImoveisExtra(); document.getElementById('ex-imovel').value=e.imovelNome||'';
   document.getElementById('modal-extra').classList.add('open');
 }
 function salvarExtra(){
   const desc=document.getElementById('ex-desc').value.trim(); if(!desc){ showToast('Informe o serviço.','peach'); return; }
-  const obj={id:_extraEditId||Date.now(), data:document.getElementById('ex-data').value, descricao:desc, imovelNome:document.getElementById('ex-imovel').value, cobrado:parseFloat(document.getElementById('ex-cobrado').value)||0, gasto:parseFloat(document.getElementById('ex-gasto').value)||0, obs:document.getElementById('ex-obs').value.trim()};
+  const ds=document.getElementById('ex-data').value;
+  const obj={id:_extraEditId||Date.now(), data:ds, dataSolicitacao:ds, dataExecucao:document.getElementById('ex-dataexec').value, dataPagamento:document.getElementById('ex-datapag').value, pago:document.getElementById('ex-pago').checked, anexo:_extraAnexoTmp||'', descricao:desc, imovelNome:document.getElementById('ex-imovel').value, cobrado:parseFloat(document.getElementById('ex-cobrado').value)||0, gasto:parseFloat(document.getElementById('ex-gasto').value)||0, obs:document.getElementById('ex-obs').value.trim()};
   if(_extraEditId){ const i=extras.findIndex(x=>x.id===_extraEditId); if(i>=0) extras[i]=obj; } else extras.unshift(obj);
   closeModal('modal-extra'); if(typeof saveAll==='function') saveAll(); sincronizarExtrasKPI(); renderExtras(); showToast('Extra salvo!','sage');
 }
@@ -803,9 +820,13 @@ function renderExtras(){
   const tc=extras.reduce((s,e)=>s+(parseFloat(e.cobrado)||0),0), tg=extras.reduce((s,e)=>s+(parseFloat(e.gasto)||0),0);
   const res=document.getElementById('extras-resumo');
   if(res) res.innerHTML=[{l:'Total Cobrado',v:brl(tc),c:'sage',i:'fa-arrow-down'},{l:'Total Custo',v:brl(tg),c:'rose',i:'fa-arrow-up'},{l:'Margem',v:brl(tc-tg),c:'gold',i:'fa-coins'}].map(x=>'<div class="metric-card '+x.c+'"><div class="metric-icon '+x.c+'"><i class="fa-solid '+x.i+'"></i></div><div class="metric-value" style="font-size:22px;">'+x.v+'</div><div class="metric-label">'+x.l+'</div></div>').join('');
+  const _df=function(d){return d?d.split('-').reverse().join('/'):'—';};
   tb.innerHTML=extras.length===0?'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3);">Nenhum serviço extra. Clique em "Novo Extra".</td></tr>':extras.map(e=>{
     const margem=(parseFloat(e.cobrado)||0)-(parseFloat(e.gasto)||0);
-    return '<tr><td style="white-space:nowrap;">'+(e.data?e.data.split('-').reverse().join('/'):'—')+'</td><td>'+esc(e.descricao)+'</td><td style="font-size:12px;">'+esc(e.imovelNome||'—')+'</td><td>'+brl(e.cobrado)+'</td><td>'+brl(e.gasto)+'</td><td style="color:var(--sage);font-weight:600;">'+brl(margem)+'</td><td style="font-size:11px;color:var(--text3);">'+esc(e.obs||'')+'</td><td style="white-space:nowrap;"><button onclick="abrirEditarExtra('+e.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-pen"></i></button><button onclick="deletarExtra('+e.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-trash"></i></button></td></tr>';
+    const datas='<div style="font-size:10px;color:var(--text3);line-height:1.5;">Sol: '+_df(e.dataSolicitacao||e.data)+'<br>Exec: '+_df(e.dataExecucao)+'<br>Pag: '+_df(e.dataPagamento)+'</div>';
+    const status=e.pago?'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--sage)22;color:var(--sage);">Pago</span>':'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--peach)22;color:var(--peach);">Pendente</span>';
+    const anexoIco=e.anexo?' <button onclick="abrirAnexo(extras.find(function(x){return x.id==='+e.id+';}).anexo)" title="Abrir NF/Recibo" style="background:none;border:none;color:var(--rose);cursor:pointer;font-size:12px;"><i class="fa-solid fa-paperclip"></i></button>':'';
+    return '<tr><td style="white-space:nowrap;">'+datas+'</td><td>'+esc(e.descricao)+'<div style="margin-top:3px;">'+status+anexoIco+'</div></td><td style="font-size:12px;">'+esc(e.imovelNome||'—')+'</td><td>'+brl(e.cobrado)+'</td><td>'+brl(e.gasto)+'</td><td style="color:var(--sage);font-weight:600;">'+brl(margem)+'</td><td style="font-size:11px;color:var(--text3);">'+esc(e.obs||'')+'</td><td style="white-space:nowrap;"><button onclick="abrirEditarExtra('+e.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-pen"></i></button><button onclick="deletarExtra('+e.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-trash"></i></button></td></tr>';
   }).join('');
 }
 
@@ -1031,6 +1052,7 @@ function renderTaskCalendar(){
     const ds=tcalY+'-'+String(tcalM+1).padStart(2,'0')+'-'+String(dia).padStart(2,'0');
     const ehHoje=ds===hojeStr;
     const doDia=tasks.filter(t=>!t.done && t.due===ds);
+    const extrasDia=(typeof extras!=='undefined'?extras:[]).filter(function(ex){return ex.dataExecucao===ds || ex.dataPagamento===ds;});
     html+='<div style="min-height:84px;border:1px solid '+(ehHoje?'var(--rose)':'var(--border)')+';border-radius:var(--r-sm);padding:5px;background:var(--bg2);overflow:hidden;">'+
       '<div style="font-size:11px;font-weight:700;'+(ehHoje?'color:var(--rose);':'color:var(--text3);')+'margin-bottom:3px;">'+dia+'</div>'+
       doDia.slice(0,4).map(t=>{
@@ -1040,10 +1062,19 @@ function renderTaskCalendar(){
         return '<div onclick="abrirDetalheTask('+t.id+')" title="'+esc(t.text)+(ehProj?(' · '+esc(projNome)):'')+'" style="cursor:pointer;font-size:10px;padding:2px 4px;margin-bottom:2px;border-radius:3px;background:'+cat.color+'22;border-left:2px solid '+(ehProj?'var(--lavender)':cat.color)+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(ehProj?'📁 ':'')+esc(t.text)+'</div>';
       }).join('')+
       (doDia.length>4?'<div style="font-size:9px;color:var(--text3);">+'+(doDia.length-4)+'</div>':'')+
+      extrasDia.map(function(ex){
+        return '<div onclick="abrirEditarExtra('+ex.id+')" title="'+esc(ex.descricao||'')+(ex.dataPagamento===ds?' · pagamento':' · execução')+'" style="cursor:pointer;font-size:10px;padding:2px 4px;margin-bottom:2px;border-radius:3px;background:var(--gold)22;border-left:2px solid var(--gold);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">💰 '+esc(ex.descricao||'Extra')+'</div>';
+      }).join('')+
       '</div>';
   }
   html+='</div>';
-  html+='<div style="margin-top:10px;font-size:11px;color:var(--text3);display:flex;gap:14px;"><span><span style="display:inline-block;width:10px;height:10px;border-left:3px solid var(--lavender);"></span> 📁 Tarefa de projeto</span><span>Clique numa tarefa para abrir os detalhes</span></div>';
+  html+='<div style="margin-top:10px;font-size:11px;color:var(--text3);display:flex;gap:14px;"><span><span style="display:inline-block;width:10px;height:10px;border-left:3px solid var(--lavender);"></span> 📁 Tarefa de projeto</span><span><span style="display:inline-block;width:10px;height:10px;border-left:3px solid var(--gold);"></span> 💰 Extra (execução/pagamento)</span><span>Clique numa tarefa para abrir os detalhes</span></div>';
+  const semData=tasks.filter(t=>!t.done && !t.due);
+  if(semData.length>0){
+    html+='<div style="margin-top:16px;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:8px;">📋 Sem data / A agendar ('+semData.length+')</div>';
+    html+=semData.map(function(t){var cat=getCatInfo(t.cat);return '<div onclick="abrirDetalheTask('+t.id+')" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);"><span style="width:8px;height:8px;border-radius:50%;background:'+cat.color+';flex-shrink:0;"></span><span style="flex:1;font-size:13px;">'+esc(t.text)+'</span><span style="font-size:10px;color:'+cat.color+';">'+cat.label+'</span></div>';}).join('');
+    html+='</div>';
+  }
   grid.innerHTML=html;
 }
 
@@ -4375,12 +4406,13 @@ function manutAbaSolicitacao(m){
   const total=sub*(1+margem/100);
   return '<div style="display:grid;gap:12px;">'+
     '<div class="form-row">'+
-    '<div class="form-group"><label class="form-label">Origem</label><select class="form-select" onchange="salvarCampoManut('+m.id+',\'origem\',this.value)">'+
+    '<div class="form-group"><label class="form-label">Origem</label><select class="form-select" onchange="manutSetOrigem('+m.id+',this.value)">'+
       Object.keys(MANUT_ORIGEM).map(function(k){return '<option value="'+k+'"'+(m.origem===k?' selected':'')+'>'+MANUT_ORIGEM[k]+'</option>';}).join('')+
     '</select></div>'+
     '<div class="form-group"><label class="form-label">Tipo</label><select class="form-select" onchange="salvarCampoManut('+m.id+',\'tipo\',this.value)">'+
       '<option value="dano"'+(m.tipo==='dano'?' selected':'')+'>Dano</option>'+
       '<option value="desgaste"'+(m.tipo==='desgaste'?' selected':'')+'>Desgaste</option>'+
+      '<option value="perda"'+(m.tipo==='perda'?' selected':'')+'>Perda</option>'+
     '</select></div></div>'+
     '<div class="form-row">'+
     '<div class="form-group"><label class="form-label">Imóvel</label><select class="form-select" onchange="salvarCampoManut('+m.id+',\'imovelNome\',this.value)">'+
@@ -4419,8 +4451,27 @@ function manutAbaSolicitacao(m){
       '<option value="hospede"'+(m.quemPaga==='hospede'?' selected':'')+'>Hóspede</option>'+
       '<option value="wecare"'+(m.quemPaga==='wecare'?' selected':'')+'>WeCare</option>'+
     '</select></div>'+
+    (m.origem==='hospede'?(function(){var h=m.hospede||{};return '<div style="border-left:2px solid var(--sky);padding-left:12px;display:grid;gap:8px;">'+
+      '<label class="form-label" style="margin-bottom:0;">Dados do hóspede</label>'+
+      '<div class="form-row">'+
+      '<div class="form-group"><label class="form-label">Nome do hóspede</label><input type="text" class="form-input" value="'+esc(h.nome||'')+'" oninput="salvarCampoManutNested('+m.id+',\'hospede\',\'nome\',this.value)"></div>'+
+      '<div class="form-group"><label class="form-label">Plataforma</label><select class="form-select" onchange="salvarCampoManutNested('+m.id+',\'hospede\',\'plataforma\',this.value)">'+
+        ['Airbnb','Booking','Outro'].map(function(p){return '<option value="'+p+'"'+(h.plataforma===p?' selected':'')+'>'+p+'</option>';}).join('')+
+      '</select></div></div>'+
+      '<div class="form-row">'+
+      '<div class="form-group"><label class="form-label">Código da reserva</label><input type="text" class="form-input" value="'+esc(h.codigo||'')+'" oninput="salvarCampoManutNested('+m.id+',\'hospede\',\'codigo\',this.value)"></div>'+
+      '<div class="form-group"><label class="form-label">Data de check-out</label><input type="date" class="form-input" value="'+esc(h.checkout||'')+'" onchange="salvarCampoManutNested('+m.id+',\'hospede\',\'checkout\',this.value)"></div></div>'+
+      '</div>';})():'')+
     '<div class="form-group"><label class="form-label">Observações</label><textarea class="form-input" rows="3" placeholder="Detalhes da solicitação..." oninput="salvarCampoManut('+m.id+',\'obs\',this.value)">'+esc(m.obs||'')+'</textarea></div>'+
     '</div>';
+}
+
+function manutSetOrigem(id,valor){
+  const m=manutencoes.find(function(x){return x.id===id;}); if(!m) return;
+  m.origem=valor;
+  if(typeof saveAll==='function') saveAll();
+  renderManutencaoKanban();
+  manutRenderAba(m);
 }
 
 function manutAbaPagamento(m){
@@ -4436,7 +4487,14 @@ function manutAbaPagamento(m){
     '</select></div></div>'+
     '<div class="form-group"><label class="form-label">Valor Gasto (R$)</label><input type="number" class="form-input" value="'+(m.valorGasto||'')+'" placeholder="0" oninput="salvarCampoManut('+m.id+',\'valorGasto\',this.value)"></div>'+
     '<div style="background:var(--bg3);border-radius:var(--r-sm);padding:10px 12px;display:flex;justify-content:space-between;font-size:13px;"><span style="font-weight:700;">Economia (pago - gasto)</span><span style="font-weight:700;color:'+(economia>=0?'var(--sage)':'var(--vermelha)')+';">R$ '+economia.toFixed(2).replace('.',',')+'</span></div>'+
+    '<div class="form-group"><label class="form-label">Anexo NF/Recibo (PDF ou imagem)</label><input type="file" accept="image/*,application/pdf" onchange="manutUploadAnexoNF('+m.id+',event)"><div style="font-size:12px;color:var(--text3);margin-top:4px;">'+(m.anexoNF?'anexo ✓ <button type="button" onclick="abrirAnexo(manutencoes.find(function(x){return x.id==='+m.id+';}).anexoNF)" style="background:none;border:none;color:var(--rose);cursor:pointer;font-size:12px;">abrir</button>':'')+'</div></div>'+
     '</div>';
+}
+
+function manutUploadAnexoNF(id,event){
+  const m=manutencoes.find(function(x){return x.id===id;}); if(!m) return;
+  const f=event.target.files&&event.target.files[0]; if(!f) return;
+  _lerArquivoBase64(f,function(dataUrl){ m.anexoNF=dataUrl; if(typeof saveAll==='function') saveAll(); manutRenderAba(m); });
 }
 
 function manutAbaCompras(m){
@@ -4469,21 +4527,14 @@ function manutAbaCompras(m){
       '<div class="form-group"><label class="form-label">Chave PIX</label><input type="text" class="form-input" value="'+esc(m.pagFornecedor.pix||'')+'" oninput="salvarCampoManutNested('+m.id+',\'pagFornecedor\',\'pix\',this.value)"></div></div>'+
       '<div class="form-group"><label class="form-label">Data de pagamento</label><input type="date" class="form-input" value="'+esc(m.pagFornecedor.dataPagamento||'')+'" onchange="salvarCampoManutNested('+m.id+',\'pagFornecedor\',\'dataPagamento\',this.value)"></div>'+
       '</div>':'')+
-    '<div class="form-group" style="border-top:1px solid var(--border);padding-top:12px;"><label class="form-label">Fornecedor (geral)</label>'+
-    '<div class="form-row">'+
-    '<div class="form-group"><input type="text" class="form-input" placeholder="Nome" value="'+esc(m.fornecedor.nome||'')+'" oninput="salvarCampoManutNested('+m.id+',\'fornecedor\',\'nome\',this.value)"></div>'+
-    '<div class="form-group"><input type="text" class="form-input" placeholder="Contato" value="'+esc(m.fornecedor.contato||'')+'" oninput="salvarCampoManutNested('+m.id+',\'fornecedor\',\'contato\',this.value)"></div></div>'+
-    '<div class="form-row">'+
-    '<div class="form-group"><input type="text" class="form-input" placeholder="Email" value="'+esc(m.fornecedor.email||'')+'" oninput="salvarCampoManutNested('+m.id+',\'fornecedor\',\'email\',this.value)"></div>'+
-    '<div class="form-group"><input type="text" class="form-input" placeholder="Chave PIX" value="'+esc(m.fornecedor.pix||'')+'" oninput="salvarCampoManutNested('+m.id+',\'fornecedor\',\'pix\',this.value)"></div></div></div>'+
-    '<button class="btn btn-rose" style="justify-self:start;" onclick="manutGerarTarefa('+m.id+')"><i class="fa-solid fa-list-check"></i> Gerar tarefa pra mim (Nicole)</button>'+
+    '<button class="btn btn-rose" style="justify-self:start;" onclick="manutGerarTarefa('+m.id+')"><i class="fa-solid fa-list-check"></i> Solicitar compra/pagamento</button>'+
     '</div>';
 }
 
 function manutGerarTarefa(id){
   const m=manutencoes.find(function(x){return x.id===id;}); if(!m) return;
-  let desc='Manutenção'+(m.imovelNome?' '+m.imovelNome:'')+': ';
-  const acoes=[]; if(m.precisaComprar) acoes.push('comprar itens'); if(m.pagarFornecedor) acoes.push('pagar fornecedor '+(m.pagFornecedor.nome||m.fornecedor.nome||''));
+  let desc='Solicitação de compra/pagamento — Manutenção'+(m.imovelNome?' '+m.imovelNome:'')+': ';
+  const acoes=[]; if(m.precisaComprar) acoes.push('comprar itens'); if(m.pagarFornecedor) acoes.push('pagar fornecedor '+((m.pagFornecedor&&m.pagFornecedor.nome)||(m.fornecedor&&m.fornecedor.nome)||''));
   desc+=acoes.join(' e ')||'providência';
   tasks.unshift({id:Date.now(),text:desc,cat:'work',prio:'high',due:m.pagarFornecedor&&m.pagFornecedor.dataPagamento?m.pagFornecedor.dataPagamento:'',hora:'',done:false,status:'todo',updates:[]});
   if(typeof renderTasks==='function') renderTasks(); if(typeof renderKanban==='function') renderKanban(); if(typeof saveAll==='function') saveAll();

@@ -1268,18 +1268,24 @@ function _validarLogin(){
   <div class="modal" style="width:520px;">
     <div class="modal-title" id="extra-modal-title">Novo Serviço Extra</div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Data</label><input type="date" class="form-input" id="ex-data"></div>
+      <div class="form-group"><label class="form-label">Data da Solicitação</label><input type="date" class="form-input" id="ex-data"></div>
       <div class="form-group"><label class="form-label">Imóvel</label><select class="form-select" id="ex-imovel"></select></div>
     </div>
     <div class="form-group"><label class="form-label">Serviço</label><input type="text" class="form-input" id="ex-desc" placeholder="Ex: Renovação de fotos"></div>
     <div class="form-row">
+      <div class="form-group"><label class="form-label">Data da Execução</label><input type="date" class="form-input" id="ex-dataexec"></div>
+      <div class="form-group"><label class="form-label">Data de Pagamento</label><input type="date" class="form-input" id="ex-datapag"></div>
+    </div>
+    <div class="form-row">
       <div class="form-group"><label class="form-label">Valor Cobrado (R$)</label><input type="number" class="form-input" id="ex-cobrado" placeholder="385"></div>
       <div class="form-group"><label class="form-label">Custo / Gasto (R$)</label><input type="number" class="form-input" id="ex-gasto" placeholder="350"></div>
     </div>
+    <div class="form-group"><label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;"><input type="checkbox" id="ex-pago"> Pago</label></div>
+    <div class="form-group"><label class="form-label">Anexo NF/Recibo (PDF ou imagem)</label><input type="file" accept="image/*,application/pdf" id="ex-anexo" onchange="_extraOnAnexo(this)"><div id="ex-anexo-status" style="font-size:12px;color:var(--text3);margin-top:4px;"></div></div>
     <div class="form-group"><label class="form-label">Observações</label><textarea class="form-input" id="ex-obs" rows="2"></textarea></div>
     <div class="modal-footer"><button class="btn" onclick="closeModal('modal-extra')">Cancelar</button><button class="btn btn-rose" onclick="salvarExtra()"><i class="fa-solid fa-check"></i> Salvar</button></div>
   </div>
 </div>
-<script src="js/app.js?v=31"></script>
+<script src="js/app.js?v=32"></script>
 </body>
 </html>

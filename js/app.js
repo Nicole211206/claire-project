@@ -354,6 +354,13 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   // Espera o backend KV popular o localStorage (dispositivos compartilham os dados)
   if(window._claireKVPromise){ try{ await window._claireKVPromise; }catch(e){} }
   loadAll();
+  // Rede de segurança: se os dados vieram vazios mas há backend, tenta puxar de novo
+  if(window.CLAIRE_SYNC && window.CLAIRE_SYNC.url && (!tasks || tasks.length===0)){
+    const ok=await kvPull();
+    if(ok){ setTimeout(_renderTudo, 50); }
+  }
+  // guarda o estado atual como "já enviado" pra não regravar à toa logo no início
+  try{ _kvLastPushed=_kvBuildBlob(); }catch(e){}
   ATTS.forEach(a=>{if(!a.respWeekly)a.respWeekly=[null,null,null,null];if(a.respMes===undefined)a.respMes=null;});
   greet();
   renderOvAgenda();
@@ -2943,30 +2950,35 @@ function saveAll(){
       localStorage.setItem(k, JSON.stringify(_PERSIST_KEYS[k]()));
     }
   }catch(e){ console.warn('saveAll falhou', e); }
-  _kvPushDebounced();
+  _kvDirty=true; // marca pra sincronizar — o push real acontece espaçado em _kvFlush()
 }
 
 // ─── Sincronização com o backend KV (compartilhado entre dispositivos) ───
 // Chaves que sincronizam (dados de equipe/operação). Credenciais e a lista
 // pesada de avaliações ficam SEMPRE locais.
 const SYNC_KEYS=['nx_users','nx_tasks','nx_imoveis','nx_notes','nx_compras','nx_projetos','nx_atts','nx_workP1','nx_workP2','nx_headfixo','nx_headcom','nx_headfotos','nx_kpivals','nx_kpisub','nx_taskcats','nx_catalog','nx_precos','nx_precoenx','nx_niveldx','nx_nicolecom','nx_nextatt','nx_transcricoes','nx_turnos','nx_salpagos','nx_outros','nx_extras','nx_manutencoes','nx_name'];
-let _kvTimer=null;
-function _kvPushDebounced(){
-  const s=window.CLAIRE_SYNC||{};
-  if(!s.url) return;
-  if(_kvTimer) clearTimeout(_kvTimer);
-  _kvTimer=setTimeout(_kvPushNow, 2500);
+let _kvDirty=false;       // há mudança local não enviada?
+let _kvLastPushed=null;   // último blob enviado (string) — evita gravações repetidas
+let _kvPushing=false;
+function _kvBuildBlob(){
+  const blob={};
+  SYNC_KEYS.forEach(k=>{ const v=localStorage.getItem(k); if(v!==null){ try{ blob[k]=JSON.parse(v); }catch(e){} } });
+  return JSON.stringify(blob);
 }
-async function _kvPushNow(){
+// Envia ao KV SOMENTE se houver mudança real (deduplicado). Chamado por um intervalo espaçado.
+async function _kvFlush(){
   const s=window.CLAIRE_SYNC||{};
-  if(!s.url) return;
+  if(!s.url || !_kvDirty || _kvPushing) return;
+  const body=_kvBuildBlob();
+  if(body===_kvLastPushed){ _kvDirty=false; return; } // nada mudou de fato → não grava
+  _kvPushing=true;
   try{
-    const blob={};
-    SYNC_KEYS.forEach(k=>{ const v=localStorage.getItem(k); if(v!==null){ try{ blob[k]=JSON.parse(v); }catch(e){} } });
-    await fetch(s.url.replace(/\/$/,'')+'/save?token='+encodeURIComponent(s.token||''),{
-      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(blob)
+    const r=await fetch(s.url.replace(/\/$/,'')+'/save?token='+encodeURIComponent(s.token||''),{
+      method:'POST', headers:{'Content-Type':'application/json'}, body:body
     });
-  }catch(e){ /* offline: tenta na próxima */ }
+    if(r.ok){ _kvLastPushed=body; _kvDirty=false; }
+  }catch(e){ /* offline/limite: tenta no próximo ciclo */ }
+  finally{ _kvPushing=false; }
 }
 // Recarrega o estado compartilhado do KV e aplica (usado para ver mudanças de outros usuários)
 async function kvPull(){
@@ -2978,10 +2990,27 @@ async function kvPull(){
     if(j&&j.data){
       for(const k in j.data){ try{ localStorage.setItem(k, JSON.stringify(j.data[k])); }catch(e){} }
       loadAll();
+      _kvLastPushed=_kvBuildBlob(); // o que veio do KV não precisa ser reenviado
       return true;
     }
   }catch(e){}
   return false;
+}
+// Re-renderiza as telas principais (após recuperar dados do KV)
+function _renderTudo(){
+  try{
+    greet(); renderTasks(); renderKanban(); if(typeof renderTaskCalendar==='function') renderTaskCalendar();
+    renderTeam(); renderTeamOv(); renderSalary();
+    if(typeof renderTurnos==='function') renderTurnos();
+    if(typeof renderOverview==='function') renderOverview();
+    if(typeof renderKPIs==='function') renderKPIs();
+    if(typeof renderCompras==='function') renderCompras();
+    if(typeof renderProjetosKanban==='function') renderProjetosKanban();
+    if(typeof renderReunioes==='function') renderReunioes();
+    if(typeof renderExtras==='function') renderExtras();
+    if(typeof renderManutencaoKanban==='function') renderManutencaoKanban();
+    if(typeof aplicarPermissoes==='function') aplicarPermissoes();
+  }catch(e){ console.warn('render falhou', e); }
 }
 
 function loadAll(){
@@ -5177,6 +5206,9 @@ toastStyle.textContent = '@keyframes toastIn{from{opacity:0;transform:translateY
 document.head.appendChild(toastStyle);
 
 // ═══════════════════ AUTOSAVE ═══════════════════
-setInterval(saveAll, 4000);
-window.addEventListener('beforeunload', saveAll);
-window.addEventListener('visibilitychange', function(){ if(document.visibilityState==='hidden') saveAll(); });
+// localStorage é gratuito → salva local com frequência. O backend KV (limite diário)
+// só recebe quando há mudança REAL, espaçado (a cada 25s) e deduplicado.
+setInterval(saveAll, 5000);              // salva no navegador (local), barato
+setInterval(_kvFlush, 25000);            // sincroniza com o backend só se mudou
+window.addEventListener('beforeunload', function(){ saveAll(); _kvFlush(); });
+window.addEventListener('visibilitychange', function(){ if(document.visibilityState==='hidden'){ saveAll(); _kvFlush(); } });

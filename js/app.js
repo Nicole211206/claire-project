@@ -897,6 +897,75 @@ function renderTasks(f){
   document.getElementById('ov-tasks').textContent=p;
   renderOvAgenda();
   renderTaskCalendar();
+  renderTaskGantt();
+}
+
+// ═══════════════════ GANTT ═══════════════════
+function _corPrio(p){ return p==='high'?'#e05a5a':(p==='med'?'#f0a24b':'#5bbf8a'); }
+function _ds(d){ return d.toISOString().split('T')[0]; }
+function _inicioSemana(d){ const x=new Date(d); x.setHours(0,0,0,0); x.setDate(x.getDate()-x.getDay()); return x; }
+function _renderGantt(containerId, items, opts){
+  opts=opts||{};
+  const el=document.getElementById(containerId); if(!el) return;
+  const validos=items.filter(it=>it.inicio||it.fim).map(it=>{ const ini=it.inicio||it.fim, fim=it.fim||it.inicio; return Object.assign({}, it, {ini:(ini<fim?ini:fim), fimr:(ini<fim?fim:ini)}); });
+  if(validos.length===0){ el.innerHTML='<div style="padding:30px;text-align:center;color:var(--text3);font-size:13px;">Sem itens com data para mostrar no cronograma.</div>'; return; }
+  let min=validos.reduce((m,it)=>it.ini<m?it.ini:m, validos[0].ini);
+  let max=validos.reduce((m,it)=>it.fimr>m?it.fimr:m, validos[0].fimr);
+  const hoje=new Date(); const hojeDs=_ds(hoje);
+  let dMin=_inicioSemana(new Date(min<hojeDs?min:hojeDs));
+  let dMax=new Date(max>hojeDs?max:hojeDs); dMax=_inicioSemana(dMax); dMax.setDate(dMax.getDate()+14);
+  const semanas=[]; let cur=new Date(dMin); let guard=0;
+  while(cur<=dMax && guard<160){ semanas.push(new Date(cur)); cur.setDate(cur.getDate()+7); guard++; }
+  const LW=46, LABELW=240;
+  const idxSemana=(ds)=>{ const d=_inicioSemana(new Date(ds)); for(let i=0;i<semanas.length;i++){ if(_ds(semanas[i])===_ds(d)) return i; } return 0; };
+  const meses=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  let headMes=''; let i2=0;
+  while(i2<semanas.length){ const mk=semanas[i2].getMonth()+'-'+semanas[i2].getFullYear(); let span=0; let j=i2; while(j<semanas.length && (semanas[j].getMonth()+'-'+semanas[j].getFullYear())===mk){ span++; j++; } headMes+='<div style="width:'+(span*LW)+'px;flex-shrink:0;border-left:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);padding:4px 6px;text-transform:uppercase;">'+meses[semanas[i2].getMonth()]+'/'+String(semanas[i2].getFullYear()).slice(2)+'</div>'; i2=j; }
+  let headSem=semanas.map(s=>{ return '<div style="width:'+LW+'px;flex-shrink:0;border-left:1px solid var(--border);font-size:9px;color:var(--text3);text-align:center;padding:2px 0;">'+String(s.getDate()).padStart(2,'0')+'</div>'; }).join('');
+  const totalW=semanas.length*LW;
+  const hi=idxSemana(hojeDs); const diaFrac=(new Date(hojeDs)-_inicioSemana(new Date(hojeDs)))/(7*86400000); const hojeX=(hi+diaFrac)*LW;
+  let linhasHtml='';
+  const grupos=opts.agrupar?opts.agrupar(validos):[{titulo:null,itens:validos}];
+  grupos.forEach(g=>{
+    if(g.titulo) linhasHtml+='<div style="display:flex;"><div style="width:'+LABELW+'px;flex-shrink:0;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);padding:8px 10px 4px;">'+esc(g.titulo)+'</div><div style="width:'+totalW+'px;"></div></div>';
+    g.itens.forEach(it=>{
+      const a=idxSemana(it.ini), b=idxSemana(it.fimr);
+      const left=a*LW, width=Math.max(LW*0.7,(b-a+1)*LW-4);
+      linhasHtml+='<div style="display:flex;align-items:center;border-top:1px solid var(--border);min-height:38px;">'+
+        '<div style="width:'+LABELW+'px;flex-shrink:0;padding:6px 10px;font-size:12.5px;display:flex;align-items:center;gap:6px;overflow:hidden;"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(it.label)+'</span>'+(it.tagHtml||'')+'</div>'+
+        '<div style="position:relative;width:'+totalW+'px;height:38px;">'+
+        '<div onclick="'+(it.onclick||'')+'" title="'+esc(it.label)+'" style="position:absolute;top:9px;left:'+left+'px;width:'+width+'px;height:20px;background:'+(it.cor||'#5bbf8a')+';border-radius:5px;cursor:pointer;display:flex;align-items:center;padding:0 8px;color:#fff;font-size:10px;font-weight:600;white-space:nowrap;overflow:hidden;box-shadow:var(--shadow);">'+(it.inicio&&it.fim?(it.inicio.split('-').reverse().slice(0,2).join('/')+' → '+it.fim.split('-').reverse().slice(0,2).join('/')):'')+'</div>'+
+        '</div></div>';
+    });
+  });
+  el.innerHTML=
+    '<div style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--r);">'+
+    '<div style="min-width:'+(LABELW+totalW)+'px;">'+
+    '<div style="display:flex;border-bottom:1px solid var(--border);background:var(--bg2);"><div style="width:'+LABELW+'px;flex-shrink:0;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);padding:8px 10px;">Atividade</div><div style="display:flex;">'+headMes+'</div></div>'+
+    '<div style="display:flex;border-bottom:1px solid var(--border);background:var(--bg2);"><div style="width:'+LABELW+'px;flex-shrink:0;"></div><div style="display:flex;">'+headSem+'</div></div>'+
+    '<div style="position:relative;">'+
+    '<div style="position:absolute;top:0;bottom:0;left:'+(LABELW+hojeX)+'px;width:2px;background:var(--rose);z-index:2;" title="Hoje"></div>'+
+    linhasHtml+
+    '</div></div></div>'+
+    '<div style="font-size:11px;color:var(--text3);margin-top:8px;display:flex;gap:14px;flex-wrap:wrap;"><span><span style="display:inline-block;width:10px;height:10px;background:#5bbf8a;border-radius:2px;"></span> Baixa</span><span><span style="display:inline-block;width:10px;height:10px;background:#f0a24b;border-radius:2px;"></span> Média</span><span><span style="display:inline-block;width:10px;height:10px;background:#e05a5a;border-radius:2px;"></span> Alta</span><span style="color:var(--rose);">| linha = hoje</span></div>';
+}
+function renderTaskGantt(){
+  const items=tasks.filter(t=>!t.done && (t.dataInicio||t.due)).map(t=>({
+    id:t.id, label:t.text, tagHtml:'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:'+getCatInfo(t.cat).color+'22;color:'+getCatInfo(t.cat).color+';font-weight:600;flex-shrink:0;">'+getCatInfo(t.cat).label+'</span>',
+    inicio:t.dataInicio||t.due, fim:t.due||t.dataInicio, cor:_corPrio(t.prio), onclick:'abrirDetalheTask('+t.id+')'
+  }));
+  _renderGantt('task-crono-view', items, { agrupar:function(arr){
+    const g={}; arr.forEach(it=>{ const mk=(it.ini||'').substring(0,7); (g[mk]=g[mk]||[]).push(it); });
+    const meses=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    return Object.keys(g).sort().map(mk=>({titulo:mk?(meses[parseInt(mk.substring(5,7))-1]+'/'+mk.substring(0,4)):'Sem data', itens:g[mk]}));
+  }});
+}
+function renderProjetosGantt(){
+  const cores={planejamento:'#f0a24b',andamento:'#e05a5a',concluido:'#5bbf8a'};
+  const items=projetos.filter(p=>p.dataInicio||p.dataFim).map(p=>({
+    id:p.id, label:p.nome||'(sem nome)', tagHtml:'', inicio:p.dataInicio||p.dataFim, fim:p.dataFim||p.dataInicio, cor:cores[p.status]||'#5bbf8a', onclick:'abrirProjetoModal('+p.id+')'
+  }));
+  _renderGantt('perf-gantt', items, {});
 }
 
 function renderTaskFilterSel(){
@@ -1043,7 +1112,7 @@ function toggleTask(id){
 }
 function delTask(id){tasks=tasks.filter(t=>t.id!==id);renderTasks();renderKanban();fillFocusSel();}
 function filterTasks(v){renderTasks(v);}
-function switchView(v,btn){document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');document.getElementById('task-cal-view').style.display=v==='cal'?'':'none';document.getElementById('task-kanban-view').style.display=v==='kanban'?'':'none';if(v==='cal')renderTaskCalendar();}
+function switchView(v,btn){btn.parentNode.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');document.getElementById('task-crono-view').style.display=v==='crono'?'':'none';document.getElementById('task-cal-view').style.display=v==='cal'?'':'none';document.getElementById('task-kanban-view').style.display=v==='kanban'?'':'none';if(v==='crono')renderTaskGantt();if(v==='cal')renderTaskCalendar();}
 let tcalM=new Date().getMonth(), tcalY=new Date().getFullYear();
 let tcalView='mes';
 let tcalRef=new Date();
@@ -1564,7 +1633,10 @@ function renderPerformance(){
     projCard('📋 A Iniciar',planejamento,'var(--sky)')+
     projCard('✅ Concluídos',concluido,'var(--sage)')+
     '</div>';
+  html+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);letter-spacing:0.5px;margin:24px 0 10px;">Cronograma de Projetos</div>';
+  html+='<div id="perf-gantt"></div>';
   el.innerHTML=html;
+  renderProjetosGantt();
 }
 
 // ═══════════════════ SALARY ═══════════════════
@@ -4763,6 +4835,7 @@ function abrirNovoProjeto(){
   const p={
     id:Date.now(),nome:'',status:'planejamento',
     tempoEstimado:'',colaboradores:'',objetivos:'',
+    dataInicio:'',dataFim:'',
     notas:'',tarefas:[],dataCriacao:new Date().toISOString()
   };
   projetos.push(p);
@@ -4796,6 +4869,10 @@ function projMudarAba(aba,btn){
       PROJ_STATUS.map(s=>'<option value="'+s.id+'"'+(p.status===s.id?' selected':'')+'>'+s.label+'</option>').join('')+
       '</select></div>'+
       '<div class="form-group"><label class="form-label">Tempo Estimado</label><input class="form-input" value="'+esc(p.tempoEstimado||'')+'" placeholder="Ex: 2 semanas" onchange="const pr=projetos.find(x=>x.id===projetoAtivo);if(pr)pr.tempoEstimado=this.value;"></div>'+
+      '</div>'+
+      '<div class="form-row">'+
+      '<div class="form-group"><label class="form-label">Início</label><input type="date" class="form-input" value="'+esc(p.dataInicio||'')+'" onchange="const pr=projetos.find(x=>x.id===projetoAtivo);if(pr)pr.dataInicio=this.value;"></div>'+
+      '<div class="form-group"><label class="form-label">Previsão de término</label><input type="date" class="form-input" value="'+esc(p.dataFim||'')+'" onchange="const pr=projetos.find(x=>x.id===projetoAtivo);if(pr)pr.dataFim=this.value;"></div>'+
       '</div>'+
       '<div class="form-group"><label class="form-label">Colaboradores</label><input class="form-input" value="'+esc(p.colaboradores||'')+'" placeholder="Ex: Gabriela, Felipe, Nicole" onchange="const pr=projetos.find(x=>x.id===projetoAtivo);if(pr)pr.colaboradores=this.value;"></div>'+
       '<div class="form-group"><label class="form-label">Objetivos</label><textarea class="form-input" rows="5" placeholder="Descreva os objetivos do projeto..." onchange="const pr=projetos.find(x=>x.id===projetoAtivo);if(pr)pr.objetivos=this.value;">'+esc(p.objetivos||'')+'</textarea></div>';

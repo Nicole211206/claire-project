@@ -330,7 +330,7 @@ function _validarLogin(){
     <!-- ── TAREFAS ── -->
     <div class="panel" id="panel-tasks">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
-        <div class="tab-bar"><button class="tab-btn active" onclick="switchView('cal',this)">Calendário</button><button class="tab-btn" onclick="switchView('kanban',this)">Kanban</button></div>
+        <div class="tab-bar"><button class="tab-btn active" onclick="switchView('crono',this)">Cronograma</button><button class="tab-btn" onclick="switchView('cal',this)">Calendário</button><button class="tab-btn" onclick="switchView('kanban',this)">Kanban</button></div>
         <select class="form-select" style="width:auto;padding:6px 10px;font-size:12.5px;" id="task-filter-sel" onchange="filterTasks(this.value)"></select>
         <select class="form-select" style="width:auto;padding:6px 10px;font-size:12.5px;" id="task-sort-prazo" onchange="renderTasks();renderKanban();">
           <option value="">Sem ordenar</option>
@@ -342,7 +342,8 @@ function _validarLogin(){
         <button class="btn btn-sm" onclick="abrirGerenciarCats()" title="Gerenciar categorias" style="padding:6px 10px;"><i class="fa-solid fa-tags"></i></button>
         <button class="btn btn-rose" style="margin-left:auto;" onclick="openAddTask()"><i class="fa-solid fa-plus"></i> Nova Tarefa</button>
       </div>
-      <div id="task-cal-view">
+      <div id="task-crono-view"></div>
+      <div id="task-cal-view" style="display:none;">
         <div class="card"><div class="card-body">
           <div class="tab-bar" style="margin-bottom:10px;display:inline-flex;">
             <button class="tab-btn active" id="tcalview-mes" onclick="setTcalView('mes',this)">Mês</button>
@@ -1293,6 +1294,6 @@ function _validarLogin(){
     <div class="modal-footer"><button class="btn" onclick="closeModal('modal-extra')">Cancelar</button><button class="btn btn-rose" onclick="salvarExtra()"><i class="fa-solid fa-check"></i> Salvar</button></div>
   </div>
 </div>
-<script src="js/app.js?v=35"></script>
+<script src="js/app.js?v=36"></script>
 </body>
 </html>

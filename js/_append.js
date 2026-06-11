@@ -136,14 +136,33 @@ let _cancelamentoEditId = null;
 function abrirModalCancelamento(id) {
   _cancelamentoEditId = id || null;
   const c = id ? cancelamentos.find(x=>x.id===id) : null;
+  // popular select de imóveis
+  const selIm = document.getElementById('canc-imovel');
+  if (selIm) {
+    selIm.innerHTML = '<option value="">Selecione...</option>' +
+      imovelsCatalog.map(im => '<option value="'+esc(im.nome)+'">'+esc(im.nome)+'</option>').join('');
+    selIm.value = c ? (c.imovel||'') : '';
+  }
   document.getElementById('canc-hospede').value = c ? (c.hospede||'') : '';
-  document.getElementById('canc-imovel').value = c ? (c.imovel||'') : '';
   document.getElementById('canc-periodo').value = c ? (c.periodo||'') : '';
   document.getElementById('canc-politica').value = c ? (c.politica||'100%') : '100%';
   document.getElementById('canc-valor-orig').value = c ? (c.valorOriginal||'') : '';
   document.getElementById('canc-valor-atual').value = c ? (c.valorAtualizado||'') : '';
-  document.getElementById('canc-split').value = c ? (c.split||'50-50') : '50-50';
+  const split = c ? (c.split||'50-50') : '50-50';
+  document.getElementById('canc-split').value = split;
   document.getElementById('canc-obs').value = c ? (c.obs||'') : '';
+  if (split === 'custom' && c && c.customDetalhes) {
+    const d = c.customDetalhes;
+    document.getElementById('canc-custom-bruto').value = d.bruto||'';
+    document.getElementById('canc-custom-plataforma').value = d.plataforma||'';
+    document.getElementById('canc-custom-comissao').value = d.comissao||'';
+    document.getElementById('canc-custom-limpeza').value = d.limpeza||'';
+    document.getElementById('canc-custom-repasse').value = d.repasse||'';
+  } else {
+    ['bruto','plataforma','comissao','limpeza','repasse'].forEach(f => {
+      const el = document.getElementById('canc-custom-'+f); if(el) el.value='';
+    });
+  }
   calcularSplitCancelamento();
   document.getElementById('modal-cancelamento').classList.add('open');
 }
@@ -152,28 +171,47 @@ function calcularSplitCancelamento() {
   const valor = parseFloat(document.getElementById('canc-valor-atual').value) || 0;
   const split = document.getElementById('canc-split').value;
   const previewEl = document.getElementById('canc-split-preview');
+  const customFields = document.getElementById('canc-custom-fields');
+  if (customFields) customFields.style.display = split === 'custom' ? 'block' : 'none';
   if (!previewEl) return;
-  let wecare = 0, prop = 0;
-  if (split === '50-50') { wecare = valor * 0.5; prop = valor * 0.5; }
-  else { wecare = valor * 0.2; prop = valor * 0.8; }
-  previewEl.innerHTML = '<span style="color:var(--rose);">WeCare: '+brl(wecare)+'</span> · <span style="color:var(--sky);">Proprietário: '+brl(prop)+'</span>';
+  if (split === 'custom') {
+    const repasse = parseFloat(document.getElementById('canc-custom-repasse').value) || 0;
+    const comissao = parseFloat(document.getElementById('canc-custom-comissao').value) || 0;
+    previewEl.innerHTML = '<span style="color:var(--rose);">WeCare: '+brl(comissao)+'</span> · <span style="color:var(--sky);">Proprietário: '+brl(repasse)+'</span>';
+  } else {
+    let wecare = 0, prop = 0;
+    if (split === '50-50') { wecare = valor * 0.5; prop = valor * 0.5; }
+    else { wecare = valor * 0.2; prop = valor * 0.8; }
+    previewEl.innerHTML = '<span style="color:var(--rose);">WeCare: '+brl(wecare)+'</span> · <span style="color:var(--sky);">Proprietário: '+brl(prop)+'</span>';
+  }
 }
 function salvarCancelamento() {
   const hospede = document.getElementById('canc-hospede').value.trim();
   const valor = parseFloat(document.getElementById('canc-valor-atual').value) || 0;
   const split = document.getElementById('canc-split').value;
-  let wecare = 0, prop = 0;
-  if (split === '50-50') { wecare = valor * 0.5; prop = valor * 0.5; }
+  let wecare = 0, prop = 0, customDetalhes = null;
+  if (split === 'custom') {
+    customDetalhes = {
+      bruto: parseFloat(document.getElementById('canc-custom-bruto').value) || 0,
+      plataforma: parseFloat(document.getElementById('canc-custom-plataforma').value) || 0,
+      comissao: parseFloat(document.getElementById('canc-custom-comissao').value) || 0,
+      limpeza: parseFloat(document.getElementById('canc-custom-limpeza').value) || 0,
+      repasse: parseFloat(document.getElementById('canc-custom-repasse').value) || 0,
+    };
+    wecare = customDetalhes.comissao;
+    prop = customDetalhes.repasse;
+  } else if (split === '50-50') { wecare = valor * 0.5; prop = valor * 0.5; }
   else { wecare = valor * 0.2; prop = valor * 0.8; }
   const obj = {
     id: _cancelamentoEditId || ('canc'+Date.now()),
     hospede,
-    imovel: document.getElementById('canc-imovel').value.trim(),
+    imovel: document.getElementById('canc-imovel').value,
     periodo: document.getElementById('canc-periodo').value.trim(),
     politica: document.getElementById('canc-politica').value,
     valorOriginal: parseFloat(document.getElementById('canc-valor-orig').value) || 0,
     valorAtualizado: valor,
     split,
+    customDetalhes,
     valorWecare: wecare,
     valorProprietario: prop,
     obs: document.getElementById('canc-obs').value.trim(),

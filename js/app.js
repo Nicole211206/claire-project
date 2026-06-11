@@ -5245,32 +5245,37 @@ function sincronizarManutencaoKPI(){
 
 function renderManutencaoKanban(){
   const el=document.getElementById('manutencao-kanban'); if(!el) return;
+  const barEl=document.getElementById('manutencao-pausadas-bar');
   const pausadas=manutencoes.filter(function(m){return m.pausado;});
-  let extra='';
-  if(pausadas.length){
-    extra='<div style="margin-bottom:12px;"><button class="btn btn-sm" style="font-size:11px;" onclick="manutTogglePausadasView()">'+
-      (manutExibirPausadas?'<i class="fa-solid fa-eye-slash"></i> Ocultar pausadas':'<i class="fa-solid fa-pause"></i> Mostrar pausadas ('+pausadas.length+')')+
-    '</button></div>';
-    if(manutExibirPausadas){
-      extra+='<div style="margin-bottom:16px;border:1px dashed var(--peach);border-radius:var(--r);padding:8px;">'+
-        '<div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--peach);margin-bottom:10px;">Pausadas</div>'+
-        pausadas.map(function(m){
-          const total=manutTotalComMargem(m);
-          return '<div onclick="abrirManutModal('+m.id+')" style="background:var(--bg3);border:1px solid var(--peach)44;border-radius:var(--r-sm);padding:9px;margin-bottom:6px;cursor:pointer;opacity:0.75;transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'var(--bg3)\'">'+
-            '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">'+
-              '<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:var(--peach)22;color:var(--peach);font-weight:700;"><i class="fa-solid fa-pause"></i> PAUSADO</span>'+
-              '<span style="font-size:13px;font-weight:600;">'+esc(m.imovelNome||'(sem imóvel)')+'</span>'+
-            '</div>'+
-            '<div style="font-size:11px;color:var(--text3);margin-bottom:5px;">'+(MANUT_ORIGEM[m.origem]||m.origem)+' · '+(MANUT_COLS.find(function(c){return c.id===m.status;})||{label:m.status}).label+'</div>'+
-            '<div style="display:flex;justify-content:space-between;align-items:center;">'+
-              '<span style="font-size:9.5px;padding:1px 6px;border-radius:8px;background:var(--sky-light);color:var(--sky);font-weight:600;">'+(MANUT_PAGADOR[m.quemPaga]||m.quemPaga)+'</span>'+
-              '<span style="font-size:12px;font-weight:700;color:var(--sage);">R$ '+total.toFixed(2).replace('.',',')+'</span>'+
-            '</div></div>';
-        }).join('')+
-      '</div>';
+  // barra de pausadas — fora do grid
+  if(barEl){
+    if(!pausadas.length){ barEl.innerHTML=''; }
+    else {
+      let barHtml='<div style="margin-bottom:12px;"><button class="btn btn-sm" style="font-size:11px;" onclick="manutTogglePausadasView()">'+
+        (manutExibirPausadas?'<i class="fa-solid fa-eye-slash"></i> Ocultar pausadas':'<i class="fa-solid fa-pause"></i> Mostrar pausadas ('+pausadas.length+')')+
+      '</button></div>';
+      if(manutExibirPausadas){
+        barHtml+='<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;padding:12px;border:1px dashed var(--peach);border-radius:var(--r);">'+
+          '<div style="width:100%;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--peach);margin-bottom:4px;">Pausadas</div>'+
+          pausadas.map(function(m){
+            const total=manutTotalComMargem(m);
+            return '<div onclick="abrirManutModal('+m.id+')" style="background:var(--bg3);border:1px solid var(--peach)44;border-radius:var(--r-sm);padding:9px;min-width:200px;cursor:pointer;opacity:0.8;transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'var(--bg3)\'">'+
+              '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">'+
+                '<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:var(--peach)22;color:var(--peach);font-weight:700;"><i class="fa-solid fa-pause"></i> PAUSADO</span>'+
+                '<span style="font-size:13px;font-weight:600;">'+esc(m.imovelNome||'(sem imóvel)')+'</span>'+
+              '</div>'+
+              '<div style="font-size:11px;color:var(--text3);margin-bottom:5px;">'+(MANUT_ORIGEM[m.origem]||m.origem)+' · '+(MANUT_COLS.find(function(c){return c.id===m.status;})||{label:m.status}).label+'</div>'+
+              '<div style="display:flex;justify-content:space-between;align-items:center;">'+
+                '<span style="font-size:9.5px;padding:1px 6px;border-radius:8px;background:var(--sky-light);color:var(--sky);font-weight:600;">'+(MANUT_PAGADOR[m.quemPaga]||m.quemPaga)+'</span>'+
+                '<span style="font-size:12px;font-weight:700;color:var(--sage);">R$ '+total.toFixed(2).replace('.',',')+'</span>'+
+              '</div></div>';
+          }).join('')+
+        '</div>';
+      }
+      barEl.innerHTML=barHtml;
     }
   }
-  el.innerHTML=extra+MANUT_COLS.map(function(col){
+  el.innerHTML=MANUT_COLS.map(function(col){
     const cards=manutencoes.filter(function(m){return m.status===col.id && !m.pausado;});
     return '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:8px;min-height:140px;">'+
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'+

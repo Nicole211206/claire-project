@@ -23,6 +23,10 @@ const KPI_DEFS=[
 
 let kpiVals={};
 let kpiSubVals={};
+let kpiPeriodo=new Date().toISOString().substring(0,7);
+function _kv(){if(!kpiVals[kpiPeriodo])kpiVals[kpiPeriodo]={};return kpiVals[kpiPeriodo];}
+function _ksv(){if(!kpiSubVals[kpiPeriodo])kpiSubVals[kpiPeriodo]={};return kpiSubVals[kpiPeriodo];}
+function setKpiPeriodo(mes){kpiPeriodo=mes;renderKPIs();if(typeof saveAll==='function')saveAll();}
 let imoveis=[];
 let imovelAtivo=null;
 let selNivelIdx=0;
@@ -526,7 +530,7 @@ function selNivel(i){selNivelIdx=i;buildNivelGrid();renderKPIs();renderSalary();
 function calcGlobal(){
   // Média ponderada de TODOS os KPIs — não preenchidos contam como 0%
   let tot=0, totalPeso=0;
-  KPI_DEFS.forEach(k=>{const p=k.calc(kpiVals[k.id]); tot+=((p!==null?p:0)/100)*k.peso; totalPeso+=k.peso;});
+  KPI_DEFS.forEach(k=>{const p=k.calc(_kv()[k.id]); tot+=((p!==null?p:0)/100)*k.peso; totalPeso+=k.peso;});
   return totalPeso>0?Math.round((tot/totalPeso)*100):0;
 }
 
@@ -549,13 +553,14 @@ function renderKPIs(){
   // Calcular tempo de ativação automaticamente: dataCriacao → dataAtivacao
   const _imComTempo=imoveis.filter(im=>im.dataAtivacao&&im.dataCriacao);
   if(_imComTempo.length>0){
-    kpiVals.ob=(_imComTempo.reduce((s,im)=>{
+    _kv().ob=(_imComTempo.reduce((s,im)=>{
       const dias=(new Date(im.dataAtivacao)-new Date(im.dataCriacao))/(1000*60*60*24);
       return s+dias;
     },0)/_imComTempo.length).toFixed(1);
   } else {
-    kpiVals.ob=null;
+    _kv().ob=null;
   }
+  const periodoSel=document.getElementById('kpi-periodo-sel'); if(periodoSel&&!periodoSel.value) periodoSel.value=kpiPeriodo;
   const g=calcGlobal(),band=getBand(g),nv=NIVEIS[selNivelIdx];
   const vp=Math.round(nv.variavel*band.mult);
   // global card
@@ -575,7 +580,7 @@ function renderKPIs(){
   var elD=document.getElementById('ov-demandas-atrasadas'); if(elD) elD.textContent=contarDemandasAtrasadas();
   // overview mini list
   document.getElementById('ov-kpi-list').innerHTML=KPI_DEFS.map(k=>{
-    const p=k.calc(kpiVals[k.id]),ps=p!==null?Math.round(p):null;
+    const p=k.calc(_kv()[k.id]),ps=p!==null?Math.round(p):null;
     return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);">'+
       '<div class="metric-icon '+k.color+'" style="width:24px;height:24px;font-size:11px;margin-bottom:0;flex-shrink:0;"><i class="fa-solid '+k.icon+'"></i></div>'+
       '<div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:500;">'+k.label+'</div>'+
@@ -584,12 +589,12 @@ function renderKPIs(){
   }).join('');
   // kpi cards
   document.getElementById('kpi-cards').innerHTML=KPI_DEFS.map(k=>{
-    const p=k.calc(kpiVals[k.id]),ps=p!==null?Math.round(p):null,band2=ps!==null?getBand(ps):null;
+    const p=k.calc(_kv()[k.id]),ps=p!==null?Math.round(p):null,band2=ps!==null?getBand(ps):null;
     const pct=p?Math.min(p,150)+'%':'0%';
     const scoreColor=ps===null?'var(--text3)':ps>=100?'var(--sage)':ps>=80?'var(--amarela)':'var(--vermelha)';
     let inputHTML='';
     if(k.id==='av'){
-      const sub=kpiSubVals.av||{};
+      const sub=_ksv().av||{};
       const hasA=sub.airbnb!==undefined&&sub.airbnb!=='';
       const hasB=sub.booking!==undefined&&sub.booking!=='';
       const partesAvg=[];
@@ -601,14 +606,14 @@ function renderKPIs(){
         '<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:90px;">Booking (0-10):</label><input type="number" step="0.01" min="0" max="10" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub.booking||'')+'" placeholder="—" onchange="setKPISub(\'av\',\'booking\',this.value)"></div>'+
         (avg!==null?'<div style="font-size:12px;font-weight:700;color:var(--sage);margin-top:2px;">Média Total: '+avg+' estrelas <span style="font-weight:400;color:var(--text3);">(Booking normalizado p/ 0-5)</span></div>':'')+'</div>';
     } else if(k.id==='cv'){
-      const sub=kpiSubVals.cv||{};
+      const sub=_ksv().cv||{};
       const pct2=(sub.reviews!==undefined&&sub.checkouts!==undefined&&+sub.checkouts>0?(((+sub.reviews||0)/(+sub.checkouts||1))*100).toFixed(1):null);
       inputHTML='<div style="display:grid;gap:6px;">'+
         '<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:120px;">Nº de reviews:</label><input type="number" step="1" min="0" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub.reviews||'')+'" placeholder="—" onchange="setKPISub(\'cv\',\'reviews\',this.value)"></div>'+
         '<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:120px;">Nº de checkouts:</label><input type="number" step="1" min="0" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub.checkouts||'')+'" placeholder="—" onchange="setKPISub(\'cv\',\'checkouts\',this.value)"></div>'+
         (pct2!==null?'<div style="font-size:12px;font-weight:700;color:var(--sage);margin-top:2px;">Conversão: '+pct2+'%</div>':'')+'</div>';
     } else if(k.id==='tr'){
-      const sub=kpiSubVals.tr||{};
+      const sub=_ksv().tr||{};
       const atts=['patricia','sara','lisarb','lais'];
       const attLabels=['Patrícia','Sara','Lisarb','Laís'];
       const vals=atts.map(a=>sub[a]!==undefined&&sub[a]!==''?+sub[a]:null);
@@ -657,7 +662,7 @@ function renderKPIs(){
           :'')+
         '</div>';
     } else if(k.id==='rc'){
-      const rcSub=kpiSubVals.rc||{limpeza:{previsto:'',gasto:''},manutencao:{previsto:'',gasto:''},setup:{previsto:'',gasto:''},margem:{previsto:'',gasto:''},extras:{previsto:'',gasto:''}};
+      const rcSub=_ksv().rc||{limpeza:{previsto:'',gasto:''},manutencao:{previsto:'',gasto:''},setup:{previsto:'',gasto:''},margem:{previsto:'',gasto:''},extras:{previsto:'',gasto:''}};
       if(!rcSub.extras)rcSub.extras={previsto:'',gasto:''};
       const rcItens=[
         {key:'limpeza',    label:'Limpeza',             hint:'Pago pelo hóspede — valor cobrado vs. custo real'},
@@ -704,7 +709,7 @@ function renderKPIs(){
     } else {
       inputHTML='<div style="display:flex;align-items:center;gap:8px;">'+
         '<label style="font-size:12px;color:var(--text2);white-space:nowrap;">Valor ('+k.unit+'):</label>'+
-        '<input type="number" step="0.01" class="form-input" style="width:100px;padding:5px 8px;" value="'+(kpiVals[k.id]||'')+'" placeholder="—" onchange="setKPI(\''+k.id+'\',this.value)">'+
+        '<input type="number" step="0.01" class="form-input" style="width:100px;padding:5px 8px;" value="'+(_kv()[k.id]||'')+'" placeholder="—" onchange="setKPI(\''+k.id+'\',this.value)">'+
         '</div>';
     }
     return '<div class="card"><div class="card-header">'+
@@ -719,73 +724,73 @@ function renderKPIs(){
   }).join('');
 }
 
-function setKPI(id,v){kpiVals[id]=v;renderKPIs();}
+function setKPI(id,v){_kv()[id]=v;renderKPIs();if(typeof saveAll==='function')saveAll();}
 
 function setKPISub(id,subKey,value){
-  if(!kpiSubVals[id])kpiSubVals[id]={};
-  kpiSubVals[id][subKey]=value;
+  if(!_ksv()[id])_ksv()[id]={};
+  _ksv()[id][subKey]=value;
   if(id==='av'){
-    const s=kpiSubVals.av;
+    const s=_ksv().av;
     const partes=[];
     if(s.airbnb!==undefined&&s.airbnb!=='') partes.push(+s.airbnb||0);
     if(s.booking!==undefined&&s.booking!=='') partes.push((+s.booking||0)/2);
-    kpiVals.av=partes.length?(partes.reduce((a,b)=>a+b,0)/partes.length).toFixed(2):null;
+    _kv().av=partes.length?(partes.reduce((a,b)=>a+b,0)/partes.length).toFixed(2):null;
   } else if(id==='cv'){
-    const s=kpiSubVals.cv;
+    const s=_ksv().cv;
     if(s.reviews!==undefined&&s.reviews!==''&&s.checkouts!==undefined&&s.checkouts!==''&&+s.checkouts>0){
-      kpiVals.cv=(((+s.reviews||0)/(+s.checkouts||1))*100).toFixed(1);
+      _kv().cv=(((+s.reviews||0)/(+s.checkouts||1))*100).toFixed(1);
     }
   } else if(id==='tr'){
-    const s=kpiSubVals.tr||{};
+    const s=_ksv().tr||{};
     const vals=['patricia','sara','lisarb','lais'].map(a=>s[a]!==undefined&&s[a]!==''?+s[a]:null).filter(v=>v!==null);
-    if(vals.length>0){kpiVals.tr=(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1);}
+    if(vals.length>0){_kv().tr=(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1);}
   }
-  renderKPIs();
+  renderKPIs();if(typeof saveAll==='function')saveAll();
 }
 
 function setKPIRcSub(item,campo,valor){
-  if(!kpiSubVals.rc)kpiSubVals.rc={limpeza:{previsto:'',gasto:''},manutencao:{previsto:'',gasto:''},setup:{previsto:'',gasto:''},margem:{previsto:'',gasto:''},extras:{previsto:'',gasto:''}};
-  if(!kpiSubVals.rc.extras)kpiSubVals.rc.extras={previsto:'',gasto:''};
-  kpiSubVals.rc[item][campo]=valor;
+  if(!_ksv().rc)_ksv().rc={limpeza:{previsto:'',gasto:''},manutencao:{previsto:'',gasto:''},setup:{previsto:'',gasto:''},margem:{previsto:'',gasto:''},extras:{previsto:'',gasto:''}};
+  if(!_ksv().rc.extras)_ksv().rc.extras={previsto:'',gasto:''};
+  _ksv().rc[item][campo]=valor;
   const itens=['limpeza','manutencao','setup','margem','extras'];
   const economias=itens.map(it=>{
-    const prev=parseFloat(kpiSubVals.rc[it].previsto);
-    const gasto=parseFloat(kpiSubVals.rc[it].gasto);
+    const prev=parseFloat(_ksv().rc[it].previsto);
+    const gasto=parseFloat(_ksv().rc[it].gasto);
     if(!prev||isNaN(prev)||isNaN(gasto))return null;
     return((prev-gasto)/prev)*100;
   }).filter(x=>x!==null);
-  kpiVals.rc=economias.length>0?(economias.reduce((s,x)=>s+x,0)/economias.length).toFixed(2):null;
-  renderKPIs();
+  _kv().rc=economias.length>0?(economias.reduce((s,x)=>s+x,0)/economias.length).toFixed(2):null;
+  renderKPIs();if(typeof saveAll==='function')saveAll();
 }
 
 function sincronizarMargemKPI(){
   // Soma das compras marcadas como margem operacional no mês vigente do filtro (ou mês atual)
-  const filtroMes = document.getElementById('compras-filtro-mes');
-  const mes = (filtroMes && filtroMes.value) ? filtroMes.value : new Date().toISOString().substring(0,7);
+  const mes = kpiPeriodo;
   const totalMargem = comprasList.filter(c=>c.margemOperacional && c.mesVigente===mes).reduce((s,c)=>s+(parseFloat(c.valor)||0),0);
-  if(!kpiSubVals.rc) kpiSubVals.rc={limpeza:{previsto:'',gasto:''},manutencao:{previsto:'',gasto:''},setup:{previsto:'',gasto:''},margem:{previsto:'',gasto:''}};
-  kpiSubVals.rc.margem.gasto = totalMargem>0 ? totalMargem.toFixed(2) : '';
+  if(!_ksv().rc) _ksv().rc={limpeza:{previsto:'',gasto:''},manutencao:{previsto:'',gasto:''},setup:{previsto:'',gasto:''},margem:{previsto:'',gasto:''}};
+  _ksv().rc.margem.gasto = totalMargem>0 ? totalMargem.toFixed(2) : '';
   // Recalcular o KPI rc (mesma lógica de setKPIRcSub)
   const itens=['limpeza','manutencao','setup','margem'];
   const economias=itens.map(it=>{
-    const prev=parseFloat(kpiSubVals.rc[it].previsto), gasto=parseFloat(kpiSubVals.rc[it].gasto);
+    const prev=parseFloat(_ksv().rc[it].previsto), gasto=parseFloat(_ksv().rc[it].gasto);
     if(!prev||isNaN(prev)||isNaN(gasto)) return null;
     return ((prev-gasto)/prev)*100;
   }).filter(x=>x!==null);
-  kpiVals.rc = economias.length>0 ? (economias.reduce((s,x)=>s+x,0)/economias.length).toFixed(2) : null;
+  _kv().rc = economias.length>0 ? (economias.reduce((s,x)=>s+x,0)/economias.length).toFixed(2) : null;
   if(typeof renderKPIs==='function') renderKPIs();
 }
 
 function sincronizarExtrasKPI(){
-  const totalCobrado=extras.reduce((s,e)=>s+(parseFloat(e.cobrado)||0),0);
-  const totalGasto=extras.reduce((s,e)=>s+(parseFloat(e.gasto)||0),0);
-  if(!kpiSubVals.rc) kpiSubVals.rc={limpeza:{previsto:'',gasto:''},manutencao:{previsto:'',gasto:''},setup:{previsto:'',gasto:''},margem:{previsto:'',gasto:''},extras:{previsto:'',gasto:''}};
-  if(!kpiSubVals.rc.extras) kpiSubVals.rc.extras={previsto:'',gasto:''};
-  kpiSubVals.rc.extras.previsto = totalCobrado>0?totalCobrado.toFixed(2):'';
-  kpiSubVals.rc.extras.gasto = totalGasto>0?totalGasto.toFixed(2):'';
+  const extrasPeriodo=extras.filter(e=>(e.data||'').substring(0,7)===kpiPeriodo);
+  const totalCobrado=extrasPeriodo.reduce((s,e)=>s+(parseFloat(e.cobrado)||0),0);
+  const totalGasto=extrasPeriodo.reduce((s,e)=>s+(parseFloat(e.gasto)||0),0);
+  if(!_ksv().rc) _ksv().rc={limpeza:{previsto:'',gasto:''},manutencao:{previsto:'',gasto:''},setup:{previsto:'',gasto:''},margem:{previsto:'',gasto:''},extras:{previsto:'',gasto:''}};
+  if(!_ksv().rc.extras) _ksv().rc.extras={previsto:'',gasto:''};
+  _ksv().rc.extras.previsto = totalCobrado>0?totalCobrado.toFixed(2):'';
+  _ksv().rc.extras.gasto = totalGasto>0?totalGasto.toFixed(2):'';
   const itens=['limpeza','manutencao','setup','margem','extras'];
-  const economias=itens.map(it=>{const p=parseFloat(kpiSubVals.rc[it].previsto),g=parseFloat(kpiSubVals.rc[it].gasto);if(!p||isNaN(p)||isNaN(g))return null;return ((p-g)/p)*100;}).filter(x=>x!==null);
-  kpiVals.rc = economias.length>0?(economias.reduce((s,x)=>s+x,0)/economias.length).toFixed(2):null;
+  const economias=itens.map(it=>{const p=parseFloat(_ksv().rc[it].previsto),g=parseFloat(_ksv().rc[it].gasto);if(!p||isNaN(p)||isNaN(g))return null;return ((p-g)/p)*100;}).filter(x=>x!==null);
+  _kv().rc = economias.length>0?(economias.reduce((s,x)=>s+x,0)/economias.length).toFixed(2):null;
   if(typeof renderKPIs==='function') renderKPIs();
 }
 
@@ -1360,12 +1365,9 @@ function renderKanban(){
     {id:'doing',  label:'Em Progresso',c:'var(--peach)'},
     {id:'done',   label:'Concluído',   c:'var(--sage)'}
   ];
-  let base=tasks;
+  let base=_getEffectiveTasks();
   const cs=document.getElementById('task-filter-sel');
   if(cs&&cs.value&&cs.value!=='all')base=base.filter(t=>t.cat===cs.value);
-  const sf=document.getElementById('task-status-filter');const sv=sf?sf.value:'ativas';
-  if(sv==='ativas') base=base.filter(t=>!t.done);
-  else if(sv==='finalizadas') base=base.filter(t=>t.done);
   const tf=document.getElementById('task-tipo-filter');const tv=tf?tf.value:'todos';
   if(tv==='projetos') base=base.filter(t=>t.projetoId);
   else if(tv==='sem-projeto') base=base.filter(t=>!t.projetoId);
@@ -1537,10 +1539,10 @@ function salvarPerfilAtt() {
   });
   const vals = a.respWeekly.filter(x => x !== null);
   a.respMes = vals.length > 0 ? vals.reduce((s,x) => s+x, 0) / vals.length : null;
-  if (!kpiSubVals.tr) kpiSubVals.tr = {};
-  kpiSubVals.tr[a.id] = a.respMes !== null ? a.respMes.toFixed(1) : '';
-  const trVals = ATTS.map(att => kpiSubVals.tr && kpiSubVals.tr[att.id] ? parseFloat(kpiSubVals.tr[att.id]) : null).filter(x => x !== null);
-  kpiVals.tr = trVals.length > 0 ? (trVals.reduce((s,x) => s+x, 0) / trVals.length).toFixed(2) : null;
+  if (!_ksv().tr) _ksv().tr = {};
+  _ksv().tr[a.id] = a.respMes !== null ? a.respMes.toFixed(1) : '';
+  const trVals = ATTS.map(att => _ksv().tr && _ksv().tr[att.id] ? parseFloat(_ksv().tr[att.id]) : null).filter(x => x !== null);
+  _kv().tr = trVals.length > 0 ? (trVals.reduce((s,x) => s+x, 0) / trVals.length).toFixed(2) : null;
   closeModal('modal-editar-att-perfil');
   renderTeam(); renderTeamOv(); renderSalary(); renderKPIs();
   if (typeof saveAll === 'function') saveAll();
@@ -1771,7 +1773,7 @@ function renderPerformance(){
   html+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);letter-spacing:0.5px;margin-bottom:10px;">KPIs do Mês</div>';
   html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:24px;">';
   KPI_DEFS.forEach(k=>{
-    const p=k.calc(kpiVals[k.id]); const ps=p!==null?Math.round(p):null;
+    const p=k.calc(_kv()[k.id]); const ps=p!==null?Math.round(p):null;
     const cor=ps===null?'var(--text3)':ps>=100?'var(--sage)':ps>=80?'var(--amarela)':'var(--vermelha)';
     html+='<div class="card"><div class="card-body" style="padding:14px;">'+
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><div class="metric-icon '+k.color+'" style="width:24px;height:24px;font-size:11px;margin:0;"><i class="fa-solid '+k.icon+'"></i></div><div style="font-size:12px;font-weight:600;flex:1;">'+k.label+'</div></div>'+
@@ -1816,10 +1818,15 @@ function renderPerformance(){
 function renderSalary(){
   const ehAdmin = (typeof isAdmin==='function') && isAdmin();
   const attsVis = ehAdmin ? ATTS : (typeof attsDoUsuario==='function'?attsDoUsuario():[]);
-  const headsCard=document.getElementById('sal-heads-card'); if(headsCard) headsCard.style.display=ehAdmin?'':'none';
+  // Para coordenação não-admin: verificar se é um head e mostrar apenas o bloco deles
+  const cu=getCurrentUser();
+  const headIds=['nicole','gabriela','felipe','nilson'];
+  const isHead = !ehAdmin && cu && headIds.includes((cu.nome||'').toLowerCase());
+  const headsCard=document.getElementById('sal-heads-card'); if(headsCard) headsCard.style.display=(ehAdmin||isHead)?'':'none';
   const folhaCard=document.getElementById('sal-folha-card'); if(folhaCard) folhaCard.style.display=ehAdmin?'':'none';
-  // Atendentes
-  document.getElementById('sal-att-body').innerHTML=attsVis.map(a=>{
+  // Atendentes — admin vê todos; head vê apenas os seus; outros veem os permitidos
+  const attsParaSal = isHead ? [] : attsVis;
+  document.getElementById('sal-att-body').innerHTML=attsParaSal.map(a=>{
     const d1=workDaysP1[a.id]!==undefined?workDaysP1[a.id]:8;
     const d2=workDaysP2[a.id]!==undefined?workDaysP2[a.id]:7;
     const v1=d1*12*a.rate, v2=d2*12*a.rate, total=v1+v2;
@@ -1832,16 +1839,19 @@ function renderSalary(){
       '</div>';
   }).join('');
 
-  if(!ehAdmin) return;
+  if(!ehAdmin && !isHead) return;
   // Heads
   const g=calcGlobal(),band=getBand(g),nv=NIVEIS[selNivelIdx],vp=Math.round(nv.variavel*band.mult);
-  document.getElementById('sal-heads-body').innerHTML=[
+  const allHeads=[
     {id:'nicole', name:'Nicole', cargo:'Head de Operações', av:'av-rose', ini:'N',
      fixo:nv.fixo, comissao:(nicoleComissaoOverride!==null?nicoleComissaoOverride:vp), isNicole:true,
      note:`Bandeira ${band.name} (${Math.round(band.mult*100)}% do variável)`},
     {id:'gabriela',name:'Gabriela',cargo:'Head de RevOps', av:'av-sage', ini:'G', fixo:headFixo.gabriela||6000, comissao:headComissao.gabriela||0, isNicole:false},
     {id:'felipe',  name:'Felipe',  cargo:'Head de AI',     av:'av-sky',  ini:'F', fixo:headFixo.felipe||6000,   comissao:headComissao.felipe||0,   isNicole:false},
-  ].map(h=>`
+    {id:'nilson',  name:'Nilson',  cargo:'Head de Operações', av:'av-lav', ini:'N', fixo:headFixo.nilson||6000, comissao:headComissao.nilson||0, isNicole:false},
+  ];
+  const headsParaMostrar = isHead ? allHeads.filter(h=>h.id===(cu.nome||'').toLowerCase()) : allHeads.filter(h=>h.id!=='nilson');
+  document.getElementById('sal-heads-body').innerHTML=headsParaMostrar.map(h=>`
     <div class="salary-block">
       <div class="salary-name">${headFotos[h.id]?'<img src="'+esc(headFotos[h.id])+'" style="width:26px;height:26px;border-radius:50%;object-fit:cover;">':'<div class="avatar '+h.av+'" style="width:26px;height:26px;font-size:10px;">'+h.ini+'</div>'}<div><div style="font-size:13px;font-weight:600;">${h.name}</div><div style="font-size:10.5px;color:var(--text3);">${h.cargo}</div></div></div>
       <div class="salary-row"><span class="salary-label">Foto</span><span class="salary-val"><label style="font-size:11px;color:var(--rose);cursor:pointer;"><i class="fa-solid fa-camera"></i> ${headFotos[h.id]?'Trocar foto':'Adicionar foto'}<input type="file" accept="image/*" style="display:none;" onchange="uploadHeadFoto('${h.id}',event)"></label></span></div>
@@ -2100,7 +2110,7 @@ async function sendMsg(){
       return;
     }
     const tc=tasks.filter(t=>!t.done).slice(0,5).map(t=>'- '+t.text+' ['+t.cat+', '+t.prio+']').join('\n');
-    const kc=KPI_DEFS.map(k=>'- '+k.label+': '+(kpiVals[k.id]||'não preenchido')+' (peso '+Math.round(k.peso*100)+'%)').join('\n');
+    const kc=KPI_DEFS.map(k=>'- '+k.label+': '+(_kv()[k.id]||'não preenchido')+' (peso '+Math.round(k.peso*100)+'%)').join('\n');
     const g=calcGlobal(),band=getBand(g),nv=NIVEIS[selNivelIdx],vp=Math.round(nv.variavel*band.mult);
     const hasGmail=!!ls('nx_gmail');const gmailReady=hasGmail;
     const sys='Você é Claire, assistente pessoal da Nicole, gerente de operações da WeCare. Responda sempre em português brasileiro.\n\nCONTEXTO:\n- KPI Global: '+g+'% — Bandeira '+band.name+'\n- Nível: '+nv.n+' (Fixo: '+brl(nv.fixo)+', Variável meta 100%: '+brl(nv.variavel)+')\n- Salário estimado: '+brl(nv.fixo+vp)+'\n- KPIs:\n'+kc+'\n- Tarefas pendentes:\n'+tc+'\n- Equipe: Patrícia (R$17/h), Sara, Lisarb, Laís (R$14/h)\n'+(hasGmail?'- Gmail conectado: pode redigir e-mails para envio':'- Gmail não configurado')+'\n\nPara calcular salário: Fixo + (Variável × multiplicador da bandeira). Vermelha=0%, Amarela=50%, Verde=100%, Azul=150%, Elite=200%.\nSeja concisa, use markdown.';
@@ -3117,19 +3127,19 @@ function setRespWeek(id,week,v){
   a.respWeekly[week]=v===''?null:parseFloat(v);
   const vals=a.respWeekly.filter(x=>x!==null&&x!=='');
   a.respMes=vals.length>0?(vals.reduce((s,x)=>s+x,0)/vals.length):null;
-  if(!kpiSubVals.tr)kpiSubVals.tr={};
-  kpiSubVals.tr[id]=a.respMes!==null?a.respMes.toFixed(1):'';
-  const trVals=ATTS.map(att=>kpiSubVals.tr&&kpiSubVals.tr[att.id]?parseFloat(kpiSubVals.tr[att.id]):null).filter(x=>x!==null);
-  kpiVals.tr=trVals.length>0?(trVals.reduce((s,x)=>s+x,0)/trVals.length).toFixed(2):null;
+  if(!_ksv().tr)_ksv().tr={};
+  _ksv().tr[id]=a.respMes!==null?a.respMes.toFixed(1):'';
+  const trVals=ATTS.map(att=>_ksv().tr&&_ksv().tr[att.id]?parseFloat(_ksv().tr[att.id]):null).filter(x=>x!==null);
+  _kv().tr=trVals.length>0?(trVals.reduce((s,x)=>s+x,0)/trVals.length).toFixed(2):null;
   renderTeam();renderKPIs();
 }
 
 function zerarRespMes(id){
   const a=ATTS.find(x=>x.id===id);if(!a)return;
   a.respWeekly=[null,null,null,null];a.respMes=null;
-  if(kpiSubVals.tr)delete kpiSubVals.tr[id];
-  const trVals=ATTS.map(att=>kpiSubVals.tr&&kpiSubVals.tr[att.id]?parseFloat(kpiSubVals.tr[att.id]):null).filter(x=>x!==null);
-  kpiVals.tr=trVals.length>0?(trVals.reduce((s,x)=>s+x,0)/trVals.length).toFixed(2):null;
+  if(_ksv().tr)delete _ksv().tr[id];
+  const trVals=ATTS.map(att=>_ksv().tr&&_ksv().tr[att.id]?parseFloat(_ksv().tr[att.id]):null).filter(x=>x!==null);
+  _kv().tr=trVals.length>0?(trVals.reduce((s,x)=>s+x,0)/trVals.length).toFixed(2):null;
   renderTeam();renderKPIs();
   showToast('Tempo de resposta zerado para '+a.name,'sage');
 }
@@ -3139,13 +3149,13 @@ function exportarKPIPDF(){
   const g=calcGlobal(),band=getBand(g),nv=NIVEIS[selNivelIdx],vp=Math.round(nv.variavel*band.mult);
   const mes=new Date().toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
   const linhasKPI=KPI_DEFS.map(k=>{
-    const p=k.calc(kpiVals[k.id]),ps=p!==null?Math.round(p):null;
-    const sub=kpiSubVals[k.id]||{};
+    const p=k.calc(_kv()[k.id]),ps=p!==null?Math.round(p):null;
+    const sub=_ksv()[k.id]||{};
     let detalhe='';
-    if(k.id==='av'&&(sub.airbnb||sub.booking))detalhe=' (Airbnb: '+(sub.airbnb||'—')+' | Booking: '+(sub.booking||'—')+' | Média: '+(kpiVals.av||'—')+')';
+    if(k.id==='av'&&(sub.airbnb||sub.booking))detalhe=' (Airbnb: '+(sub.airbnb||'—')+' | Booking: '+(sub.booking||'—')+' | Média: '+(_kv().av||'—')+')';
     if(k.id==='cv'&&(sub.reviews||sub.checkouts))detalhe=' ('+(sub.reviews||0)+' reviews / '+(sub.checkouts||0)+' checkouts)';
     if(k.id==='tr'){const atts=['patricia','sara','lisarb','lais'];const vals=atts.filter(a=>sub[a]).map(a=>sub[a]+'min');if(vals.length)detalhe=' ('+vals.join(' | ')+')'}
-    return '<tr><td style="padding:8px;border-bottom:1px solid #eee;">'+k.label+'</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:center;">'+Math.round(k.peso*100)+'%</td><td style="padding:8px;border-bottom:1px solid #eee;">'+(kpiVals[k.id]||'—')+' '+k.unit+detalhe+'</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:center;font-weight:600;color:'+(ps===null?'#999':ps>=100?'#2e7d32':ps>=80?'#f57c00':'#c62828')+'">'+(ps!==null?ps+'%':'—')+'</td></tr>';
+    return '<tr><td style="padding:8px;border-bottom:1px solid #eee;">'+k.label+'</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:center;">'+Math.round(k.peso*100)+'%</td><td style="padding:8px;border-bottom:1px solid #eee;">'+(_kv()[k.id]||'—')+' '+k.unit+detalhe+'</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:center;font-weight:600;color:'+(ps===null?'#999':ps>=100?'#2e7d32':ps>=80?'#f57c00':'#c62828')+'">'+(ps!==null?ps+'%':'—')+'</td></tr>';
   }).join('');
   const html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Relatório KPI — '+mes+'</title><style>body{font-family:Arial,sans-serif;padding:40px;color:#222}h1{color:#c0616a;font-size:22px}h2{font-size:16px;color:#444;margin-top:24px}table{width:100%;border-collapse:collapse}th{background:#f5f5f5;padding:8px;text-align:left;border-bottom:2px solid #ddd;font-size:12px}td{font-size:13px}.band{display:inline-block;padding:4px 12px;border-radius:20px;font-weight:700;font-size:14px}.verde{background:#e8f5e9;color:#2e7d32}.amarela{background:#fff8e1;color:#f57c00}.vermelha{background:#ffebee;color:#c62828}.azul{background:#e3f2fd;color:#1565c0}.elite{background:#f3e5f5;color:#6a1b9a}.footer{margin-top:32px;font-size:11px;color:#999;border-top:1px solid #eee;padding-top:12px}@media print{button{display:none}}</style></head><body>'+
     '<h1>📊 Relatório de KPIs — WeCare</h1>'+
@@ -3350,8 +3360,15 @@ function loadAll(){
     v=g('nx_headfixo');   if(v&&typeof v==='object') headFixo=v;
     v=g('nx_headcom');    if(v&&typeof v==='object') headComissao=v;
     v=g('nx_headfotos');  if(v&&typeof v==='object') headFotos=v;
-    v=g('nx_kpivals');    if(v&&typeof v==='object') kpiVals=v;
-    v=g('nx_kpisub');     if(v&&typeof v==='object') kpiSubVals=v;
+    v=g('nx_kpivals');    if(v&&typeof v==='object'){
+      // migração: se o objeto tem chaves flat (av/tr/ob...) e não chaves de período, migrar
+      if('av' in v||'tr' in v||'ob' in v||'cv' in v||'rc' in v){kpiVals={};kpiVals[kpiPeriodo]=v;}
+      else kpiVals=v;
+    }
+    v=g('nx_kpisub');     if(v&&typeof v==='object'){
+      if('av' in v||'tr' in v||'cv' in v||'rc' in v){kpiSubVals={};kpiSubVals[kpiPeriodo]=v;}
+      else kpiSubVals=v;
+    }
     v=g('nx_taskcats');   if(Array.isArray(v)&&v.length) taskCats=v;
     v=g('nx_catalog');    if(Array.isArray(v)&&v.length) imovelsCatalog=v;
     v=g('nx_precos');     if(v&&typeof v==='object') PRECOS_ITENS=v;
@@ -3713,18 +3730,17 @@ async function aplicarAvaliacoesNoKPI(){
   const medCanal=nomes=>{const arr=noPeriodo.filter(a=>nomes.includes(a.canal));return arr.length?arr.reduce((s,a)=>s+a.rating,0)/arr.length:null;};
   const mAir10=medCanal(['Airbnb']);          // média Airbnb em 0-10
   const mBook10=medCanal(['Booking.com','Booking']); // média Booking em 0-10
-  if(!kpiSubVals.av) kpiSubVals.av={};
+  if(!_ksv().av) _ksv().av={};
   // Exibição: Airbnb na escala real 0-5 (Hostaway/2); Booking na escala 0-10
-  if(mAir10!=null) kpiSubVals.av.airbnb=(mAir10/2).toFixed(2);
-  if(mBook10!=null) kpiSubVals.av.booking=mBook10.toFixed(2);
+  if(mAir10!=null) _ksv().av.airbnb=(mAir10/2).toFixed(2);
+  if(mBook10!=null) _ksv().av.booking=mBook10.toFixed(2);
   // KPI combinado em 0-5: cada canal normalizado para 0-5 (dividir o valor 0-10 por 2)
   const partes=[];
   if(mAir10!=null) partes.push(mAir10/2);
   if(mBook10!=null) partes.push(mBook10/2);
-  kpiVals.av = partes.length ? (partes.reduce((a,b)=>a+b,0)/partes.length).toFixed(2) : null;
+  _kv().av = partes.length ? (partes.reduce((a,b)=>a+b,0)/partes.length).toFixed(2) : null;
 
   // ── KPI de Conversão (cv) = avaliações ÷ reservas (check-outs) no período ──
-  // Conta TODAS as avaliações de hóspede no período (com ou sem nota — qualquer review conta como "avaliou")
   const avNoPeriodo=avaliacoes.filter(a=>a.tipo==='guest-to-host'&&refData(a)>=per.de&&refData(a)<=per.ate).length;
   let reservas=null;
   const url=ls('nx_hostaway_url');
@@ -3737,10 +3753,10 @@ async function aplicarAvaliacoesNoKPI(){
     }catch(e){}
   }
   if(reservas!=null && reservas>0){
-    if(!kpiSubVals.cv) kpiSubVals.cv={};
-    kpiSubVals.cv.reviews=avNoPeriodo;
-    kpiSubVals.cv.checkouts=reservas;
-    kpiVals.cv=((avNoPeriodo/reservas)*100).toFixed(1);
+    if(!_ksv().cv) _ksv().cv={};
+    _ksv().cv.reviews=avNoPeriodo;
+    _ksv().cv.checkouts=reservas;
+    _kv().cv=((avNoPeriodo/reservas)*100).toFixed(1);
   }
 
   if(typeof renderKPIs==='function') renderKPIs();
@@ -5230,15 +5246,20 @@ function apagarManutencao(){
 }
 
 function sincronizarManutencaoKPI(){
-  const recebido=manutencoes.reduce(function(s,m){return s+(parseFloat(m.valorPago)||0);},0);
-  const gasto=manutencoes.reduce(function(s,m){return s+(parseFloat(m.valorGasto)||0);},0);
-  if(!kpiSubVals.rc) kpiSubVals.rc={limpeza:{previsto:'',gasto:''},manutencao:{previsto:'',gasto:''},setup:{previsto:'',gasto:''},margem:{previsto:'',gasto:''},extras:{previsto:'',gasto:''}};
-  if(!kpiSubVals.rc.manutencao) kpiSubVals.rc.manutencao={previsto:'',gasto:''};
-  kpiSubVals.rc.manutencao.previsto = recebido>0?recebido.toFixed(2):'';
-  kpiSubVals.rc.manutencao.gasto = gasto>0?gasto.toFixed(2):'';
+  // só conta manutenções do período atual do KPI
+  const manutPeriodo=manutencoes.filter(function(m){
+    const d=m.dataPagamento||m.dataExecucao||m.dataSolicitacao||m.data||'';
+    return d.substring(0,7)===kpiPeriodo;
+  });
+  const recebido=manutPeriodo.reduce(function(s,m){return s+(parseFloat(m.valorPago)||0);},0);
+  const gasto=manutPeriodo.reduce(function(s,m){return s+(parseFloat(m.valorGasto)||0);},0);
+  if(!_ksv().rc) _ksv().rc={limpeza:{previsto:'',gasto:''},manutencao:{previsto:'',gasto:''},setup:{previsto:'',gasto:''},margem:{previsto:'',gasto:''},extras:{previsto:'',gasto:''}};
+  if(!_ksv().rc.manutencao) _ksv().rc.manutencao={previsto:'',gasto:''};
+  _ksv().rc.manutencao.previsto = recebido>0?recebido.toFixed(2):'';
+  _ksv().rc.manutencao.gasto = gasto>0?gasto.toFixed(2):'';
   const itens=['limpeza','manutencao','setup','margem','extras'];
-  const economias=itens.map(function(it){if(!kpiSubVals.rc[it])return null;const p=parseFloat(kpiSubVals.rc[it].previsto),g=parseFloat(kpiSubVals.rc[it].gasto);if(!p||isNaN(p)||isNaN(g))return null;return ((p-g)/p)*100;}).filter(function(x){return x!==null;});
-  kpiVals.rc = economias.length>0?(economias.reduce(function(s,x){return s+x;},0)/economias.length).toFixed(2):null;
+  const economias=itens.map(function(it){if(!_ksv().rc[it])return null;const p=parseFloat(_ksv().rc[it].previsto),g=parseFloat(_ksv().rc[it].gasto);if(!p||isNaN(p)||isNaN(g))return null;return ((p-g)/p)*100;}).filter(function(x){return x!==null;});
+  _kv().rc = economias.length>0?(economias.reduce(function(s,x){return s+x;},0)/economias.length).toFixed(2):null;
   if(typeof saveAll==='function') saveAll();
   if(typeof renderKPIs==='function') renderKPIs();
 }

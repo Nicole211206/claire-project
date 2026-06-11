@@ -250,7 +250,10 @@ function _validarLogin(){
     <div class="panel" id="panel-kpis">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
         <div><h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Meus KPIs</h2><p style="color:var(--text3);font-size:13px;margin-top:2px;">Comissionamento por desempenho — WeCare</p></div>
-        <div id="kpi-band-pill"></div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div><label style="font-size:10.5px;color:var(--text3);text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px;">Período</label><input type="month" id="kpi-periodo-sel" class="form-input" style="padding:5px 9px;font-size:12.5px;" onchange="setKpiPeriodo(this.value)"></div>
+          <div id="kpi-band-pill" style="margin-top:16px;"></div>
+        </div>
       </div>
       <div class="card" style="margin-bottom:16px;">
         <div class="card-body" style="padding:20px;">
@@ -1485,6 +1488,6 @@ function _validarLogin(){
   </div>
 </div>
 
-<script src="js/app.js?v=44"></script>
+<script src="js/app.js?v=45"></script>
 </body>
 </html>

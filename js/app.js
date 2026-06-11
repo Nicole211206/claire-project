@@ -88,7 +88,7 @@ let imovelsCatalog = [
 let manutencoes=[];
 let manutAtiva=null, manutAba='solicitacao';
 let fornecedoresCadastro=[]; // cadastro de fornecedores reutilizáveis
-let manutMostrarPausadas=false;
+let manutExibirPausadas=false;
 let manualEntradas=[];
 let superhostPeriodos=[];
 let cancelamentos=[];
@@ -1789,12 +1789,12 @@ function renderPerformance(){
   const _ultimo = superhostPeriodos.length > 0 ? superhostPeriodos[superhostPeriodos.length-1] : null;
   html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);letter-spacing:0.5px;margin-bottom:10px;margin-top:24px;">Superhost Airbnb</div>';
   if (_ultimo) {
-    const _oks = SUPERHOST_CRITERIOS.filter(c => _ultimo[c.id] != null ? (c.inverso ? _ultimo[c.id] <= c.meta : _ultimo[c.id] >= c.meta) : false).length;
+    const _oks = SUPERHOST_CRITERIOS.filter(c => _shCriterioOk(c, _ultimo) === true).length;
     const _status = _oks === SUPERHOST_CRITERIOS.length ? 'sage' : _oks >= 3 ? 'gold' : 'rose';
     html += '<div class="card" style="margin-bottom:16px;"><div class="card-body" style="padding:16px;"><div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">'+
       '<div><div style="font-size:11px;color:var(--text3);">Último período</div><div style="font-size:16px;font-weight:700;">'+esc(_ultimo.periodo||'—')+'</div></div>'+
       '<div><div style="font-size:11px;color:var(--text3);">Critérios atingidos</div><div style="font-size:22px;font-weight:700;color:var(--'+_status+');">'+_oks+'/'+SUPERHOST_CRITERIOS.length+'</div></div>'+
-      SUPERHOST_CRITERIOS.map(c=>{const v=_ultimo[c.id];const ok=v!=null?(c.inverso?v<=c.meta:v>=c.meta):null;return '<div><div style="font-size:10px;color:var(--text3);">'+c.label+'</div><div style="font-weight:600;color:'+(ok===null?'var(--text3)':ok?'var(--sage)':'var(--vermelha)')+';">'+(v!=null?(v+(c.unit==='★'?'★':' '+c.unit)):'—')+'</div></div>';}).join('')+
+      SUPERHOST_CRITERIOS.map(c=>{const v=_ultimo[c.id];const ok=_shCriterioOk(c,_ultimo);return '<div><div style="font-size:10px;color:var(--text3);">'+c.label+'</div><div style="font-weight:600;color:'+(ok===null?'var(--text3)':ok?'var(--sage)':'var(--vermelha)')+';">'+(v!=null?(v+(c.unit?' '+c.unit:'')):'—')+'</div></div>';}).join('')+
       '</div></div></div>';
   } else {
     html += '<div class="card" style="margin-bottom:16px;"><div class="card-body" style="padding:14px;color:var(--text3);font-size:13px;">Nenhum período Superhost registrado.</div></div>';
@@ -4709,6 +4709,12 @@ function abrirManutModal(id){
   }
   const btnAv=document.getElementById('manut-btn-avancar');
   if(btnAv) btnAv.style.display=m.status==='pago'?'none':'';
+  const pausadoBadge=document.getElementById('manut-pausado-badge');
+  if(pausadoBadge) pausadoBadge.style.display=m.pausado?'':'none';
+  const btnPausar=document.getElementById('manut-btn-pausar');
+  if(btnPausar){ btnPausar.innerHTML=m.pausado?'<i class="fa-solid fa-play"></i> Retomar':'<i class="fa-solid fa-pause"></i> Pausar'; }
+  const prazoEl=document.getElementById('manut-prazo-header');
+  if(prazoEl) prazoEl.textContent=m.dataPrazo?'Prazo: '+fd(m.dataPrazo):'';
   document.querySelectorAll('#manut-tabs .tab-btn').forEach(function(b){
     b.classList.toggle('active', b.getAttribute('data-aba')===manutAba);
   });
@@ -4728,7 +4734,8 @@ function manutRenderAba(m){
   const el=document.getElementById('manut-aba-content'); if(!el) return;
   if(manutAba==='solicitacao') el.innerHTML=manutAbaSolicitacao(m);
   else if(manutAba==='pagamento') el.innerHTML=manutAbaPagamento(m);
-  else el.innerHTML=manutAbaCompras(m);
+  else if(manutAba==='compras') el.innerHTML=manutAbaCompras(m);
+  else if(manutAba==='tarefas') el.innerHTML=manutAbaTarefas(m);
 }
 
 function manutAbaSolicitacao(m){
@@ -4751,6 +4758,14 @@ function manutAbaSolicitacao(m){
       imovelsCatalog.map(function(c){return '<option value="'+esc(c.nome)+'"'+(m.imovelNome===c.nome?' selected':'')+'>'+esc(c.nome)+'</option>';}).join('')+
     '</select></div>'+
     '<div class="form-group"><label class="form-label">Data da solicitação</label><input type="date" class="form-input" value="'+esc(m.dataSolicitacao||'')+'" onchange="salvarCampoManut('+m.id+',\'dataSolicitacao\',this.value)"></div></div>'+
+    '<div class="form-row">'+
+    '<div class="form-group"><label class="form-label">Prazo para resolução</label><input type="date" class="form-input" value="'+esc(m.dataPrazo||'')+'" onchange="salvarCampoManut('+m.id+',\'dataPrazo\',this.value)"></div>'+
+    '<div class="form-group" style="display:flex;align-items:flex-end;padding-bottom:2px;">'+
+      '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:8px 12px;background:var(--lav-light);border-radius:var(--r-sm);border:1px solid var(--lavender)44;">'+
+        '<input type="checkbox" '+(m.repassarHostaway?'checked':'')+' onchange="manutRepassarHostaway('+m.id+',this.checked)">'+
+        '<span style="color:var(--lavender);font-weight:600;"><i class="fa-solid fa-rotate"></i> Repassar para proprietário no Hostaway</span>'+
+      '</label>'+
+    '</div></div>'+
     '<div class="form-group"><label class="form-label">Itens</label>'+
     '<div style="display:grid;gap:6px;">'+
     (m.itens||[]).map(function(it,i){
@@ -4850,13 +4865,23 @@ function manutAbaCompras(m){
     '<div class="form-group"><label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;"><input type="checkbox" '+(m.pagarFornecedor?'checked':'')+' onchange="manutToggle('+m.id+',\'pagarFornecedor\',this.checked)"> Pagar fornecedor?</label></div>'+
     (m.pagarFornecedor?
       '<div style="border-left:2px solid var(--peach);padding-left:12px;display:grid;gap:8px;">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">'+
+        '<label class="form-label" style="margin:0;">Selecionar fornecedor cadastrado</label>'+
+        '<button class="btn btn-sm" onclick="abrirModalCadFornecedor()" style="font-size:11px;padding:3px 10px;"><i class="fa-solid fa-address-book"></i> Gerenciar Fornecedores</button>'+
+      '</div>'+
+      '<select class="form-select" onchange="manutSelecionarFornCad('+m.id+',this.value)">'+
+        '<option value="">— Digitar manualmente —</option>'+
+        fornecedoresCadastro.map(function(f){return '<option value="'+f.id+'"'+(m.pagFornecedor.fornCadId===f.id?' selected':'')+'>'+esc(f.nome)+'</option>';}).join('')+
+      '</select>'+
       '<div class="form-row">'+
       '<div class="form-group"><label class="form-label">Nome do fornecedor</label><input type="text" class="form-input" value="'+esc(m.pagFornecedor.nome||'')+'" oninput="salvarCampoManutNested('+m.id+',\'pagFornecedor\',\'nome\',this.value)"></div>'+
       '<div class="form-group"><label class="form-label">Valor (R$)</label><input type="number" class="form-input" value="'+(m.pagFornecedor.valor||'')+'" oninput="salvarCampoManutNested('+m.id+',\'pagFornecedor\',\'valor\',this.value)"></div></div>'+
       '<div class="form-row">'+
       '<div class="form-group"><label class="form-label">Email</label><input type="text" class="form-input" value="'+esc(m.pagFornecedor.email||'')+'" oninput="salvarCampoManutNested('+m.id+',\'pagFornecedor\',\'email\',this.value)"></div>'+
       '<div class="form-group"><label class="form-label">Chave PIX</label><input type="text" class="form-input" value="'+esc(m.pagFornecedor.pix||'')+'" oninput="salvarCampoManutNested('+m.id+',\'pagFornecedor\',\'pix\',this.value)"></div></div>'+
-      '<div class="form-group"><label class="form-label">Data de pagamento</label><input type="date" class="form-input" value="'+esc(m.pagFornecedor.dataPagamento||'')+'" onchange="salvarCampoManutNested('+m.id+',\'pagFornecedor\',\'dataPagamento\',this.value)"></div>'+
+      '<div class="form-row">'+
+      '<div class="form-group"><label class="form-label">CPF/CNPJ</label><input type="text" class="form-input" value="'+esc(m.pagFornecedor.cpfCnpj||'')+'" oninput="salvarCampoManutNested('+m.id+',\'pagFornecedor\',\'cpfCnpj\',this.value)"></div>'+
+      '<div class="form-group"><label class="form-label">Data de pagamento</label><input type="date" class="form-input" value="'+esc(m.pagFornecedor.dataPagamento||'')+'" onchange="salvarCampoManutNested('+m.id+',\'pagFornecedor\',\'dataPagamento\',this.value)"></div></div>'+
       '</div>':'')+
     '<button class="btn btn-rose" style="justify-self:start;" onclick="manutGerarTarefa('+m.id+')"><i class="fa-solid fa-list-check"></i> Solicitar compra/pagamento</button>'+
     '</div>';
@@ -4864,12 +4889,218 @@ function manutAbaCompras(m){
 
 function manutGerarTarefa(id){
   const m=manutencoes.find(function(x){return x.id===id;}); if(!m) return;
-  let desc='Solicitação de compra/pagamento — Manutenção'+(m.imovelNome?' '+m.imovelNome:'')+': ';
-  const acoes=[]; if(m.precisaComprar) acoes.push('comprar itens'); if(m.pagarFornecedor) acoes.push('pagar fornecedor '+((m.pagFornecedor&&m.pagFornecedor.nome)||(m.fornecedor&&m.fornecedor.nome)||''));
-  desc+=acoes.join(' e ')||'providência';
-  tasks.unshift({id:Date.now(),text:desc,cat:'work',prio:'high',due:m.pagarFornecedor&&m.pagFornecedor.dataPagamento?m.pagFornecedor.dataPagamento:'',hora:'',done:false,status:'todo',updates:[]});
+  const acoes=[]; if(m.precisaComprar) acoes.push('Comprar itens'); if(m.pagarFornecedor) acoes.push('Pagar fornecedor');
+  let desc='[Manutenção]'+(m.imovelNome?' '+m.imovelNome:'')+' — '+(acoes.join(' + ')||'Providência');
+  // monta detalhes completos nos updates
+  const detalhes=[];
+  detalhes.push('Imóvel: '+(m.imovelNome||'—'));
+  detalhes.push('Tipo: '+(m.tipo||'—')+' | Origem: '+((MANUT_ORIGEM[m.origem])||m.origem));
+  detalhes.push('Prazo: '+(m.dataPrazo?fd(m.dataPrazo):'não definido'));
+  if(m.itens&&m.itens.length){ detalhes.push('Itens: '+m.itens.map(function(it){return it.desc+(it.valor?' (R$'+parseFloat(it.valor).toFixed(2)+')':'');}).join('; ')); }
+  detalhes.push('Total c/ margem: R$ '+manutTotalComMargem(m).toFixed(2));
+  if(m.precisaComprar){
+    if(m.ondeEntregar) detalhes.push('Entregar em: '+m.ondeEntregar);
+    if(m.obsCompra) detalhes.push('Obs compra: '+m.obsCompra);
+    if(m.linksItens&&m.linksItens.length) detalhes.push('Links: '+m.linksItens.map(function(l){return l.link+(l.obs?' ('+l.obs+')':'');}).join(' | '));
+  }
+  if(m.pagarFornecedor&&m.pagFornecedor){
+    detalhes.push('Fornecedor: '+(m.pagFornecedor.nome||'—'));
+    if(m.pagFornecedor.email) detalhes.push('Email: '+m.pagFornecedor.email);
+    if(m.pagFornecedor.pix) detalhes.push('PIX: '+m.pagFornecedor.pix);
+    if(m.pagFornecedor.cpfCnpj) detalhes.push('CPF/CNPJ: '+m.pagFornecedor.cpfCnpj);
+    if(m.pagFornecedor.valor) detalhes.push('Valor: R$ '+parseFloat(m.pagFornecedor.valor).toFixed(2));
+    if(m.pagFornecedor.dataPagamento) detalhes.push('Data pagamento: '+fd(m.pagFornecedor.dataPagamento));
+  }
+  if(m.obs) detalhes.push('Obs: '+m.obs);
+  const updates=[{texto:detalhes.join('\n'),data:new Date().toISOString()}];
+  tasks.unshift({id:Date.now(),text:desc,cat:'work',prio:'high',due:m.dataPrazo||(m.pagarFornecedor&&m.pagFornecedor.dataPagamento?m.pagFornecedor.dataPagamento:''),hora:'',done:false,status:'todo',updates:updates,assignedTo:'nicole'});
   if(typeof renderTasks==='function') renderTasks(); if(typeof renderKanban==='function') renderKanban(); if(typeof saveAll==='function') saveAll();
-  showToast('Tarefa criada pra você!','sage');
+  showToast('Tarefa criada com todos os detalhes!','sage');
+}
+
+function manutRepassarHostaway(id, checked){
+  const m=manutencoes.find(function(x){return x.id===id;}); if(!m) return;
+  m.repassarHostaway=checked;
+  if(typeof saveAll==='function') saveAll();
+  if(checked){
+    // gera tarefa para Nicole (admin) com todos os detalhes
+    const detalhes=[];
+    detalhes.push('⚠️ REPASSAR NO HOSTAWAY para o proprietário');
+    detalhes.push('Imóvel: '+(m.imovelNome||'—'));
+    detalhes.push('Tipo: '+(m.tipo||'—')+' | Origem: '+((MANUT_ORIGEM[m.origem])||m.origem));
+    if(m.dataPrazo) detalhes.push('Prazo: '+fd(m.dataPrazo));
+    if(m.itens&&m.itens.length){ detalhes.push('Itens: '+m.itens.map(function(it){return it.desc+(it.valor?' (R$'+parseFloat(it.valor).toFixed(2)+')':'');}).join('; ')); }
+    detalhes.push('Total c/ margem: R$ '+manutTotalComMargem(m).toFixed(2));
+    if(m.obs) detalhes.push('Obs: '+m.obs);
+    const updates=[{texto:detalhes.join('\n'),data:new Date().toISOString()}];
+    tasks.unshift({id:Date.now(),text:'[Hostaway] Repassar manutenção ao proprietário'+(m.imovelNome?' — '+m.imovelNome:''),cat:'work',prio:'high',due:m.dataPrazo||'',hora:'',done:false,status:'todo',updates:updates,assignedTo:'nicole'});
+    if(typeof renderTasks==='function') renderTasks(); if(typeof renderKanban==='function') renderKanban(); if(typeof saveAll==='function') saveAll();
+    showToast('Tarefa de repasse criada!','lavender');
+  }
+}
+
+function manutTogglePausado(){
+  const m=manutencoes.find(function(x){return x.id===manutAtiva;}); if(!m) return;
+  m.pausado=!m.pausado;
+  if(typeof saveAll==='function') saveAll();
+  abrirManutModal(m.id);
+  renderManutencaoKanban();
+  showToast(m.pausado?'Manutenção pausada.':'Manutenção retomada!','peach');
+}
+
+function manutSelecionarFornCad(id,fornId){
+  const m=manutencoes.find(function(x){return x.id===id;}); if(!m) return;
+  if(!fornId){ m.pagFornecedor.fornCadId=null; if(typeof saveAll==='function') saveAll(); manutRenderAba(m); return; }
+  const forn=fornecedoresCadastro.find(function(f){return String(f.id)===String(fornId);});
+  if(!forn) return;
+  m.pagFornecedor.fornCadId=forn.id;
+  m.pagFornecedor.nome=forn.nome;
+  m.pagFornecedor.email=forn.email||'';
+  m.pagFornecedor.pix=forn.pix||'';
+  m.pagFornecedor.cpfCnpj=forn.cpfCnpj||'';
+  if(typeof saveAll==='function') saveAll();
+  manutRenderAba(m);
+}
+
+// ── Cadastro de Fornecedores ──
+let fornModalEditId=null;
+function abrirModalCadFornecedor(){
+  fornModalEditId=null;
+  document.getElementById('modal-forn-cad').classList.add('open');
+  renderListaFornCad();
+}
+function renderListaFornCad(){
+  const el=document.getElementById('forn-cad-lista'); if(!el) return;
+  if(!fornecedoresCadastro.length){ el.innerHTML='<p style="color:var(--text3);font-size:13px;text-align:center;padding:16px;">Nenhum fornecedor cadastrado.</p>'; return; }
+  el.innerHTML=fornecedoresCadastro.map(function(f){
+    return '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);">'+
+      '<div style="flex:1;font-size:13px;"><strong>'+esc(f.nome)+'</strong>'+(f.cpfCnpj?' <span style="font-size:11px;color:var(--text3);">'+esc(f.cpfCnpj)+'</span>':'')+
+        (f.email?'<div style="font-size:11px;color:var(--text3);">'+esc(f.email)+'</div>':'')+
+        (f.pix?'<div style="font-size:11px;color:var(--text3);">PIX: '+esc(f.pix)+'</div>':'')+
+      '</div>'+
+      '<button onclick="fornEditarCad('+f.id+')" style="background:none;border:none;color:var(--sky);cursor:pointer;font-size:13px;" title="Editar"><i class="fa-solid fa-pen"></i></button>'+
+      '<button onclick="fornApagarCad('+f.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;" title="Apagar"><i class="fa-solid fa-trash"></i></button>'+
+    '</div>';
+  }).join('');
+}
+function fornEditarCad(id){
+  const f=fornecedoresCadastro.find(function(x){return x.id===id;}); if(!f) return;
+  fornModalEditId=id;
+  document.getElementById('forn-input-nome').value=f.nome||'';
+  document.getElementById('forn-input-email').value=f.email||'';
+  document.getElementById('forn-input-pix').value=f.pix||'';
+  document.getElementById('forn-input-cpfcnpj').value=f.cpfCnpj||'';
+}
+function fornApagarCad(id){
+  if(!confirm('Apagar este fornecedor?')) return;
+  fornecedoresCadastro=fornecedoresCadastro.filter(function(f){return f.id!==id;});
+  if(typeof saveAll==='function') saveAll();
+  renderListaFornCad();
+}
+function fornSalvarCad(){
+  const nome=document.getElementById('forn-input-nome').value.trim();
+  if(!nome){showToast('Nome obrigatório.','peach');return;}
+  if(fornModalEditId){
+    const f=fornecedoresCadastro.find(function(x){return x.id===fornModalEditId;});
+    if(f){ f.nome=nome;f.email=document.getElementById('forn-input-email').value.trim();f.pix=document.getElementById('forn-input-pix').value.trim();f.cpfCnpj=document.getElementById('forn-input-cpfcnpj').value.trim(); }
+    fornModalEditId=null;
+  } else {
+    fornecedoresCadastro.push({id:Date.now(),nome:nome,email:document.getElementById('forn-input-email').value.trim(),pix:document.getElementById('forn-input-pix').value.trim(),cpfCnpj:document.getElementById('forn-input-cpfcnpj').value.trim()});
+  }
+  document.getElementById('forn-input-nome').value='';
+  document.getElementById('forn-input-email').value='';
+  document.getElementById('forn-input-pix').value='';
+  document.getElementById('forn-input-cpfcnpj').value='';
+  if(typeof saveAll==='function') saveAll();
+  renderListaFornCad();
+  showToast('Fornecedor salvo!','sage');
+}
+
+// ── Aba Tarefas de Manutenção ──
+function manutAbaTarefas(m){
+  const tfs=m.tarefasManut||[];
+  const membros=usuarios.filter(function(u){return u.email;});
+  let html='<div style="display:grid;gap:12px;">'+
+    '<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;">'+
+      '<div style="font-size:12px;color:var(--text3);">Tarefas internas desta manutenção — aparecem no cronograma do responsável.</div>'+
+      '<button class="btn btn-rose btn-sm" onclick="manutNovaTarefa('+m.id+')"><i class="fa-solid fa-plus"></i> Nova Tarefa</button>'+
+    '</div>';
+  if(!tfs.length){
+    html+='<p style="color:var(--text3);font-size:13px;text-align:center;padding:20px;">Nenhuma tarefa ainda.</p>';
+  } else {
+    tfs.forEach(function(t,i){
+      const statusCor={todo:'var(--peach)',doing:'var(--sky)',done:'var(--sage)'}[t.status]||'var(--text3)';
+      const statusLabel={todo:'A Fazer',doing:'Em Andamento',done:'Concluída'}[t.status]||t.status;
+      html+='<div style="border:1px solid var(--border);border-radius:var(--r-sm);padding:12px;display:grid;gap:8px;">'+
+        '<div style="display:flex;align-items:flex-start;gap:8px;">'+
+          '<div style="flex:1;font-size:13.5px;font-weight:600;">'+esc(t.titulo||'(sem título)')+'</div>'+
+          '<select onchange="manutSetTarefaField('+m.id+','+i+',\'status\',this.value)" style="font-size:11px;padding:2px 6px;border-radius:10px;border:1px solid '+statusCor+';background:'+statusCor+'22;color:'+statusCor+';cursor:pointer;">'+
+            ['todo','doing','done'].map(function(s){return '<option value="'+s+'"'+(t.status===s?' selected':'')+'>'+({todo:'A Fazer',doing:'Em Andamento',done:'Concluída'}[s])+'</option>';}).join('')+
+          '</select>'+
+          '<button onclick="manutRemoverTarefa('+m.id+','+i+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;"><i class="fa-solid fa-xmark"></i></button>'+
+        '</div>'+
+        '<div class="form-row" style="gap:8px;">'+
+          '<div class="form-group" style="flex:1;min-width:0;"><label class="form-label" style="font-size:11px;">Responsável</label>'+
+            '<select class="form-select" style="font-size:12px;" onchange="manutSetTarefaField('+m.id+','+i+',\'responsavel\',this.value)">'+
+              '<option value="">Selecione...</option>'+
+              membros.map(function(u){return '<option value="'+esc(u.email)+'"'+(t.responsavel===u.email?' selected':'')+'>'+esc(u.nome||u.email)+'</option>';}).join('')+
+            '</select>'+
+          '</div>'+
+          '<div class="form-group"><label class="form-label" style="font-size:11px;">Início</label><input type="date" class="form-input" style="font-size:12px;" value="'+esc(t.dataInicio||'')+'" onchange="manutSetTarefaField('+m.id+','+i+',\'dataInicio\',this.value)"></div>'+
+          '<div class="form-group"><label class="form-label" style="font-size:11px;">Prazo</label><input type="date" class="form-input" style="font-size:12px;" value="'+esc(t.dataPrazo||'')+'" onchange="manutSetTarefaField('+m.id+','+i+',\'dataPrazo\',this.value)"></div>'+
+        '</div>'+
+        '<div class="form-group"><label class="form-label" style="font-size:11px;">Etiquetas</label>'+
+          '<input type="text" class="form-input" style="font-size:12px;" value="'+esc((t.etiquetas||[]).join(', '))+'" placeholder="Ex: urgente, elétrica, hidráulica" oninput="manutSetTarefaField('+m.id+','+i+',\'etiquetas\',this.value.split(\',\').map(function(x){return x.trim();}).filter(Boolean))">'+
+        '</div>'+
+        '<div class="form-group"><label class="form-label" style="font-size:11px;">Atualizações</label>'+
+          (t.updates&&t.updates.length?t.updates.map(function(u){return '<div style="background:var(--bg3);border-radius:var(--r-sm);padding:6px 10px;font-size:12px;margin-bottom:4px;"><span style="color:var(--text3);font-size:10px;">'+fd(u.data.split('T')[0])+'</span> — '+esc(u.texto)+'</div>';}).join(''):'')+
+          '<div style="display:flex;gap:6px;margin-top:4px;">'+
+            '<input type="text" class="form-input" style="font-size:12px;" placeholder="Nova atualização..." id="manut-upd-'+m.id+'-'+i+'">'+
+            '<button class="btn btn-sm" onclick="manutAdicionarUpdateTarefa('+m.id+','+i+')"><i class="fa-solid fa-plus"></i></button>'+
+          '</div>'+
+        '</div>'+
+      '</div>';
+    });
+  }
+  html+='</div>';
+  return html;
+}
+
+function manutNovaTarefa(id){
+  const m=manutencoes.find(function(x){return x.id===id;}); if(!m) return;
+  if(!m.tarefasManut) m.tarefasManut=[];
+  m.tarefasManut.push({id:Date.now(),titulo:'',status:'todo',responsavel:'',dataInicio:'',dataPrazo:'',etiquetas:[],updates:[],desc:''});
+  if(typeof saveAll==='function') saveAll();
+  manutRenderAba(m);
+  // foca no input do título da nova tarefa
+  setTimeout(function(){
+    const inputs=document.querySelectorAll('#manut-aba-content input[type=text]');
+    if(inputs.length){ const last=inputs[inputs.length-2]; if(last&&last.placeholder==='') last.focus(); }
+  },50);
+}
+
+function manutSetTarefaField(id,i,campo,valor){
+  const m=manutencoes.find(function(x){return x.id===id;}); if(!m||!m.tarefasManut[i]) return;
+  m.tarefasManut[i][campo]=valor;
+  if(typeof saveAll==='function') saveAll();
+  if(campo==='status') manutRenderAba(m);
+}
+
+function manutRemoverTarefa(id,i){
+  const m=manutencoes.find(function(x){return x.id===id;}); if(!m) return;
+  m.tarefasManut.splice(i,1);
+  if(typeof saveAll==='function') saveAll();
+  manutRenderAba(m);
+}
+
+function manutAdicionarUpdateTarefa(id,i){
+  const m=manutencoes.find(function(x){return x.id===id;}); if(!m||!m.tarefasManut[i]) return;
+  const inp=document.getElementById('manut-upd-'+id+'-'+i); if(!inp) return;
+  const txt=inp.value.trim(); if(!txt) return;
+  if(!m.tarefasManut[i].updates) m.tarefasManut[i].updates=[];
+  m.tarefasManut[i].updates.push({texto:txt,data:new Date().toISOString()});
+  if(typeof saveAll==='function') saveAll();
+  manutRenderAba(m);
 }
 
 function salvarCampoManut(id,campo,valor){
@@ -4989,8 +5220,33 @@ function sincronizarManutencaoKPI(){
 
 function renderManutencaoKanban(){
   const el=document.getElementById('manutencao-kanban'); if(!el) return;
-  el.innerHTML=MANUT_COLS.map(function(col){
-    const cards=manutencoes.filter(function(m){return m.status===col.id;});
+  const pausadas=manutencoes.filter(function(m){return m.pausado;});
+  let extra='';
+  if(pausadas.length){
+    extra='<div style="margin-bottom:12px;"><button class="btn btn-sm" style="font-size:11px;" onclick="manutTogglePausadasView()">'+
+      (manutExibirPausadas?'<i class="fa-solid fa-eye-slash"></i> Ocultar pausadas':'<i class="fa-solid fa-pause"></i> Mostrar pausadas ('+pausadas.length+')')+
+    '</button></div>';
+    if(manutExibirPausadas){
+      extra+='<div style="margin-bottom:16px;border:1px dashed var(--peach);border-radius:var(--r);padding:8px;">'+
+        '<div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--peach);margin-bottom:10px;">Pausadas</div>'+
+        pausadas.map(function(m){
+          const total=manutTotalComMargem(m);
+          return '<div onclick="abrirManutModal('+m.id+')" style="background:var(--bg3);border:1px solid var(--peach)44;border-radius:var(--r-sm);padding:9px;margin-bottom:6px;cursor:pointer;opacity:0.75;transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'var(--bg3)\'">'+
+            '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">'+
+              '<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:var(--peach)22;color:var(--peach);font-weight:700;"><i class="fa-solid fa-pause"></i> PAUSADO</span>'+
+              '<span style="font-size:13px;font-weight:600;">'+esc(m.imovelNome||'(sem imóvel)')+'</span>'+
+            '</div>'+
+            '<div style="font-size:11px;color:var(--text3);margin-bottom:5px;">'+(MANUT_ORIGEM[m.origem]||m.origem)+' · '+(MANUT_COLS.find(function(c){return c.id===m.status;})||{label:m.status}).label+'</div>'+
+            '<div style="display:flex;justify-content:space-between;align-items:center;">'+
+              '<span style="font-size:9.5px;padding:1px 6px;border-radius:8px;background:var(--sky-light);color:var(--sky);font-weight:600;">'+(MANUT_PAGADOR[m.quemPaga]||m.quemPaga)+'</span>'+
+              '<span style="font-size:12px;font-weight:700;color:var(--sage);">R$ '+total.toFixed(2).replace('.',',')+'</span>'+
+            '</div></div>';
+        }).join('')+
+      '</div>';
+    }
+  }
+  el.innerHTML=extra+MANUT_COLS.map(function(col){
+    const cards=manutencoes.filter(function(m){return m.status===col.id && !m.pausado;});
     return '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:8px;min-height:140px;">'+
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'+
       '<div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:'+col.color+';">'+col.label+'</div>'+
@@ -4998,16 +5254,22 @@ function renderManutencaoKanban(){
       cards.map(function(m){
         const total=manutTotalComMargem(m);
         const cardOpacity=m.status==='pago'?'opacity:0.6;':'';
+        const prazoStr=m.dataPrazo?'<span style="font-size:9.5px;color:var(--text3);"><i class="fa-regular fa-calendar"></i> '+fd(m.dataPrazo)+'</span>':'';
         return '<div onclick="abrirManutModal('+m.id+')" style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:9px;margin-bottom:6px;cursor:pointer;'+cardOpacity+'transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'var(--bg3)\'">'+
           '<div style="font-size:13px;font-weight:600;margin-bottom:3px;">'+esc(m.imovelNome||'(sem imóvel)')+'</div>'+
-          '<div style="font-size:11px;color:var(--text3);margin-bottom:5px;">'+(MANUT_ORIGEM[m.origem]||m.origem)+' · '+(m.tipo==='dano'?'Dano':'Desgaste')+'</div>'+
+          '<div style="font-size:11px;color:var(--text3);margin-bottom:5px;">'+(MANUT_ORIGEM[m.origem]||m.origem)+' · '+(m.tipo==='dano'?'Dano':m.tipo==='desgaste'?'Desgaste':'Perda')+'</div>'+
           '<div style="display:flex;justify-content:space-between;align-items:center;">'+
           '<span style="font-size:9.5px;padding:1px 6px;border-radius:8px;background:var(--sky-light);color:var(--sky);font-weight:600;">'+(MANUT_PAGADOR[m.quemPaga]||m.quemPaga)+'</span>'+
+          prazoStr+
           '<span style="font-size:12px;font-weight:700;color:var(--sage);">R$ '+total.toFixed(2).replace('.',',')+'</span>'+
           '</div></div>';
       }).join('')+
       '</div>';
   }).join('');
+}
+function manutTogglePausadasView(){
+  manutExibirPausadas=!manutExibirPausadas;
+  renderManutencaoKanban();
 }
 
 // ═══════════════════ PROJETOS ═══════════════════
@@ -5539,11 +5801,17 @@ function switchAcompTab(tab, btn) {
 
 // ── SUPERHOST ──
 const SUPERHOST_CRITERIOS = [
-  {id:'nota', label:'Nota geral', meta:4.8, unit:'estrelas', desc:'Mínimo 4,8 estrelas'},
-  {id:'qtdAvaliacoes', label:'Nº de avaliações', meta:10, unit:'aval.', desc:'Mínimo 10 no período'},
-  {id:'taxaResposta', label:'Taxa de resposta', meta:90, unit:'%', desc:'Mínimo 90%'},
-  {id:'qtdCancelamentos', label:'Cancelamentos pelo anfitrião', meta:1, unit:'canc.', desc:'Máximo 1 (quanto menor melhor)', inverso:true},
+  {id:'nota',             label:'Avaliação geral',       meta:4.8, unit:'★', desc:'Mínimo 4,8 estrelas'},
+  {id:'taxaResposta',     label:'Taxa de resposta',       meta:90,  unit:'%', desc:'Mínimo 90%'},
+  {id:'estadias',         label:'Estadias concluídas',    meta:10,  unit:'',  desc:'Mín. 10 estadias (ou 100 noites em 3+)'},
+  {id:'taxaCancelamento', label:'Taxa de cancelamento',   meta:1,   unit:'%', desc:'Máximo 1%', inverso:true},
 ];
+function _shCriterioOk(c, p) {
+  const v = p[c.id];
+  if (v == null) return null;
+  if (c.id === 'estadias') return (v >= 10) || (p.noites != null && p.noites >= 100 && v >= 3);
+  return c.inverso ? v <= c.meta : v >= c.meta;
+}
 
 function renderSuperhost() {
   const el = document.getElementById('superhost-lista'); if (!el) return;
@@ -5551,10 +5819,10 @@ function renderSuperhost() {
   const resumoEl = document.getElementById('superhost-criterios-resumo');
   if (resumoEl && ultimo) {
     resumoEl.innerHTML = SUPERHOST_CRITERIOS.map(c => {
-      const v = ultimo[c.id]; const ok = v == null ? null : (c.inverso ? v <= c.meta : v >= c.meta);
+      const v = ultimo[c.id]; const ok = _shCriterioOk(c, ultimo);
       const cor = ok === null ? 'sky' : ok ? 'sage' : 'rose';
       const iconName = ok===null ? 'fa-circle-question' : ok ? 'fa-circle-check' : 'fa-circle-xmark';
-      const displayVal = v != null ? (v + (c.unit === 'estrelas' ? '★' : ' ' + c.unit)) : '—';
+      const displayVal = v != null ? (v + (c.unit ? (' '+c.unit) : '')) : '—';
       return '<div class="metric-card '+cor+'"><div class="metric-icon '+cor+'"><i class="fa-solid '+iconName+'"></i></div><div class="metric-value" style="font-size:22px;">'+displayVal+'</div><div class="metric-label">'+c.label+'<br><span style="font-size:10px;opacity:0.7;">'+c.desc+'</span></div></div>';
     }).join('');
   } else if (resumoEl) {
@@ -5566,11 +5834,11 @@ function renderSuperhost() {
   }
   el.innerHTML = '<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);letter-spacing:0.5px;margin-bottom:10px;">Histórico de Períodos</div>' +
     superhostPeriodos.slice().reverse().map(p => {
-      const oks = SUPERHOST_CRITERIOS.filter(c => p[c.id] != null ? (c.inverso ? p[c.id] <= c.meta : p[c.id] >= c.meta) : false).length;
+      const oks = SUPERHOST_CRITERIOS.filter(c => _shCriterioOk(c, p) === true).length;
       const status = oks === SUPERHOST_CRITERIOS.length ? 'sage' : oks >= 3 ? 'gold' : 'rose';
       const criteriosHtml = SUPERHOST_CRITERIOS.map(c => {
-        const v = p[c.id]; const ok = v!=null?(c.inverso?v<=c.meta:v>=c.meta):null;
-        const dv = v!=null?(v+(c.unit==='estrelas'?'★':' '+c.unit)):'—';
+        const v = p[c.id]; const ok = _shCriterioOk(c, p);
+        const dv = c.id==='estadias' ? (v!=null?v+(p.noites!=null?' ('+p.noites+' noites)':''):'—') : (v!=null?(v+(c.unit?(' '+c.unit):'')):'—');
         const clr = ok===null?'var(--text3)':ok?'var(--sage)':'var(--vermelha)';
         return '<div style="background:var(--bg3);border-radius:6px;padding:8px;"><div style="font-size:10px;color:var(--text3);">'+c.label+'</div><div style="font-weight:700;color:'+clr+';">'+dv+'</div></div>';
       }).join('') + (p.obsExtra ? '<div style="grid-column:1/-1;font-size:12px;color:var(--text3);padding:4px 0;">'+esc(p.obsExtra)+'</div>' : '');
@@ -5584,9 +5852,10 @@ function abrirModalSuperhost(id) {
   const p = id ? superhostPeriodos.find(x=>x.id===id) : null;
   document.getElementById('sh-periodo').value = p ? (p.periodo||'') : '';
   document.getElementById('sh-nota').value = p ? (p.nota!=null?p.nota:'') : '';
-  document.getElementById('sh-qtd-aval').value = p ? (p.qtdAvaliacoes!=null?p.qtdAvaliacoes:'') : '';
   document.getElementById('sh-taxa-resp').value = p ? (p.taxaResposta!=null?p.taxaResposta:'') : '';
-  document.getElementById('sh-qtd-canc').value = p ? (p.qtdCancelamentos!=null?p.qtdCancelamentos:'') : '';
+  document.getElementById('sh-estadias').value = p ? (p.estadias!=null?p.estadias:'') : '';
+  document.getElementById('sh-noites').value = p ? (p.noites!=null?p.noites:'') : '';
+  document.getElementById('sh-taxa-canc').value = p ? (p.taxaCancelamento!=null?p.taxaCancelamento:'') : '';
   document.getElementById('sh-obs').value = p ? (p.obsExtra||'') : '';
   document.getElementById('modal-superhost').classList.add('open');
 }
@@ -5598,9 +5867,10 @@ function salvarSuperhost() {
     id: _superhostEditId || ('sh'+Date.now()),
     periodo,
     nota: document.getElementById('sh-nota').value !== '' ? parseFloat(document.getElementById('sh-nota').value) : null,
-    qtdAvaliacoes: document.getElementById('sh-qtd-aval').value !== '' ? parseInt(document.getElementById('sh-qtd-aval').value) : null,
     taxaResposta: document.getElementById('sh-taxa-resp').value !== '' ? parseFloat(document.getElementById('sh-taxa-resp').value) : null,
-    qtdCancelamentos: document.getElementById('sh-qtd-canc').value !== '' ? parseInt(document.getElementById('sh-qtd-canc').value) : null,
+    estadias: document.getElementById('sh-estadias').value !== '' ? parseInt(document.getElementById('sh-estadias').value) : null,
+    noites: document.getElementById('sh-noites').value !== '' ? parseInt(document.getElementById('sh-noites').value) : null,
+    taxaCancelamento: document.getElementById('sh-taxa-canc').value !== '' ? parseFloat(document.getElementById('sh-taxa-canc').value) : null,
     obsExtra: document.getElementById('sh-obs').value.trim(),
     criadoEm: Date.now()
   };

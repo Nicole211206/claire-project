@@ -1027,6 +1027,7 @@ function _validarLogin(){
   <div class="modal" style="width:760px;max-height:92vh;overflow-y:auto;">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
       <div id="manut-imovel-nome" style="flex:1;font-size:18px;font-weight:700;font-family:var(--font-display);"></div>
+      <span id="manut-pausado-badge" style="display:none;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;background:var(--peach)22;color:var(--peach);border:1px solid var(--peach);"><i class="fa-solid fa-pause"></i> PAUSADO</span>
       <span id="manut-status-badge"></span>
       <button onclick="closeModal('modal-manut')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;padding:4px;"><i class="fa-solid fa-xmark"></i></button>
     </div>
@@ -1034,12 +1035,40 @@ function _validarLogin(){
       <button class="tab-btn active" data-aba="solicitacao" onclick="manutMudarAba('solicitacao',this)">Solicitação</button>
       <button class="tab-btn" data-aba="pagamento" onclick="manutMudarAba('pagamento',this)">Pagamento</button>
       <button class="tab-btn" data-aba="compras" onclick="manutMudarAba('compras',this)">Compras/Fornecedor</button>
+      <button class="tab-btn" data-aba="tarefas" onclick="manutMudarAba('tarefas',this)">Tarefas</button>
     </div>
     <div id="manut-aba-content" style="min-height:320px;"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;padding-top:12px;border-top:1px solid var(--border);">
       <button class="btn" onclick="apagarManutencao()" style="color:var(--vermelha);border-color:var(--vermelha);margin-right:auto;"><i class="fa-solid fa-trash"></i> Apagar</button>
+      <button class="btn" id="manut-btn-pausar" onclick="manutTogglePausado()"><i class="fa-solid fa-pause"></i> Pausar</button>
       <button class="btn" onclick="closeModal('modal-manut')">Fechar</button>
       <button class="btn btn-rose" id="manut-btn-avancar" onclick="manutAvancarFase()"><i class="fa-solid fa-arrow-right"></i> Avançar Fase</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Cadastro Fornecedores -->
+<div class="modal-overlay" id="modal-forn-cad">
+  <div class="modal" style="width:520px;max-height:88vh;overflow-y:auto;">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+      <div style="flex:1;font-size:17px;font-weight:700;font-family:var(--font-display);"><i class="fa-solid fa-address-book" style="color:var(--peach);"></i> Fornecedores Cadastrados</div>
+      <button onclick="closeModal('modal-forn-cad')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;padding:4px;"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div style="background:var(--bg3);border-radius:var(--r-sm);padding:12px;margin-bottom:16px;display:grid;gap:10px;">
+      <div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;">Novo Fornecedor</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Nome *</label><input type="text" class="form-input" id="forn-input-nome" placeholder="Nome do fornecedor"></div>
+        <div class="form-group"><label class="form-label">CPF/CNPJ</label><input type="text" class="form-input" id="forn-input-cpfcnpj" placeholder="000.000.000-00"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Email</label><input type="text" class="form-input" id="forn-input-email" placeholder="email@exemplo.com"></div>
+        <div class="form-group"><label class="form-label">Chave PIX</label><input type="text" class="form-input" id="forn-input-pix" placeholder="CPF, email ou telefone"></div>
+      </div>
+      <button class="btn btn-rose btn-sm" style="justify-self:end;" onclick="fornSalvarCad()"><i class="fa-solid fa-floppy-disk"></i> Salvar Fornecedor</button>
+    </div>
+    <div id="forn-cad-lista"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:12px;">
+      <button class="btn" onclick="closeModal('modal-forn-cad')">Fechar</button>
     </div>
   </div>
 </div>
@@ -1360,10 +1389,11 @@ function _validarLogin(){
     <div class="modal-header"><h3 class="modal-title">Período Superhost</h3><button class="modal-close" onclick="closeModal('modal-superhost')"><i class="fa-solid fa-xmark"></i></button></div>
     <div class="form-group"><label class="form-label">Período (ex: Q1 2026)</label><input type="text" class="form-input" id="sh-periodo" placeholder="Q1 2026"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-      <div class="form-group"><label class="form-label">Nota geral (estrelas)</label><input type="number" class="form-input" id="sh-nota" step="0.01" min="1" max="5" placeholder="4.8"></div>
-      <div class="form-group"><label class="form-label">Nº de avaliações</label><input type="number" class="form-input" id="sh-qtd-aval" min="0" placeholder="10"></div>
-      <div class="form-group"><label class="form-label">Taxa de resposta (%)</label><input type="number" class="form-input" id="sh-taxa-resp" step="0.1" min="0" max="100" placeholder="90"></div>
-      <div class="form-group"><label class="form-label">Cancelamentos pelo anfitrião</label><input type="number" class="form-input" id="sh-qtd-canc" min="0" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Avaliação geral (★) <span style="font-size:10px;color:var(--text3);">critério ≥ 4,8</span></label><input type="number" class="form-input" id="sh-nota" step="0.01" min="1" max="5" placeholder="4.8"></div>
+      <div class="form-group"><label class="form-label">Taxa de resposta (%) <span style="font-size:10px;color:var(--text3);">critério ≥ 90%</span></label><input type="number" class="form-input" id="sh-taxa-resp" step="0.1" min="0" max="100" placeholder="100"></div>
+      <div class="form-group"><label class="form-label">Estadias concluídas <span style="font-size:10px;color:var(--text3);">critério ≥ 10</span></label><input type="number" class="form-input" id="sh-estadias" min="0" placeholder="10"></div>
+      <div class="form-group"><label class="form-label">Noites totais <span style="font-size:10px;color:var(--text3);">critério ≥ 100 (alt.)</span></label><input type="number" class="form-input" id="sh-noites" min="0" placeholder="0"></div>
+      <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Taxa de cancelamento (%) <span style="font-size:10px;color:var(--text3);">critério &lt; 1%</span></label><input type="number" class="form-input" id="sh-taxa-canc" step="0.01" min="0" max="100" placeholder="0.08"></div>
     </div>
     <div class="form-group"><label class="form-label">Observações</label><textarea class="form-input" id="sh-obs" rows="2" placeholder="Notas adicionais..."></textarea></div>
     <div class="modal-footer"><button class="btn" onclick="closeModal('modal-superhost')">Cancelar</button><button class="btn btn-rose" onclick="salvarSuperhost()"><i class="fa-solid fa-check"></i> Salvar</button></div>
@@ -1431,6 +1461,6 @@ function _validarLogin(){
   </div>
 </div>
 
-<script src="js/app.js?v=40"></script>
+<script src="js/app.js?v=41"></script>
 </body>
 </html>

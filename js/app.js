@@ -87,6 +87,8 @@ let imovelsCatalog = [
 
 let manutencoes=[];
 let manutAtiva=null, manutAba='solicitacao';
+let fornecedoresCadastro=[]; // cadastro de fornecedores reutilizáveis
+let manutMostrarPausadas=false;
 let manualEntradas=[];
 let superhostPeriodos=[];
 let cancelamentos=[];
@@ -3231,6 +3233,7 @@ const _PERSIST_KEYS = {
   nx_outros:()=>outrosMembros,
   nx_extras:()=>extras,
   nx_manutencoes:()=>manutencoes,
+  nx_fornecedores_cad:()=>fornecedoresCadastro,
   nx_manual:()=>manualEntradas,
   nx_superhost:()=>superhostPeriodos,
   nx_cancelamentos:()=>cancelamentos,
@@ -3250,7 +3253,7 @@ function saveAll(){
 // ─── Sincronização com o backend KV (compartilhado entre dispositivos) ───
 // Chaves que sincronizam (dados de equipe/operação). Credenciais e a lista
 // pesada de avaliações ficam SEMPRE locais.
-const SYNC_KEYS=['nx_lastSaved','nx_users','nx_tasks','nx_imoveis','nx_notes','nx_compras','nx_projetos','nx_atts','nx_workP1','nx_workP2','nx_headfixo','nx_headcom','nx_headfotos','nx_kpivals','nx_kpisub','nx_taskcats','nx_catalog','nx_precos','nx_precoenx','nx_niveldx','nx_nicolecom','nx_nextatt','nx_transcricoes','nx_turnos','nx_salpagos','nx_outros','nx_extras','nx_manutencoes','nx_manual','nx_superhost','nx_cancelamentos','nx_notasfiscais','nx_name'];
+const SYNC_KEYS=['nx_lastSaved','nx_users','nx_tasks','nx_imoveis','nx_notes','nx_compras','nx_projetos','nx_atts','nx_workP1','nx_workP2','nx_headfixo','nx_headcom','nx_headfotos','nx_kpivals','nx_kpisub','nx_taskcats','nx_catalog','nx_precos','nx_precoenx','nx_niveldx','nx_nicolecom','nx_nextatt','nx_transcricoes','nx_turnos','nx_salpagos','nx_outros','nx_extras','nx_manutencoes','nx_manual','nx_superhost','nx_cancelamentos','nx_notasfiscais','nx_name','nx_fornecedores_cad'];
 let _kvDirty=false;       // há mudança local não enviada?
 let _kvLastPushed=null;   // último blob enviado (string) — evita gravações repetidas
 let _kvPushing=false;

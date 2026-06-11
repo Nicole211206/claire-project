@@ -329,9 +329,19 @@ function _validarLogin(){
 
     <!-- ── TAREFAS ── -->
     <div class="panel" id="panel-tasks">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
-        <div class="tab-bar"><button class="tab-btn active" onclick="switchView('crono',this)">Cronograma</button><button class="tab-btn" onclick="switchView('cal',this)">Calendário</button><button class="tab-btn" onclick="switchView('kanban',this)">Kanban</button></div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap;">
+        <div class="tab-bar"><button class="tab-btn active" onclick="switchView('crono',this)">Cronograma</button><button class="tab-btn" onclick="switchView('kanban',this)">Kanban</button></div>
         <select class="form-select" style="width:auto;padding:6px 10px;font-size:12.5px;" id="task-filter-sel" onchange="filterTasks(this.value)"></select>
+        <select class="form-select" style="width:auto;padding:6px 10px;font-size:12.5px;" id="task-status-filter" onchange="renderTasks();renderKanban();">
+          <option value="ativas">Ativas</option>
+          <option value="todas">Todas</option>
+          <option value="finalizadas">Finalizadas</option>
+        </select>
+        <select class="form-select" style="width:auto;padding:6px 10px;font-size:12.5px;" id="task-tipo-filter" onchange="renderTasks();renderKanban();">
+          <option value="todos">Todos os tipos</option>
+          <option value="projetos">Só projetos</option>
+          <option value="sem-projeto">Sem projeto</option>
+        </select>
         <select class="form-select" style="width:auto;padding:6px 10px;font-size:12.5px;" id="task-sort-prazo" onchange="renderTasks();renderKanban();">
           <option value="">Sem ordenar</option>
           <option value="prazo-asc">Prazo: mais próximo</option>
@@ -343,19 +353,6 @@ function _validarLogin(){
         <button class="btn btn-rose" style="margin-left:auto;" onclick="openAddTask()"><i class="fa-solid fa-plus"></i> Nova Tarefa</button>
       </div>
       <div id="task-crono-view"></div>
-      <div id="task-cal-view" style="display:none;">
-        <div class="card"><div class="card-body">
-          <div class="tab-bar" style="margin-bottom:10px;display:inline-flex;">
-            <button class="tab-btn active" id="tcalview-mes" onclick="setTcalView('mes',this)">Mês</button>
-            <button class="tab-btn" id="tcalview-semana" onclick="setTcalView('semana',this)">Semana</button>
-          </div>
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-            <div style="font-family:var(--font-display);font-size:16px;font-weight:600;" id="tcal-label"></div>
-            <div style="display:flex;gap:6px;"><button class="btn btn-sm" onclick="tcalMudarMes(-1)"><i class="fa-solid fa-chevron-left"></i></button><button class="btn btn-sm" onclick="tcalMudarMes(1)"><i class="fa-solid fa-chevron-right"></i></button></div>
-          </div>
-          <div id="tcal-grid"></div>
-        </div></div>
-      </div>
       <div id="task-kanban-view" style="display:none;"><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;" id="kanban-board"></div></div>
     </div>
 

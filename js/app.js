@@ -859,7 +859,10 @@ function renderExtras(){
 // ═══════════════════ TASKS ═══════════════════
 // Para não-admin com attId, as "tarefas" são as demandas atribuídas a elas no Equipe
 function _getEffectiveTasks(){
-  if(typeof isAdmin==='function' && !isAdmin() && typeof getCurrentUser==='function' && getCurrentUser()&&getCurrentUser().attId){
+  const u=typeof getCurrentUser==='function'?getCurrentUser():null;
+  const admin=typeof isAdmin==='function'&&isAdmin();
+  if(!admin && u){
+    // Não-admin: sempre mostra só as demandas do ATT vinculado, nunca as tarefas globais
     const att=typeof getMinhaAtt==='function'?getMinhaAtt():null;
     if(att){
       return att.demands.map((d,i)=>({
@@ -878,6 +881,8 @@ function _getEffectiveTasks(){
         _isDemand:true,_demIdx:i,_attId:att.id
       }));
     }
+    // Não-admin sem ATT vinculado: lista vazia (nunca expõe tarefas do sistema)
+    return [];
   }
   return tasks;
 }

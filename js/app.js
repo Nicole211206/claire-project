@@ -5428,6 +5428,15 @@ const PLANTAO_STATUS=[
 ];
 function _plantaoStatusInfo(s){return PLANTAO_STATUS.find(x=>x.id===s)||PLANTAO_STATUS[0];}
 
+function _preencherDatalistImoveis(){
+  const dl=document.getElementById('pt-imovel-list');if(!dl)return;
+  const nomes=[...new Set([
+    ...imovelsCatalog.map(im=>im.nome.replace(/^WC-\d+\s*-\s*/,'')),
+    ...plantaoItems.map(r=>r.imovel).filter(Boolean)
+  ])].sort();
+  dl.innerHTML=nomes.map(n=>'<option value="'+esc(n)+'">').join('');
+}
+
 function abrirNovoPlantao(){
   plantaoAtivo=null;
   const hoje=new Date().toISOString().split('T')[0];
@@ -5453,6 +5462,7 @@ function abrirPlantaoModal(id){
   document.getElementById('pt-status').value=r.status||'pendente';
   document.getElementById('pt-nova-update').value='';
   document.getElementById('modal-plantao-title').textContent=r.situacao||'Ocorrência';
+  _preencherDatalistImoveis();
   renderPlantaoUpdates();
   document.getElementById('modal-plantao').classList.add('open');
 }

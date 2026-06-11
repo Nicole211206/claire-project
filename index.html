@@ -398,7 +398,7 @@ function _validarLogin(){
           <option value="atrasadas">Só atrasadas</option>
         </select>
         <button class="btn btn-sm" onclick="abrirGerenciarCats()" title="Gerenciar categorias" style="padding:6px 10px;"><i class="fa-solid fa-tags"></i></button>
-        <button class="btn btn-rose" style="margin-left:auto;" onclick="openAddTask()"><i class="fa-solid fa-plus"></i> Nova Tarefa</button>
+        <button class="btn btn-rose" id="btn-nova-tarefa" style="margin-left:auto;" onclick="openAddTask()"><i class="fa-solid fa-plus"></i> Nova Tarefa</button>
       </div>
       <div id="task-crono-view"></div>
       <div id="task-kanban-view" style="display:none;"><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;" id="kanban-board"></div></div>
@@ -1481,6 +1481,6 @@ function _validarLogin(){
   </div>
 </div>
 
-<script src="js/app.js?v=41"></script>
+<script src="js/app.js?v=42"></script>
 </body>
 </html>

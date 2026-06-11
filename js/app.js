@@ -220,6 +220,9 @@ function aplicarPermissoes(){
     const primeiro=MODULOS_LISTA.find(m=>u.perfil==='admin'||podeAcessar(m.id));
     if(primeiro){ const btn=document.querySelector('#sidebar .nav-item[onclick*="showPanel(\''+primeiro.id+'\'"]'); showPanel(primeiro.id, btn||null); }
   }
+  // Esconder botão "Nova Tarefa" para atendentes (só veem demandas atribuídas)
+  const btnNovaTarefa=document.getElementById('btn-nova-tarefa');
+  if(btnNovaTarefa) btnNovaTarefa.style.display=(u.perfil==='atendente')?'none':'';
   // Redesenhar telas dependentes de permissão (importante: o 1º render ocorre antes do login)
   if(typeof renderOverview==='function') renderOverview();
   if(typeof renderTeam==='function') renderTeam();

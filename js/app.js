@@ -3880,6 +3880,7 @@ function obAdicionarComentario(id, fase){
   if(!im.comentarios[fase])im.comentarios[fase]=[];
   im.comentarios[fase].push({texto,data:new Date().toISOString()});
   el.value='';
+  if(typeof saveAll==='function')saveAll();
   obRenderAba(im);
   showToast('Comentário adicionado!','sage');
 }
@@ -3887,6 +3888,7 @@ function obAdicionarComentario(id, fase){
 function obRemoverComentario(id, fase, idx){
   const im=imoveis.find(x=>x.id===id);if(!im)return;
   if(im.comentarios&&im.comentarios[fase])im.comentarios[fase].splice(idx,1);
+  if(typeof saveAll==='function')saveAll();
   obRenderAba(im);
 }
 
@@ -4198,7 +4200,7 @@ function salvarCampoImovel(id,campo,valor){
   const im=imoveis.find(x=>x.id===id);
   if(!im)return;
   im[campo]=valor;
-  if(campo==='nome'&&document.getElementById('ob-imovel-nome')){}
+  if(typeof saveAll==='function')saveAll();
   renderOnboardingKanban();
 }
 
@@ -4207,12 +4209,14 @@ function obTogglePlat(id,plat,checked){
   if(!im.plataformas)im.plataformas=[];
   if(checked){if(!im.plataformas.includes(plat))im.plataformas.push(plat);}
   else{im.plataformas=im.plataformas.filter(p=>p!==plat);}
+  if(typeof saveAll==='function')saveAll();
   renderOnboardingKanban();
 }
 
 function obToggleDef(id,key){
   const im=imoveis.find(x=>x.id===id);if(!im)return;
   im[key]=!im[key];
+  if(typeof saveAll==='function')saveAll();
   obRenderAba(im);
   renderOnboardingKanban();
 }
@@ -4223,12 +4227,14 @@ function obAdicionarCama(id){
   const qtd=parseInt(document.getElementById('ob-cama-qtd').value)||1;
   if(!im.camas)im.camas=[];
   im.camas.push({tipo,qtd});
+  if(typeof saveAll==='function')saveAll();
   obRenderAba(im);renderOnboardingKanban();
 }
 
 function obRemoverCama(id,idx){
   const im=imoveis.find(x=>x.id===id);if(!im)return;
   im.camas.splice(idx,1);
+  if(typeof saveAll==='function')saveAll();
   obRenderAba(im);renderOnboardingKanban();
 }
 
@@ -4237,6 +4243,7 @@ function obSalvarOps(id,bloco,campo,valor){
   if(!im.ops)im.ops={};
   if(!im.ops[bloco])im.ops[bloco]={data:'',responsavel:'',hora:'',custo:''};
   im.ops[bloco][campo]=valor;
+  if(typeof saveAll==='function')saveAll();
   renderOnboardingKanban();
 }
 
@@ -4256,6 +4263,7 @@ function obSalvarOpsCusto(id,bloco,valor){
   const margem=im.margemWecare||15;
   const subtotal=im.custos.reduce((a,c)=>a+(+c.valor||0),0);
   im.valorSetup=subtotal*(1+margem/100);
+  if(typeof saveAll==='function')saveAll();
   renderOnboardingKanban();
 }
 
@@ -4264,6 +4272,7 @@ function obAdicionarTarefa(id,label,bloco){
   const op=im.ops&&im.ops[bloco]||{};
   const txt=label+(im.nome?' — '+im.nome:'')+(op.data?' em '+op.data:'');
   tasks.unshift({id:Date.now(),text:txt,cat:'work',prio:'med',due:op.data||'',done:false,status:'todo'});
+  if(typeof saveAll==='function')saveAll();
   renderTasks();renderKanban();fillFocusSel();
   showToast('Tarefa adicionada: '+txt,'sage');
 }
@@ -4272,6 +4281,7 @@ function obAdicionarCusto(id){
   const im=imoveis.find(x=>x.id===id);if(!im)return;
   if(!im.custos)im.custos=[];
   im.custos.push({desc:'',valor:0});
+  if(typeof saveAll==='function')saveAll();
   obRenderAba(im);
 }
 
@@ -4281,19 +4291,23 @@ function obEditarCusto(id,idx,campo,valor){
   const custos=im.custos||[];const margem=im.margemWecare||15;
   const subtotal=custos.reduce((a,c)=>a+(+c.valor||0),0);
   im.valorSetup=subtotal*(1+margem/100);
+  if(typeof saveAll==='function')saveAll();
   renderOnboardingKanban();
 }
 
 function obRemoverCusto(id,idx){
   const im=imoveis.find(x=>x.id===id);if(!im)return;
   im.custos.splice(idx,1);
+  if(typeof saveAll==='function')saveAll();
   obRenderAba(im);
+  renderOnboardingKanban();
 }
 
 function obMarcarCompra(id,key,value){
   const im=imoveis.find(x=>x.id===id);if(!im)return;
   if(!im.compras)im.compras={};
   im.compras[key]=value;
+  if(typeof saveAll==='function')saveAll();
   renderOnboardingKanban();
 }
 
@@ -4301,6 +4315,7 @@ function salvarCampoImovelNested(id,obj,campo,valor){
   const im=imoveis.find(x=>x.id===id);if(!im)return;
   if(!im[obj])im[obj]={};
   im[obj][campo]=valor;
+  if(typeof saveAll==='function')saveAll();
   if(obj==='defEnxoval'&&campo==='tipo'){
     obRenderAba(im);
   }
@@ -4318,6 +4333,7 @@ function obSalvarSetupAluguel(id,valor){
   else if(v>0){im.custos.push({desc:'Setup Enxoval ('+(im.defEnxoval.fornecedor||'Terceirizada')+')',valor:v,_blocoRef:'_setupAluguel'});}
   const margem=im.margemWecare||15;
   im.valorSetup=im.custos.reduce((a,c)=>a+(+c.valor||0),0)*(1+margem/100);
+  if(typeof saveAll==='function')saveAll();
   renderOnboardingKanban();
 }
 
@@ -4326,6 +4342,7 @@ function obSalvarCompra(id,key,campo,valor){
   if(!im.compras)im.compras={};
   if(!im.compras[key]||typeof im.compras[key]!=='object')im.compras[key]={tem:0,valorUnit:0};
   im.compras[key][campo]=campo==='tem'?(parseInt(valor)||0):(parseFloat(valor)||0);
+  if(typeof saveAll==='function')saveAll();
 }
 
 function calcQtdNecessaria(itemName,categoria,im){
@@ -4469,7 +4486,7 @@ function obAvancarFase(){
   const im=imoveis.find(x=>x.id===imovelAtivo);if(!im)return;
   const order=['contrato','compras','definicoes','producao','auditoria','ativo'];
   const idx=order.indexOf(im.status);
-  if(idx<order.length-1){im.status=order[idx+1];abrirImovelModal(im.id);renderOnboardingKanban();}
+  if(idx<order.length-1){im.status=order[idx+1];if(typeof saveAll==='function')saveAll();abrirImovelModal(im.id);renderOnboardingKanban();}
 }
 
 function obEnviarParaCriacao(id){
@@ -4499,6 +4516,7 @@ function obEnviarParaCriacao(id){
     showToast('Demanda criada para '+im.responsavelCriacao+' com prazo de '+prazoH+'h!','sage');
   }
 
+  if(typeof saveAll==='function')saveAll();
   obRenderAba(im);
   renderOnboardingKanban();
   _iniciarMonitorPrazo(id);
@@ -4530,9 +4548,10 @@ function obDarBaixa(){
   const im=imoveis.find(x=>x.id===imovelAtivo);if(!im)return;
   if(_prazoTimers[im.id]){clearInterval(_prazoTimers[im.id]);delete _prazoTimers[im.id];}
   im.status='ativo';
-  im.dataAtivacao=new Date().toISOString(); // registra data de ativação do anúncio
+  im.dataAtivacao=new Date().toISOString();
+  if(typeof saveAll==='function')saveAll();
   abrirImovelModal(im.id);renderOnboardingKanban();
-  renderKPIs(); // atualiza KPI de tempo de ativação
+  renderKPIs();
   showToast('Imóvel ativado! Tempo de ativação registrado automaticamente.','sage');
 }
 
@@ -4542,6 +4561,7 @@ function obApagarImovel(){
   if(!confirm('Apagar "'+nome+'"? Esta ação não pode ser desfeita.'))return;
   imoveis=imoveis.filter(x=>x.id!==imovelAtivo);
   imovelAtivo=null;
+  if(typeof saveAll==='function')saveAll();
   closeModal('modal-imovel');
   renderOnboardingKanban();
   showToast('Imóvel "'+nome+'" apagado.','peach');
@@ -4649,6 +4669,7 @@ function obMarcarPerdido(){
   if(!confirm('Marcar "'+( im.nome||'este imóvel')+'" como Perdido? Ele sairá do kanban principal mas ficará salvo.'))return;
   im.statusAnterior=im.status;
   im.status='perdido';
+  if(typeof saveAll==='function')saveAll();
   closeModal('modal-imovel');
   renderOnboardingKanban();
   showToast('"'+(im.nome||'Imóvel')+'" marcado como perdido.','peach');
@@ -4658,6 +4679,7 @@ function obVoltarOperacao(id){
   const im=imoveis.find(x=>x.id===id);if(!im)return;
   im.status=im.statusAnterior||'contrato';
   delete im.statusAnterior;
+  if(typeof saveAll==='function')saveAll();
   renderOnboardingKanban();
   showToast('"'+(im.nome||'Imóvel')+'" voltou ao fluxo!','sage');
 }

@@ -5428,26 +5428,26 @@ const PLANTAO_STATUS=[
 ];
 function _plantaoStatusInfo(s){return PLANTAO_STATUS.find(x=>x.id===s)||PLANTAO_STATUS[0];}
 
-function _preencherDatalistImoveis(){
-  const dl=document.getElementById('pt-imovel-list');if(!dl)return;
-  const nomes=[...new Set([
-    ...imovelsCatalog.map(im=>im.nome.replace(/^WC-\d+\s*-\s*/,'')),
-    ...plantaoItems.map(r=>r.imovel).filter(Boolean)
-  ])].sort();
-  dl.innerHTML=nomes.map(n=>'<option value="'+esc(n)+'">').join('');
+function _preencherSelectImovelPlantao(valorAtual){
+  const sel=document.getElementById('pt-imovel');if(!sel)return;
+  sel.innerHTML='<option value="">— Selecione o imóvel —</option>'+
+    imovelsCatalog.map(im=>{
+      const nome=im.nome.replace(/^WC-\d+\s*-\s*/,'');
+      return '<option value="'+esc(nome)+'"'+(nome===valorAtual?' selected':'')+'>'+esc(nome)+'</option>';
+    }).join('');
 }
 
 function abrirNovoPlantao(){
   plantaoAtivo=null;
   const hoje=new Date().toISOString().split('T')[0];
   document.getElementById('pt-data').value=hoje;
-  document.getElementById('pt-imovel').value='';
   document.getElementById('pt-situacao').value='';
   document.getElementById('pt-detalhes').value='';
   document.getElementById('pt-status').value='pendente';
   document.getElementById('pt-updates-list').innerHTML='';
   document.getElementById('pt-nova-update').value='';
   document.getElementById('modal-plantao-title').textContent='Nova Ocorrência';
+  _preencherSelectImovelPlantao('');
   document.getElementById('modal-plantao').classList.add('open');
   setTimeout(()=>document.getElementById('pt-situacao').focus(),100);
 }
@@ -5456,13 +5456,12 @@ function abrirPlantaoModal(id){
   const r=plantaoItems.find(x=>x.id===id);if(!r)return;
   plantaoAtivo=id;
   document.getElementById('pt-data').value=r.data||'';
-  document.getElementById('pt-imovel').value=r.imovel||'';
   document.getElementById('pt-situacao').value=r.situacao||'';
   document.getElementById('pt-detalhes').value=r.detalhes||'';
   document.getElementById('pt-status').value=r.status||'pendente';
   document.getElementById('pt-nova-update').value='';
   document.getElementById('modal-plantao-title').textContent=r.situacao||'Ocorrência';
-  _preencherDatalistImoveis();
+  _preencherSelectImovelPlantao(r.imovel||'');
   renderPlantaoUpdates();
   document.getElementById('modal-plantao').classList.add('open');
 }

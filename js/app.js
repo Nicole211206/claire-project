@@ -3341,6 +3341,7 @@ function loadAll(){
     v=g('nx_outros');     if(Array.isArray(v)) outrosMembros=v;
     v=g('nx_extras');     if(Array.isArray(v)) extras=v;
     v=g('nx_manutencoes'); if(Array.isArray(v)) manutencoes=v;
+    v=g('nx_fornecedores_cad'); if(Array.isArray(v)) fornecedoresCadastro=v;
     v=g('nx_manual');     if(Array.isArray(v)) manualEntradas=v;
     v=g('nx_superhost');  if(Array.isArray(v)) superhostPeriodos=v;
     v=g('nx_cancelamentos'); if(Array.isArray(v)) cancelamentos=v;
@@ -4688,7 +4689,7 @@ function manutSubtotal(m){ return (m.itens||[]).reduce(function(s,it){return s+(
 function manutTotalComMargem(m){ const sub=manutSubtotal(m); const margem=parseFloat(m.margemPercent); return sub*(1+((isNaN(margem)?20:margem)/100)); }
 
 function abrirNovaManutencao(){
-  const m={id:Date.now(),status:'solicitacao',origem:'proprietario',imovelNome:'',dataSolicitacao:new Date().toISOString().split('T')[0],tipo:'dano',itens:[{desc:'',valor:0}],margemPercent:20,fotos:[],quemPaga:'proprietario',fornecedor:{nome:'',contato:'',email:'',pix:''},precisaComprar:false,linksItens:[],ondeEntregar:'',obsCompra:'',pagarFornecedor:false,pagFornecedor:{valor:0,nome:'',email:'',pix:'',dataPagamento:''},valorPago:0,pagoPor:'proprietario',valorGasto:0,obs:'',dataCriacao:new Date().toISOString()};
+  const m={id:Date.now(),status:'solicitacao',pausado:false,origem:'proprietario',imovelNome:'',dataSolicitacao:new Date().toISOString().split('T')[0],dataPrazo:'',tipo:'dano',itens:[{desc:'',valor:0}],margemPercent:20,fotos:[],quemPaga:'proprietario',fornecedor:{nome:'',contato:'',email:'',pix:''},precisaComprar:false,linksItens:[],ondeEntregar:'',obsCompra:'',pagarFornecedor:false,pagFornecedor:{valor:0,nome:'',email:'',pix:'',cpfCnpj:'',dataPagamento:'',fornCadId:null},repassarHostaway:false,valorPago:0,pagoPor:'proprietario',valorGasto:0,obs:'',tarefasManut:[],responsavel:'',dataCriacao:new Date().toISOString()};
   manutencoes.unshift(m); manutAtiva=m.id; manutAba='solicitacao';
   abrirManutModal(m.id); renderManutencaoKanban();
   if(typeof saveAll==='function') saveAll();

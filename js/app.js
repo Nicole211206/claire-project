@@ -1124,6 +1124,7 @@ function adicionarCat(){
   renderCatsList();
   renderTaskFilterSel();
   renderTaskCatSelect();
+  if(typeof saveAll==='function')saveAll();
 }
 
 function removeCat(id){
@@ -1132,6 +1133,7 @@ function removeCat(id){
   renderTaskFilterSel();
   renderTaskCatSelect();
   renderTasks();
+  if(typeof saveAll==='function')saveAll();
 }
 
 let taskDetalheAtivo=null;
@@ -1201,6 +1203,7 @@ function adicionarUpdate(){
   document.getElementById('td-nova-update').value='';
   renderTaskUpdates();
   renderTasks();
+  if(typeof saveAll==='function')saveAll();
   showToast('Atualização adicionada!','sage');
 }
 
@@ -1209,6 +1212,7 @@ function removerUpdate(idx){
   t.updates.splice(idx,1);
   renderTaskUpdates();
   renderTasks();
+  if(typeof saveAll==='function')saveAll();
 }
 
 function toggleTask(id){
@@ -1232,9 +1236,10 @@ function toggleTask(id){
     showToast('🔁 Próxima recorrência criada: '+fd(proximaDue),'sage');
   }
   renderTasks();renderKanban();fillFocusSel();
+  if(typeof saveAll==='function')saveAll();
   if(typeof renderFocusInsights==='function')renderFocusInsights();
 }
-function delTask(id){tasks=tasks.filter(t=>t.id!==id);renderTasks();renderKanban();fillFocusSel();}
+function delTask(id){tasks=tasks.filter(t=>t.id!==id);if(typeof saveAll==='function')saveAll();renderTasks();renderKanban();fillFocusSel();}
 function filterTasks(v){renderTasks(v);}
 function switchView(v,btn){btn.parentNode.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');document.getElementById('task-crono-view').style.display=v==='crono'?'':'none';document.getElementById('task-kanban-view').style.display=v==='kanban'?'':'none';if(v==='crono')renderTaskGantt();}
 let tcalM=new Date().getMonth(), tcalY=new Date().getFullYear();
@@ -1551,7 +1556,7 @@ function salvarPerfilAtt() {
   showToast('Perfil salvo!', 'sage');
 }
 
-function setAttFoto(id,v){const a=ATTS.find(x=>x.id===id);if(a){a.foto=v;renderTeam();renderTeamOv();}}
+function setAttFoto(id,v){const a=ATTS.find(x=>x.id===id);if(a){a.foto=v;if(typeof saveAll==='function')saveAll();renderTeam();renderTeamOv();}}
 function _lerImagemReduzida(file, cb){
   const reader=new FileReader();
   reader.onload=function(e){
@@ -3113,18 +3118,20 @@ function adicionarMembro(){
     respWeekly:[null,null,null,null],respMes:null,demands:[]
   });
   nextAttId++;
+  if(typeof saveAll==='function')saveAll();
   renderTeam();renderTeamOv();renderSalary();
 }
 
 function removerMembro(id){
   if(!confirm('Remover este membro da equipe?'))return;
   ATTS=ATTS.filter(a=>a.id!==id);
+  if(typeof saveAll==='function')saveAll();
   renderTeam();renderTeamOv();renderSalary();
 }
 
-function setAttNome(id,v){const a=ATTS.find(x=>x.id===id);if(a){a.name=v;a.ini=v.charAt(0).toUpperCase();renderTeamOv();renderSalary();}}
-function setAttRate(id,v){const a=ATTS.find(x=>x.id===id);if(a){a.rate=parseFloat(v)||0;renderSalary();}}
-function setAttEscala(id,v){const a=ATTS.find(x=>x.id===id);if(a)a.escala=v;}
+function setAttNome(id,v){const a=ATTS.find(x=>x.id===id);if(a){a.name=v;a.ini=v.charAt(0).toUpperCase();if(typeof saveAll==='function')saveAll();renderTeamOv();renderSalary();}}
+function setAttRate(id,v){const a=ATTS.find(x=>x.id===id);if(a){a.rate=parseFloat(v)||0;if(typeof saveAll==='function')saveAll();renderSalary();}}
+function setAttEscala(id,v){const a=ATTS.find(x=>x.id===id);if(a){a.escala=v;if(typeof saveAll==='function')saveAll();}}
 
 function setRespWeek(id,week,v){
   const a=ATTS.find(x=>x.id===id);if(!a)return;
@@ -3135,6 +3142,7 @@ function setRespWeek(id,week,v){
   _ksv().tr[id]=a.respMes!==null?a.respMes.toFixed(1):'';
   const trVals=ATTS.map(att=>_ksv().tr&&_ksv().tr[att.id]?parseFloat(_ksv().tr[att.id]):null).filter(x=>x!==null);
   _kv().tr=trVals.length>0?(trVals.reduce((s,x)=>s+x,0)/trVals.length).toFixed(2):null;
+  if(typeof saveAll==='function')saveAll();
   renderTeam();renderKPIs();
 }
 
@@ -3144,6 +3152,7 @@ function zerarRespMes(id){
   if(_ksv().tr)delete _ksv().tr[id];
   const trVals=ATTS.map(att=>_ksv().tr&&_ksv().tr[att.id]?parseFloat(_ksv().tr[att.id]):null).filter(x=>x!==null);
   _kv().tr=trVals.length>0?(trVals.reduce((s,x)=>s+x,0)/trVals.length).toFixed(2):null;
+  if(typeof saveAll==='function')saveAll();
   renderTeam();renderKPIs();
   showToast('Tempo de resposta zerado para '+a.name,'sage');
 }
@@ -3424,12 +3433,14 @@ function salvarTurno(){
   const turno=document.getElementById('t-turno-tipo').value;
   const attId=document.getElementById('t-turno-att').value;
   turnos.push({id:Date.now(),data,turno,attId,confirmado:false});
+  if(typeof saveAll==='function')saveAll();
   closeModal('modal-turno');
   renderTurnos();
   showToast('Turno lançado!','sage');
 }
 function removerTurno(id){
   turnos=turnos.filter(t=>t.id!==id);
+  if(typeof saveAll==='function')saveAll();
   recalcularDiasDosTurnos();
   renderTurnos();
 }
@@ -5378,7 +5389,7 @@ function abrirProjetoModal(id){
   const p=projetos.find(x=>x.id===id);if(!p)return;
   projetoAtivo=id;
   document.getElementById('proj-nome-input').value=p.nome||'';
-  document.getElementById('proj-nome-input').oninput=function(){const pr=projetos.find(x=>x.id===projetoAtivo);if(pr){pr.nome=this.value;renderProjetosKanban();}};
+  document.getElementById('proj-nome-input').oninput=function(){const pr=projetos.find(x=>x.id===projetoAtivo);if(pr){pr.nome=this.value;if(typeof saveAll==='function')saveAll();renderProjetosKanban();}};
   const sc=PROJ_STATUS.find(s=>s.id===p.status)||PROJ_STATUS[0];
   document.getElementById('proj-status-badge').textContent=sc.label;
   document.getElementById('proj-status-badge').style.color=sc.color;
@@ -5395,17 +5406,17 @@ function projMudarAba(aba,btn){
   if(aba==='info'){
     el.innerHTML=
       '<div class="form-row">'+
-      '<div class="form-group"><label class="form-label">Status</label><select class="form-select" onchange="const pr=projetos.find(x=>x.id===projetoAtivo);if(pr){pr.status=this.value;if(this.value===\'andamento\'&&!pr.dataInicio){pr.dataInicio=new Date().toISOString().split(\'T\')[0];}const sc=PROJ_STATUS.find(s=>s.id===this.value);document.getElementById(\'proj-status-badge\').textContent=sc.label;document.getElementById(\'proj-status-badge\').style.color=sc.color;renderProjetosKanban();}">'+
+      '<div class="form-group"><label class="form-label">Status</label><select class="form-select" onchange="const pr=projetos.find(x=>x.id===projetoAtivo);if(pr){pr.status=this.value;if(this.value===\'andamento\'&&!pr.dataInicio){pr.dataInicio=new Date().toISOString().split(\'T\')[0];}const sc=PROJ_STATUS.find(s=>s.id===this.value);document.getElementById(\'proj-status-badge\').textContent=sc.label;document.getElementById(\'proj-status-badge\').style.color=sc.color;if(typeof saveAll===\'function\')saveAll();renderProjetosKanban();}">'+
       PROJ_STATUS.map(s=>'<option value="'+s.id+'"'+(p.status===s.id?' selected':'')+'>'+s.label+'</option>').join('')+
       '</select></div>'+
-      '<div class="form-group"><label class="form-label">Tempo Estimado</label><input class="form-input" value="'+esc(p.tempoEstimado||'')+'" placeholder="Ex: 2 semanas" onchange="const pr=projetos.find(x=>x.id===projetoAtivo);if(pr)pr.tempoEstimado=this.value;"></div>'+
+      '<div class="form-group"><label class="form-label">Tempo Estimado</label><input class="form-input" value="'+esc(p.tempoEstimado||'')+'" placeholder="Ex: 2 semanas" onchange="const pr=projetos.find(x=>x.id===projetoAtivo);if(pr){pr.tempoEstimado=this.value;if(typeof saveAll===\'function\')saveAll();}"></div>'+
       '</div>'+
       '<div class="form-row">'+
       '<div class="form-group"><label class="form-label">Início</label><input type="date" class="form-input" value="'+esc(p.dataInicio||'')+'" onchange="const pr=projetos.find(x=>x.id===projetoAtivo);if(pr){pr.dataInicio=this.value;if(typeof saveAll===\'function\')saveAll();if(typeof renderProjetosGantt===\'function\')renderProjetosGantt();}"></div>'+
       '<div class="form-group"><label class="form-label">Previsão de término</label><input type="date" class="form-input" value="'+esc(p.dataFim||'')+'" onchange="const pr=projetos.find(x=>x.id===projetoAtivo);if(pr){pr.dataFim=this.value;if(typeof saveAll===\'function\')saveAll();if(typeof renderProjetosGantt===\'function\')renderProjetosGantt();}"></div>'+
       '</div>'+
-      '<div class="form-group"><label class="form-label">Colaboradores</label><input class="form-input" value="'+esc(p.colaboradores||'')+'" placeholder="Ex: Gabriela, Felipe, Nicole" onchange="const pr=projetos.find(x=>x.id===projetoAtivo);if(pr)pr.colaboradores=this.value;"></div>'+
-      '<div class="form-group"><label class="form-label">Objetivos</label><textarea class="form-input" rows="5" placeholder="Descreva os objetivos do projeto..." onchange="const pr=projetos.find(x=>x.id===projetoAtivo);if(pr)pr.objetivos=this.value;">'+esc(p.objetivos||'')+'</textarea></div>';
+      '<div class="form-group"><label class="form-label">Colaboradores</label><input class="form-input" value="'+esc(p.colaboradores||'')+'" placeholder="Ex: Gabriela, Felipe, Nicole" onchange="const pr=projetos.find(x=>x.id===projetoAtivo);if(pr){pr.colaboradores=this.value;if(typeof saveAll===\'function\')saveAll();}"></div>'+
+      '<div class="form-group"><label class="form-label">Objetivos</label><textarea class="form-input" rows="5" placeholder="Descreva os objetivos do projeto..." onchange="const pr=projetos.find(x=>x.id===projetoAtivo);if(pr){pr.objetivos=this.value;if(typeof saveAll===\'function\')saveAll();}">'+esc(p.objetivos||'')+'</textarea></div>';
     const reuVinc=transcricoes.filter(r=>String(r.projetoId)===String(p.id));
     if(reuVinc.length){
       el.innerHTML+='<div class="form-group" style="border-top:1px solid var(--border);padding-top:12px;"><label class="form-label">Reuniões vinculadas</label>'+
@@ -5414,7 +5425,7 @@ function projMudarAba(aba,btn){
     }
   } else if(aba==='notas'){
     el.innerHTML='<div class="form-group"><label class="form-label" style="font-size:11px;color:var(--text3);">Espaço livre para anotações — funciona como um documento</label>'+
-      '<textarea class="form-input" rows="18" style="font-size:13.5px;line-height:1.8;font-family:var(--font-body);resize:vertical;" placeholder="Escreva aqui suas anotações, ideias, atas de reunião..." oninput="const pr=projetos.find(x=>x.id===projetoAtivo);if(pr)pr.notas=this.value;">'+esc(p.notas||'')+'</textarea></div>';
+      '<textarea class="form-input" rows="18" style="font-size:13.5px;line-height:1.8;font-family:var(--font-body);resize:vertical;" placeholder="Escreva aqui suas anotações, ideias, atas de reunião..." oninput="const pr=projetos.find(x=>x.id===projetoAtivo);if(pr){pr.notas=this.value;if(typeof saveAll===\'function\')saveAll();}">'+esc(p.notas||'')+'</textarea></div>';
   } else if(aba==='tarefas'){
     const tarefasProj=tasks.filter(t=>t.projetoId===p.id);
     el.innerHTML='<div style="margin-bottom:12px;"><button class="btn btn-rose btn-sm" onclick="adicionarTarefaProjeto()"><i class="fa-solid fa-plus"></i> Nova Tarefa do Projeto</button></div>'+
@@ -5432,11 +5443,13 @@ function adicionarTarefaProjeto(){
   if(!texto||!texto.trim())return;
   const nova={id:Date.now(),text:texto.trim(),cat:'work',prio:'med',due:'',done:false,status:'todo',projetoId:p.id,projetoNome:p.nome};
   tasks.unshift(nova);
+  if(typeof saveAll==='function')saveAll();
   renderTasks();renderKanban();fillFocusSel();
   projMudarAba('tarefas',document.getElementById('ptab-tarefas'));
 }
 
 function salvarProjeto(){
+  if(typeof saveAll==='function')saveAll();
   renderProjetosKanban();
   showToast('Projeto salvo!','sage');
   closeModal('modal-projeto');
@@ -5695,6 +5708,7 @@ function salvarCompraItem(){
   } else {
     comprasList.unshift(compra);
   }
+  if(typeof saveAll==='function')saveAll();
   closeModal('modal-compra');
   renderCompras();
   sincronizarMargemKPI();

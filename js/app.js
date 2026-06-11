@@ -218,12 +218,18 @@ function aplicarPermissoes(){
     const primeiro=MODULOS_LISTA.find(m=>u.perfil==='admin'||podeAcessar(m.id));
     if(primeiro){ const btn=document.querySelector('#sidebar .nav-item[onclick*="showPanel(\''+primeiro.id+'\'"]'); showPanel(primeiro.id, btn||null); }
   }
+  // Atendentes com attId sempre veem Tarefas (mesmo se o preset antigo tinha 'team')
+  if(u.perfil==='atendente' && u.attId){
+    const navTasks=document.querySelector('#sidebar .nav-item[onclick*="showPanel(\'tasks\'"]');
+    if(navTasks) navTasks.style.display='';
+  }
   // Redesenhar telas dependentes de permissão (importante: o 1º render ocorre antes do login)
   if(typeof renderOverview==='function') renderOverview();
   if(typeof renderTeam==='function') renderTeam();
   if(typeof renderSalary==='function') renderSalary();
   if(typeof renderTurnos==='function') renderTurnos();
   if(typeof renderKPIs==='function') renderKPIs();
+  if(typeof renderTasks==='function') renderTasks();
 }
 
 function logout(){
@@ -284,7 +290,7 @@ function aplicarPresetPerfil(perfil){
   grp.style.opacity='1';
   let preset=[];
   if(perfil==='coordenacao') preset=['team','onboarding','compras','overview'];
-  else if(perfil==='atendente') preset=['team','turnos','overview'];
+  else if(perfil==='atendente') preset=['tasks','turnos','overview'];
   _renderModulosChecks(preset);
 }
 
@@ -844,6 +850,44 @@ function renderExtras(){
 }
 
 // ═══════════════════ TASKS ═══════════════════
+// Para não-admin com attId, as "tarefas" são as demandas atribuídas a elas no Equipe
+function _getEffectiveTasks(){
+  if(typeof isAdmin==='function' && !isAdmin()){
+    const att=typeof getMinhaAtt==='function'?getMinhaAtt():null;
+    if(att){
+      return att.demands.map((d,i)=>({
+        id:'dem_'+i,
+        text:d.desc||'(sem descrição)',
+        cat:'work',
+        prio:d.prio||'med',
+        due:d.due||'',
+        dataInicio:d.dataInicio||d.due||'',
+        done:d.s==='done',
+        status:d.s==='done'?'done':(d.s==='doing'?'doing':'todo'),
+        recorrente:d.recorrente||false,
+        tipoRecorrencia:d.tipoRecorrencia||null,
+        updates:d.updates||[],
+        projetoId:null,projetoNome:null,
+        _isDemand:true,_demIdx:i,_attId:att.id
+      }));
+    }
+  }
+  return tasks;
+}
+function toggleDemanda(attId,idx){
+  const att=ATTS.find(a=>a.id===attId);if(!att||!att.demands[idx])return;
+  att.demands[idx].s=att.demands[idx].s==='done'?'todo':'done';
+  if(typeof saveAll==='function')saveAll();
+  renderTasks();
+}
+function mudarStatusDemanda(attId,idx,s){
+  const att=ATTS.find(a=>a.id===attId);if(!att||!att.demands[idx])return;
+  att.demands[idx].s=s;
+  if(typeof saveAll==='function')saveAll();
+  renderTasks();
+  showToast('Status atualizado!','sage');
+}
+
 let taskCats=[
   {id:'work',    label:'Trabalho', color:'#e07a7a'},
   {id:'personal',label:'Pessoal',  color:'#a78bfa'},
@@ -878,39 +922,48 @@ function filtrarSequenciaProjetos(lista){
 
 function renderTasks(f){
   if(f===undefined){const cs=document.getElementById('task-filter-sel');f=cs&&cs.value?cs.value:'all';}
-  let list=f==='all'?tasks:tasks.filter(t=>t.cat===f);
+  const effective=_getEffectiveTasks();
+  const isDemandView=effective.length>0&&effective[0]&&effective[0]._isDemand;
+  let list=f==='all'?effective:effective.filter(t=>t.cat===f);
   // filtro status (ativas/finalizadas/todas)
   const sf=document.getElementById('task-status-filter');
   const sv=sf?sf.value:'ativas';
   if(sv==='ativas') list=list.filter(t=>!t.done);
   else if(sv==='finalizadas') list=list.filter(t=>t.done);
-  // filtro tipo (projetos/sem-projeto/todos)
-  const tf=document.getElementById('task-tipo-filter');
-  const tv=tf?tf.value:'todos';
-  if(tv==='projetos') list=list.filter(t=>t.projetoId);
-  else if(tv==='sem-projeto') list=list.filter(t=>!t.projetoId);
-  list=filtrarSequenciaProjetos(list);
+  // filtro tipo (projetos/sem-projeto/todos) — só para tarefas normais
+  if(!isDemandView){
+    const tf=document.getElementById('task-tipo-filter');
+    const tv=tf?tf.value:'todos';
+    if(tv==='projetos') list=list.filter(t=>t.projetoId);
+    else if(tv==='sem-projeto') list=list.filter(t=>!t.projetoId);
+    list=filtrarSequenciaProjetos(list);
+  }
   list=aplicarFiltroPrazo(list);
   const _listaEl=document.getElementById('all-tasks-list');
   if(_listaEl) _listaEl.innerHTML=list.map(t=>{
     const cat=getCatInfo(t.cat);
+    const toggleFn=t._isDemand?'toggleDemanda(\''+t._attId+'\','+t._demIdx+')':'toggleTask('+t.id+')';
+    const detalheFn=t._isDemand?'abrirDemandaModal(\''+t._attId+'\','+t._demIdx+')':'abrirDetalheTask('+t.id+')';
+    const statusLabel=t._isDemand?({todo:'A fazer',doing:'Em andamento',done:'Concluída'}[t.status]||'A fazer'):'';
+    const statusBadge=t._isDemand?'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--bg3);color:var(--text3);">'+statusLabel+'</span>':'';
     return '<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);'+(t.done?'opacity:0.5;':'')+'">'+
       '<div style="width:3px;height:36px;border-radius:2px;background:'+(PC[t.prio]||'var(--text3)')+';flex-shrink:0;margin-top:2px;"></div>'+
-      '<div onclick="toggleTask('+t.id+')" style="width:18px;height:18px;border-radius:50%;border:1.5px solid '+(t.done?'var(--sage)':'var(--border2)')+';background:'+(t.done?'var(--sage)':'transparent')+';cursor:pointer;flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;font-size:9px;color:'+(t.done?'#fff':'transparent')+';transition:all 0.15s;">'+(t.done?'<i class="fa-solid fa-check"></i>':'')+
+      '<div onclick="'+toggleFn+'" style="width:18px;height:18px;border-radius:50%;border:1.5px solid '+(t.done?'var(--sage)':'var(--border2)')+';background:'+(t.done?'var(--sage)':'transparent')+';cursor:pointer;flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;font-size:9px;color:'+(t.done?'#fff':'transparent')+';transition:all 0.15s;">'+(t.done?'<i class="fa-solid fa-check"></i>':'')+
       '</div>'+
-      '<div style="flex:1;min-width:0;"><div onclick="abrirDetalheTask('+t.id+')" style="font-size:13.5px;cursor:pointer;'+(t.done?'text-decoration:line-through;color:var(--text3);':'')+'" title="Ver detalhes e atualizações">'+t.text+(t.recorrente&&t.tipoRecorrencia?'<span style="font-size:10px;color:var(--lavender);margin-left:6px;">🔁</span>':'')+'</div>'+
-      '<div style="display:flex;gap:6px;margin-top:3px;align-items:center;">'+
-      '<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:'+cat.color+'22;color:'+cat.color+';border:1px solid '+cat.color+'44;">'+cat.label+'</span>'+
+      '<div style="flex:1;min-width:0;"><div onclick="'+detalheFn+'" style="font-size:13.5px;cursor:pointer;'+(t.done?'text-decoration:line-through;color:var(--text3);':'')+'" title="Ver detalhes">'+esc(t.text)+(t.recorrente&&t.tipoRecorrencia?'<span style="font-size:10px;color:var(--lavender);margin-left:6px;">🔁</span>':'')+'</div>'+
+      '<div style="display:flex;gap:6px;margin-top:3px;align-items:center;flex-wrap:wrap;">'+
+      (t._isDemand?statusBadge:'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:'+cat.color+'22;color:'+cat.color+';border:1px solid '+cat.color+'44;">'+cat.label+'</span>')+
       (t.due?'<span style="font-size:11px;color:var(--text3);"><i class="fa-regular fa-calendar fa-xs"></i> '+fd(t.due)+'</span>':'')+
       ((t.updates&&t.updates.length>0)?'<span style="font-size:10px;color:var(--text3);"><i class="fa-solid fa-message fa-xs"></i> '+t.updates.length+'</span>':'')+
+      (t._isDemand&&!t.done?'<select onchange="mudarStatusDemanda(\''+t._attId+'\','+t._demIdx+',this.value);this.blur();" onclick="event.stopPropagation();" style="font-size:10px;padding:1px 6px;border-radius:8px;border:1px solid var(--border2);background:var(--bg2);color:var(--text);cursor:pointer;"><option value="todo"'+(t.status==='todo'?' selected':'')+'>A fazer</option><option value="doing"'+(t.status==='doing'?' selected':'')+'>Em andamento</option><option value="done"'+(t.status==='done'?' selected':'')+'>Concluída</option></select>':'')+
       '</div></div>'+
-      '<button onclick="delTask('+t.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 4px;transition:color 0.15s;" onmouseover="this.style.color=\'var(--vermelha)\'" onmouseout="this.style.color=\'var(--text3)\'"><i class="fa-solid fa-xmark"></i></button>'+
-      ((!t.done&&t.due)?'<button onclick="criarEventoGCal(\''+escQ(t.text)+'\',\''+t.due+'\',\''+(t.hora||'09:00')+'\',60,\'Tarefa Claire\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:2px 4px;" title="Criar no Google Agenda"><i class="fa-brands fa-google"></i></button>':'')+
+      (!t._isDemand?'<button onclick="delTask('+t.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 4px;transition:color 0.15s;" onmouseover="this.style.color=\'var(--vermelha)\'" onmouseout="this.style.color=\'var(--text3)\'"><i class="fa-solid fa-xmark"></i></button>':'')+
+      ((!t.done&&t.due&&!t._isDemand)?'<button onclick="criarEventoGCal(\''+escQ(t.text)+'\',\''+t.due+'\',\''+(t.hora||'09:00')+'\',60,\'Tarefa Claire\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:2px 4px;" title="Criar no Google Agenda"><i class="fa-brands fa-google"></i></button>':'')+
       '</div>';
   }).join('');
-  const p=tasks.filter(t=>!t.done).length;
-  document.getElementById('tasks-badge').textContent=p;
-  document.getElementById('ov-tasks').textContent=p;
+  const p=effective.filter(t=>!t.done).length;
+  const badge=document.getElementById('tasks-badge'); if(badge) badge.textContent=p;
+  const ovt=document.getElementById('ov-tasks'); if(ovt) ovt.textContent=p;
   renderOvAgenda();
   renderTaskGantt();
 }
@@ -988,18 +1041,27 @@ function _renderGantt(containerId, items, opts){
 function renderTaskGantt(){
   const sf=document.getElementById('task-status-filter');
   const sv=sf?sf.value:'ativas';
-  let ganttBase=tasks.filter(t=>(t.dataInicio||t.due));
+  const effective=_getEffectiveTasks();
+  const isDemandView=effective.length>0&&effective[0]&&effective[0]._isDemand;
+  let ganttBase=effective.filter(t=>(t.dataInicio||t.due));
   if(sv==='ativas') ganttBase=ganttBase.filter(t=>!t.done);
   else if(sv==='finalizadas') ganttBase=ganttBase.filter(t=>t.done);
-  const tf=document.getElementById('task-tipo-filter');
-  const tv=tf?tf.value:'todos';
-  if(tv==='projetos') ganttBase=ganttBase.filter(t=>t.projetoId);
-  else if(tv==='sem-projeto') ganttBase=ganttBase.filter(t=>!t.projetoId);
-  const cs=document.getElementById('task-filter-sel');const cf=cs?cs.value:'all';
-  if(cf&&cf!=='all') ganttBase=ganttBase.filter(t=>t.cat===cf);
+  if(!isDemandView){
+    const tf=document.getElementById('task-tipo-filter');
+    const tv=tf?tf.value:'todos';
+    if(tv==='projetos') ganttBase=ganttBase.filter(t=>t.projetoId);
+    else if(tv==='sem-projeto') ganttBase=ganttBase.filter(t=>!t.projetoId);
+    const cs=document.getElementById('task-filter-sel');const cf=cs?cs.value:'all';
+    if(cf&&cf!=='all') ganttBase=ganttBase.filter(t=>t.cat===cf);
+  }
   const items=ganttBase.map(t=>({
-    id:t.id, label:t.text, tagHtml:'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:'+getCatInfo(t.cat).color+'22;color:'+getCatInfo(t.cat).color+';font-weight:600;flex-shrink:0;">'+getCatInfo(t.cat).label+'</span>',
-    inicio:t.dataInicio||t.due, fim:t.due||t.dataInicio, cor:_corPrio(t.prio), onclick:'abrirDetalheTask('+t.id+')'
+    id:t.id,
+    label:t.text,
+    tagHtml:t._isDemand
+      ?'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:var(--bg3);color:var(--text3);font-weight:600;flex-shrink:0;">'+(t.status==='doing'?'Em andamento':t.status==='done'?'Concluída':'A fazer')+'</span>'
+      :'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:'+getCatInfo(t.cat).color+'22;color:'+getCatInfo(t.cat).color+';font-weight:600;flex-shrink:0;">'+getCatInfo(t.cat).label+'</span>',
+    inicio:t.dataInicio||t.due, fim:t.due||t.dataInicio, cor:_corPrio(t.prio),
+    onclick:t._isDemand?'abrirDemandaModal(\''+t._attId+'\','+t._demIdx+')':'abrirDetalheTask('+t.id+')'
   }));
   _renderGantt('task-crono-view', items, { agrupar:function(arr){
     const g={}; arr.forEach(it=>{ const mk=(it.ini||'').substring(0,7); (g[mk]=g[mk]||[]).push(it); });
@@ -1444,11 +1506,6 @@ function renderTeam(){
       '</div>'+
       '<div class="card-body" style="padding:12px 16px;">'+
       '<label style="font-size:11px;color:var(--rose);cursor:pointer;display:inline-block;margin-bottom:10px;"><i class="fa-solid fa-camera"></i> '+(a.foto?'Trocar foto':'Adicionar foto')+'<input type="file" accept="image/*" style="display:none;" onchange="uploadAttFoto(\''+a.id+'\',event)"></label>'+
-      '<div style="font-size:12px;color:var(--text3);margin-bottom:10px;">'+
-      '<span style="margin-right:14px;"><strong>R$/h:</strong> '+a.rate+'</span>'+
-      '<span style="margin-right:14px;"><strong>Escala:</strong> '+esc(a.escala||'12×36')+'</span>'+
-      '<span><strong>Resp. média:</strong> '+(media?media+' min':'—')+'</span>'+
-      '</div>'+
       '<div style="margin-bottom:8px;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;"><div style="font-size:10.5px;font-weight:700;text-transform:uppercase;color:var(--text3);">Demandas ('+a.demands.filter(d=>d.s!=='done').length+')</div><button class="btn btn-sm btn-rose" onclick="openAttModal(\''+a.id+'\')" style="font-size:10px;padding:3px 8px;"><i class="fa-solid fa-list"></i> Ver</button></div>'+
       a.demands.map((d,i)=>({d,i})).filter(x=>x.d.s!=='done').slice(0,3).map(({d,i})=>'<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-top:1px solid var(--border);cursor:pointer;" onclick="abrirDemandaModal(\''+a.id+'\','+i+')"><div style="width:3px;height:20px;border-radius:2px;background:'+(PC2[d.prio]||'var(--text3)')+';flex-shrink:0;"></div><span style="font-size:11px;color:var(--text3);font-weight:600;min-width:36px;">'+(PL[d.prio]||'')+' </span><span style="font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(d.desc)+(d.updates&&d.updates.length?' 💬'+d.updates.length:'')+'</span>'+(d.recorrente?'<span style="font-size:10px;background:var(--lav-light);color:var(--lavender);padding:1px 5px;border-radius:8px;">🔁</span>':'')+'</div>').join('')+
       '</div>'+
@@ -1672,35 +1729,33 @@ function marcarPago(id, parte){
 function _pagoBadges(id){
   const m=_mesAtualSal();
   const partes=[{k:'p15',l:'Dia 15'},{k:'p30',l:'Dia 30'},{k:'com',l:'Comissão'}];
-  const nfKey=getNotaFiscalKey(id);
-  const nfData=notasFiscais[nfKey];
-  const nfHtml='<div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'+
-    '<span style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);">NF:</span>'+
-    (nfData
-      ?('<button onclick="abrirAnexo(notasFiscais[\''+nfKey+'\'])" style="background:none;border:none;color:var(--rose);cursor:pointer;font-size:12px;padding:2px 6px;" title="Ver NF"><i class="fa-solid fa-file-pdf"></i> Ver NF</button>'+
-        '<button onclick="removerNotaFiscal(\''+id+'\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;" title="Remover NF"><i class="fa-solid fa-xmark"></i></button>')
-      :'<label style="cursor:pointer;font-size:11px;color:var(--text3);padding:2px 6px;border:1px dashed var(--border);border-radius:6px;"><i class="fa-solid fa-paperclip"></i> Anexar NF PDF<input type="file" accept="application/pdf" style="display:none;" onchange="uploadNotaFiscal(\''+id+'\',event)"></label>')+
-    '</div>';
-  return '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;justify-content:flex-end;">'+
-    partes.map(function(p){
-      const pago=salPagos[id+'_'+m+'_'+p.k];
-      return '<span onclick="marcarPago(\''+id+'\',\''+p.k+'\')" title="Clique para marcar/desmarcar" style="cursor:pointer;font-size:10.5px;padding:3px 9px;border-radius:10px;font-weight:600;'+(pago?'background:var(--sage-light);color:var(--sage);':'background:var(--bg3);color:var(--text3);border:1px solid var(--border);')+'">'+(pago?'<i class="fa-solid fa-check"></i> ':'')+p.l+'</span>';
-    }).join('')+
-    '</div>'+nfHtml;
+  // Uma linha por parcela: badge pago + anexo NF
+  const linhas=partes.map(function(p){
+    const pago=salPagos[id+'_'+m+'_'+p.k];
+    const nfKey=id+'_'+m+'_nf_'+p.k;
+    const nfData=notasFiscais[nfKey];
+    const badge='<span onclick="marcarPago(\''+id+'\',\''+p.k+'\')" title="Clique para marcar/desmarcar" style="cursor:pointer;font-size:10.5px;padding:3px 9px;border-radius:10px;font-weight:600;min-width:72px;text-align:center;display:inline-block;'+(pago?'background:var(--sage-light);color:var(--sage);':'background:var(--bg3);color:var(--text3);border:1px solid var(--border);')+'">'+(pago?'<i class="fa-solid fa-check"></i> ':'')+p.l+'</span>';
+    const nfBtn=nfData
+      ?('<button onclick="abrirAnexo(notasFiscais[\''+nfKey+'\'])" style="background:none;border:none;color:var(--rose);cursor:pointer;font-size:11px;padding:2px 5px;" title="Ver NF '+p.l+'"><i class="fa-solid fa-file-pdf"></i> NF</button>'+
+         '<button onclick="removerNotaFiscal(\''+id+'\',\''+p.k+'\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:2px 4px;" title="Remover"><i class="fa-solid fa-xmark"></i></button>')
+      :'<label style="cursor:pointer;font-size:10.5px;color:var(--text3);padding:2px 7px;border:1px dashed var(--border);border-radius:6px;white-space:nowrap;"><i class="fa-solid fa-paperclip"></i> Anexar NF<input type="file" accept="application/pdf" style="display:none;" onchange="uploadNotaFiscal(\''+id+'\',\''+p.k+'\',event)"></label>';
+    return '<div style="display:flex;align-items:center;gap:8px;padding:3px 0;border-top:1px solid var(--border);">'+badge+nfBtn+'</div>';
+  }).join('');
+  return '<div style="margin-top:8px;">'+linhas+'</div>';
 }
 
-function getNotaFiscalKey(id){ return id+'_'+_mesAtualSal(); }
-function uploadNotaFiscal(id, event){
+function getNotaFiscalKey(id, parcela){ return id+'_'+_mesAtualSal()+'_nf_'+(parcela||'p15'); }
+function uploadNotaFiscal(id, parcela, event){
   const file=event.target.files[0]; if(!file) return;
   _lerArquivoBase64(file, function(dataUrl){
-    notasFiscais[getNotaFiscalKey(id)]=dataUrl;
+    notasFiscais[getNotaFiscalKey(id, parcela)]=dataUrl;
     if(typeof saveAll==='function') saveAll();
     renderSalary();
-    showToast('NF anexada!','sage');
+    showToast('NF '+parcela+' anexada!','sage');
   });
 }
-function removerNotaFiscal(id){
-  delete notasFiscais[getNotaFiscalKey(id)];
+function removerNotaFiscal(id, parcela){
+  delete notasFiscais[getNotaFiscalKey(id, parcela)];
   if(typeof saveAll==='function') saveAll();
   renderSalary();
   showToast('NF removida.','peach');
@@ -5468,6 +5523,8 @@ function switchAcompTab(tab, btn) {
   ['avaliacoes','superhost','cancelamentos'].forEach(t => {
     const el = document.getElementById('acomp-content-'+t);
     if (el) el.style.display = t === tab ? '' : 'none';
+    const actEl = document.getElementById('acomp-actions-'+t);
+    if (actEl) actEl.style.display = t === tab ? 'flex' : 'none';
   });
   document.querySelectorAll('.acomp-tab-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');

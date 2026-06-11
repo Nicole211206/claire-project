@@ -358,12 +358,18 @@ function _validarLogin(){
 
       <!-- Superhost -->
       <div id="acomp-content-superhost" style="display:none;">
+        <div style="display:flex;justify-content:flex-end;margin-bottom:14px;">
+          <button class="btn btn-rose" onclick="abrirModalSuperhost()"><i class="fa-solid fa-plus"></i> Registrar Período</button>
+        </div>
         <div id="superhost-criterios-resumo" class="metrics-grid" style="margin-bottom:16px;"></div>
         <div id="superhost-lista"></div>
       </div>
 
       <!-- Cancelamentos -->
       <div id="acomp-content-cancelamentos" style="display:none;">
+        <div style="display:flex;justify-content:flex-end;margin-bottom:14px;">
+          <button class="btn btn-rose" onclick="abrirModalCancelamento()"><i class="fa-solid fa-plus"></i> Novo Cancelamento</button>
+        </div>
         <div id="cancelamentos-resumo" class="metrics-grid" style="margin-bottom:16px;"></div>
         <div id="cancelamentos-lista"></div>
       </div>
@@ -1388,7 +1394,43 @@ function _validarLogin(){
   </div>
 </div>
 
-<script src="js/app.js?v=38"></script>
-<script src="js/_append.js?v=4"></script>
+<!-- Modal Editar Perfil Atendente -->
+<div class="modal-overlay" id="modal-editar-att-perfil">
+  <div class="modal">
+    <div class="modal-title">Perfil do Membro</div>
+    <div class="form-group"><label class="form-label">Nome</label><input type="text" class="form-input" id="eap-nome"></div>
+    <div class="form-group"><label class="form-label">R$/hora</label><input type="number" class="form-input" id="eap-rate"></div>
+    <div class="form-group"><label class="form-label">Escala</label><input type="text" class="form-input" id="eap-escala"></div>
+    <div class="form-group">
+      <label class="form-label">Tempo de Resposta (min) — Semanas</label>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">
+        <div><label style="font-size:10px;color:var(--text3);">Sem.1</label><input type="number" class="form-input" id="eap-resp0" step="0.1"></div>
+        <div><label style="font-size:10px;color:var(--text3);">Sem.2</label><input type="number" class="form-input" id="eap-resp1" step="0.1"></div>
+        <div><label style="font-size:10px;color:var(--text3);">Sem.3</label><input type="number" class="form-input" id="eap-resp2" step="0.1"></div>
+        <div><label style="font-size:10px;color:var(--text3);">Sem.4</label><input type="number" class="form-input" id="eap-resp3" step="0.1"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-editar-att-perfil')">Cancelar</button>
+      <button class="btn btn-rose" onclick="salvarPerfilAtt()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Manual -->
+<div class="modal-overlay" id="modal-manual">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-title" id="manual-modal-title">Nova Entrada</div>
+    <div class="form-group"><label class="form-label">Título</label><input type="text" class="form-input" id="manual-titulo" placeholder="Ex: Processo de onboarding..."></div>
+    <div class="form-group"><label class="form-label">Categoria (opcional)</label><input type="text" class="form-input" id="manual-categoria" placeholder="Ex: Operações, Financeiro..."></div>
+    <div class="form-group"><label class="form-label">Conteúdo</label><textarea class="form-input" id="manual-conteudo" rows="8" style="resize:vertical;" placeholder="Descreva o processo, procedimento ou informação..."></textarea></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-manual')">Cancelar</button>
+      <button class="btn btn-rose" onclick="salvarEntradaManual()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/app.js?v=40"></script>
 </body>
 </html>

@@ -163,7 +163,7 @@ const MODULOS_LISTA=[
 function getMinhaAtt(){ const u=getCurrentUser(); if(!u||!u.attId) return null; return ATTS.find(a=>a.id===u.attId)||null; }
 function getCurrentUser(){ try{ return JSON.parse(sessionStorage.getItem('nx_currentuser')||'null'); }catch(e){ return null; } }
 function isAdmin(){ const u=getCurrentUser(); return u && u.perfil==='admin'; }
-function podeAcessar(modId){ const u=getCurrentUser(); if(!u) return false; if(u.perfil==='admin') return true; if(modId==='tasks'&&u.perfil==='atendente'&&u.attId) return true; return (u.modulos||[]).includes(modId); }
+function podeAcessar(modId){ const u=getCurrentUser(); if(!u) return false; if(u.perfil==='admin') return true; if(modId==='tasks'&&u.attId) return true; return (u.modulos||[]).includes(modId); }
 function attsDoUsuario(){
   const u=getCurrentUser();
   if(!u) return [];
@@ -220,9 +220,9 @@ function aplicarPermissoes(){
     const primeiro=MODULOS_LISTA.find(m=>u.perfil==='admin'||podeAcessar(m.id));
     if(primeiro){ const btn=document.querySelector('#sidebar .nav-item[onclick*="showPanel(\''+primeiro.id+'\'"]'); showPanel(primeiro.id, btn||null); }
   }
-  // Esconder botão "Nova Tarefa" para atendentes (só veem demandas atribuídas)
+  // Botão "Nova Tarefa": visível para admin; oculto para quem tem attId (vê demandas atribuídas)
   const btnNovaTarefa=document.getElementById('btn-nova-tarefa');
-  if(btnNovaTarefa) btnNovaTarefa.style.display=(u.perfil==='atendente')?'none':'';
+  if(btnNovaTarefa) btnNovaTarefa.style.display=(u.attId&&u.perfil!=='admin')?'none':'';
   // Redesenhar telas dependentes de permissão (importante: o 1º render ocorre antes do login)
   if(typeof renderOverview==='function') renderOverview();
   if(typeof renderTeam==='function') renderTeam();
@@ -281,7 +281,7 @@ function aplicarPresetPerfil(perfil){
   const grp=document.getElementById('u-modulos-group');
   const attGrp=document.getElementById('u-att-group');
   const attsPermGrp=document.getElementById('u-attsperm-group');
-  if(attGrp) attGrp.style.display = perfil==='atendente'?'':'none';
+  if(attGrp) attGrp.style.display = (perfil==='atendente'||perfil==='coordenacao')?'':'none';
   if(attsPermGrp) attsPermGrp.style.display = perfil==='coordenacao'?'':'none';
   if(perfil==='coordenacao') _renderAttsPermChecks([]);
   const attSel=document.getElementById('u-att');
@@ -314,7 +314,7 @@ function abrirEditarUsuario(email){
   document.getElementById('u-senha').value=u.senha||'';
   document.getElementById('u-perfil').value=u.perfil||'atendente';
   const attGrp=document.getElementById('u-att-group');
-  if(attGrp) attGrp.style.display = u.perfil==='atendente'?'':'none';
+  if(attGrp) attGrp.style.display = (u.perfil==='atendente'||u.perfil==='coordenacao')?'':'none';
   const attsPermGrp=document.getElementById('u-attsperm-group');
   if(attsPermGrp) attsPermGrp.style.display = u.perfil==='coordenacao'?'':'none';
   if(u.perfil==='coordenacao') _renderAttsPermChecks(u.attsPermitidos||[]);
@@ -332,7 +332,7 @@ function salvarUsuario(){
   const perfil=document.getElementById('u-perfil').value;
   if(!nome||!email||!senha){ showToast('Preencha nome, e-mail e senha.','peach'); return; }
   const modulos=Array.from(document.querySelectorAll('.u-mod-check:checked')).map(c=>c.value);
-  const attId = perfil==='atendente' ? document.getElementById('u-att').value : '';
+  const attId = (perfil==='atendente'||perfil==='coordenacao') ? (document.getElementById('u-att').value||'') : '';
   const attsPermitidos = Array.from(document.querySelectorAll('.u-attperm-check:checked')).map(c=>c.value);
   // email duplicado?
   const jaExiste=usuarios.find(u=>u.email===email);
@@ -852,7 +852,7 @@ function renderExtras(){
 // ═══════════════════ TASKS ═══════════════════
 // Para não-admin com attId, as "tarefas" são as demandas atribuídas a elas no Equipe
 function _getEffectiveTasks(){
-  if(typeof isAdmin==='function' && !isAdmin()){
+  if(typeof isAdmin==='function' && !isAdmin() && typeof getCurrentUser==='function' && getCurrentUser()&&getCurrentUser().attId){
     const att=typeof getMinhaAtt==='function'?getMinhaAtt():null;
     if(att){
       return att.demands.map((d,i)=>({

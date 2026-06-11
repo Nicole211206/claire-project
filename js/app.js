@@ -5541,12 +5541,14 @@ function renderProjetosKanban(){
       cards.map(p=>{
         const tarefasTotal=tasks.filter(t=>t.projetoId===p.id).length;
         const tarefasDone=tasks.filter(t=>t.projetoId===p.id&&t.done).length;
-        return '<div onclick="abrirProjetoModal('+p.id+')" style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px;cursor:pointer;margin-bottom:8px;transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'var(--bg3)\'">'+
+        return '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px;margin-bottom:8px;position:relative;">'+
+          '<button onclick="event.stopPropagation();deletarProjeto('+p.id+')" style="position:absolute;top:8px;right:8px;background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:2px 4px;" title="Apagar projeto" onmouseover="this.style.color=\'var(--vermelha)\'" onmouseout="this.style.color=\'var(--text3)\'"><i class="fa-solid fa-xmark"></i></button>'+
+          '<div onclick="abrirProjetoModal('+p.id+')" style="cursor:pointer;">'+
           '<div style="font-size:13px;font-weight:600;margin-bottom:4px;">'+esc(p.nome||'(sem nome)')+'</div>'+
           (p.tempoEstimado?'<div style="font-size:11px;color:var(--text3);margin-bottom:3px;"><i class="fa-regular fa-clock"></i> '+esc(p.tempoEstimado)+'</div>':'')+
           (p.colaboradores?'<div style="font-size:11px;color:var(--text3);margin-bottom:3px;"><i class="fa-solid fa-users" style="font-size:10px;"></i> '+esc(p.colaboradores)+'</div>':'')+
           (tarefasTotal>0?'<div style="font-size:11px;color:var(--sage);">✅ '+tarefasDone+'/'+tarefasTotal+' tarefas</div>':'')+
-          '</div>';
+          '</div></div>';
       }).join('')+
       '</div>';
   }).join('');
@@ -5661,8 +5663,17 @@ function salvarCompraItem(){
 function deletarCompra(id){
   if(!confirm('Apagar esta compra?')) return;
   comprasList = comprasList.filter(x=>x.id!==id);
+  if(typeof saveAll==='function') saveAll();
   renderCompras();
   showToast('Compra apagada.','peach');
+}
+
+function deletarProjeto(id){
+  if(!confirm('Apagar este projeto? As tarefas vinculadas NÃO serão apagadas.')) return;
+  projetos = projetos.filter(x=>x.id!==id);
+  if(typeof saveAll==='function') saveAll();
+  renderProjetosKanban();
+  showToast('Projeto apagado.','peach');
 }
 
 function renderCompras(){

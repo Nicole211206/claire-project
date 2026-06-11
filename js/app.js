@@ -122,6 +122,8 @@ let extras=[]; // {id, data, descricao, imovelNome, cobrado, gasto, obs}
 let projetos=[];
 let transcricoes=[];
 let transcricaoAtiva=null;
+let plantaoItems=[];
+let plantaoAtivo=null;
 let projetoAtivo=null;
 let projetoAbaAtiva='info';
 let headFixo={gabriela:6000,felipe:6000};
@@ -159,7 +161,7 @@ const MODULOS_LISTA=[
   {id:'ai',label:'Assistente IA'},{id:'team',label:'Equipe'},{id:'salary',label:'Salários'},
   {id:'compras',label:'Compras'},
   {id:'manutencao',label:'Manutenção'},
-  {id:'gmail',label:'Gmail'},{id:'projetos',label:'Projetos'},{id:'reunioes',label:'Reuniões'},
+  {id:'gmail',label:'Gmail'},{id:'projetos',label:'Projetos'},{id:'plantao',label:'Passagem de Turno'},
   {id:'turnos',label:'Turnos'},
   {id:'extras',label:'Extras'},
   {id:'manual',label:'Manual'}
@@ -427,7 +429,7 @@ function showPanel(id,btn){
   if(id==='gmail'){checkGmailConfig();if(ls('nx_gmail'))loadEmails();}
   if(id==='onboarding'){renderOnboardingKanban();}
   if(id==='projetos'){renderProjetosKanban();}
-  if(id==='reunioes'){renderReunioes();}
+  if(id==='plantao'){renderPlantao();}
   if(id==='compras'){renderCompras();}
   if(id==='manutencao'){renderManutencaoKanban();}
   if(id==='focus'){renderFocusInsights();}
@@ -3264,7 +3266,7 @@ const _PERSIST_KEYS = {
   nx_taskcats:()=>taskCats, nx_catalog:()=>imovelsCatalog,
   nx_precos:()=>PRECOS_ITENS, nx_niveldx:()=>selNivelIdx,
   nx_nicolecom:()=>nicoleComissaoOverride, nx_nextatt:()=>nextAttId,
-  nx_transcricoes:()=>transcricoes, nx_precoenx:()=>PRECOS_ENXOVAL,
+  nx_transcricoes:()=>transcricoes, nx_plantao:()=>plantaoItems, nx_precoenx:()=>PRECOS_ENXOVAL,
   nx_avaliacoes:()=>avaliacoes, nx_turnos:()=>turnos,
   nx_salpagos:()=>salPagos,
   nx_outros:()=>outrosMembros,
@@ -3290,7 +3292,7 @@ function saveAll(){
 // ─── Sincronização com o backend KV (compartilhado entre dispositivos) ───
 // Chaves que sincronizam (dados de equipe/operação). Credenciais e a lista
 // pesada de avaliações ficam SEMPRE locais.
-const SYNC_KEYS=['nx_lastSaved','nx_users','nx_tasks','nx_imoveis','nx_notes','nx_compras','nx_projetos','nx_atts','nx_workP1','nx_workP2','nx_headfixo','nx_headcom','nx_headfotos','nx_kpivals','nx_kpisub','nx_taskcats','nx_catalog','nx_precos','nx_precoenx','nx_niveldx','nx_nicolecom','nx_nextatt','nx_transcricoes','nx_turnos','nx_salpagos','nx_outros','nx_extras','nx_manutencoes','nx_manual','nx_superhost','nx_cancelamentos','nx_notasfiscais','nx_name','nx_fornecedores_cad'];
+const SYNC_KEYS=['nx_lastSaved','nx_users','nx_tasks','nx_imoveis','nx_notes','nx_compras','nx_projetos','nx_atts','nx_workP1','nx_workP2','nx_headfixo','nx_headcom','nx_headfotos','nx_kpivals','nx_kpisub','nx_taskcats','nx_catalog','nx_precos','nx_precoenx','nx_niveldx','nx_nicolecom','nx_nextatt','nx_transcricoes','nx_plantao','nx_turnos','nx_salpagos','nx_outros','nx_extras','nx_manutencoes','nx_manual','nx_superhost','nx_cancelamentos','nx_notasfiscais','nx_name','nx_fornecedores_cad'];
 let _kvDirty=false;       // há mudança local não enviada?
 let _kvLastPushed=null;   // último blob enviado (string) — evita gravações repetidas
 let _kvPushing=false;
@@ -3344,7 +3346,7 @@ function _renderTudo(){
     if(typeof renderKPIs==='function') renderKPIs();
     if(typeof renderCompras==='function') renderCompras();
     if(typeof renderProjetosKanban==='function') renderProjetosKanban();
-    if(typeof renderReunioes==='function') renderReunioes();
+    if(typeof renderPlantao==='function') renderPlantao();
     if(typeof renderExtras==='function') renderExtras();
     if(typeof renderManutencaoKanban==='function') renderManutencaoKanban();
     if(typeof aplicarPermissoes==='function') aplicarPermissoes();
@@ -3383,6 +3385,7 @@ function loadAll(){
     v=g('nx_nicolecom');  if(v!==undefined) nicoleComissaoOverride=v;
     v=g('nx_nextatt');    if(typeof v==='number') nextAttId=v;
     v=g('nx_transcricoes'); if(Array.isArray(v)) transcricoes=v;
+    v=g('nx_plantao');     if(Array.isArray(v)) plantaoItems=v;
     v=g('nx_avaliacoes'); if(Array.isArray(v)) avaliacoes=v;
     v=g('nx_turnos');     if(Array.isArray(v)) turnos=v;
     v=g('nx_salpagos');   if(v&&typeof v==='object') salPagos=v;
@@ -5417,116 +5420,122 @@ function salvarProjeto(){
   closeModal('modal-projeto');
 }
 
-// ═══════════════════ REUNIÕES ═══════════════════
-function abrirNovaReuniao(){
-  const r={id:Date.now(),titulo:'',data:new Date().toISOString().split('T')[0],link:'',texto:'',resumo:'',projetoId:'',taskId:'',updates:[]};
-  transcricoes.unshift(r);
-  transcricaoAtiva=r.id;
-  abrirReuniaoModal(r.id);
-  renderReunioes();
+// ═══════════════════ PASSAGEM DE TURNO ═══════════════════
+const PLANTAO_STATUS=[
+  {id:'pendente',   label:'Pendente',              color:'var(--vermelha)', bg:'var(--rose-light)'},
+  {id:'aguardando', label:'Aguardando informações', color:'var(--amarela)',  bg:'#fff8e1'},
+  {id:'concluido',  label:'Concluído',              color:'var(--sage)',     bg:'var(--sage-light)'},
+];
+function _plantaoStatusInfo(s){return PLANTAO_STATUS.find(x=>x.id===s)||PLANTAO_STATUS[0];}
+
+function abrirNovoPlantao(){
+  plantaoAtivo=null;
+  const hoje=new Date().toISOString().split('T')[0];
+  document.getElementById('pt-data').value=hoje;
+  document.getElementById('pt-imovel').value='';
+  document.getElementById('pt-situacao').value='';
+  document.getElementById('pt-detalhes').value='';
+  document.getElementById('pt-status').value='pendente';
+  document.getElementById('pt-updates-list').innerHTML='';
+  document.getElementById('pt-nova-update').value='';
+  document.getElementById('modal-plantao-title').textContent='Nova Ocorrência';
+  document.getElementById('modal-plantao').classList.add('open');
+  setTimeout(()=>document.getElementById('pt-situacao').focus(),100);
 }
 
-function abrirReuniaoModal(id){
-  const r=transcricoes.find(x=>x.id===id);if(!r)return;
-  transcricaoAtiva=id;
-  document.getElementById('r-titulo').value=r.titulo||'';
-  document.getElementById('r-data').value=r.data||'';
-  document.getElementById('r-link').value=r.link||'';
-  document.getElementById('r-texto').value=r.texto||'';
-  document.getElementById('r-resumo').value=r.resumo||'';
-  const selP=document.getElementById('r-projeto');
-  selP.innerHTML='<option value="">— Nenhum —</option>'+projetos.map(p=>'<option value="'+p.id+'"'+(String(r.projetoId)===String(p.id)?' selected':'')+'>'+esc(p.nome||'Projeto')+'</option>').join('');
-  const selT=document.getElementById('r-tarefa');
-  selT.innerHTML='<option value="">— Nenhuma —</option>'+tasks.filter(t=>!t.done).map(t=>'<option value="'+t.id+'"'+(String(r.taskId)===String(t.id)?' selected':'')+'>'+esc(t.text)+'</option>').join('');
-  renderReuniaoUpdates();
-  document.getElementById('modal-reuniao').classList.add('open');
+function abrirPlantaoModal(id){
+  const r=plantaoItems.find(x=>x.id===id);if(!r)return;
+  plantaoAtivo=id;
+  document.getElementById('pt-data').value=r.data||'';
+  document.getElementById('pt-imovel').value=r.imovel||'';
+  document.getElementById('pt-situacao').value=r.situacao||'';
+  document.getElementById('pt-detalhes').value=r.detalhes||'';
+  document.getElementById('pt-status').value=r.status||'pendente';
+  document.getElementById('pt-nova-update').value='';
+  document.getElementById('modal-plantao-title').textContent=r.situacao||'Ocorrência';
+  renderPlantaoUpdates();
+  document.getElementById('modal-plantao').classList.add('open');
 }
 
-function lerArquivoTranscricao(event){
-  const file=event.target.files[0];if(!file)return;
-  const reader=new FileReader();
-  reader.onload=function(e){ document.getElementById('r-texto').value=e.target.result; };
-  reader.readAsText(file);
-}
-
-async function gerarResumoReuniao(){
-  const texto=document.getElementById('r-texto').value.trim();
-  if(!texto){showToast('Cole a transcrição ou anotações primeiro.','peach');return;}
-  showToast('Gerando resumo...','sage');
-  try{
-    const resumo=await callAI(
-      'Você é um assistente que resume reuniões de forma clara e objetiva em português. Produza: 1) um resumo breve, 2) principais decisões, 3) próximos passos/tarefas. Use markdown simples.',
-      [{role:'user',content:'Resuma esta reunião:\n\n'+texto.substring(0,12000)}],
-      1500
-    );
-    document.getElementById('r-resumo').value=resumo;
-    showToast('Resumo gerado!','sage');
-  }catch(e){
-    showToast('Erro ao gerar resumo: configure a chave de IA nas configurações.','vermelha');
+function salvarPlantao(){
+  const data=document.getElementById('pt-data').value;
+  const imovel=document.getElementById('pt-imovel').value.trim();
+  const situacao=document.getElementById('pt-situacao').value.trim();
+  const detalhes=document.getElementById('pt-detalhes').value.trim();
+  const status=document.getElementById('pt-status').value;
+  if(!situacao){showToast('Informe a situação/assunto.','peach');return;}
+  if(plantaoAtivo){
+    const r=plantaoItems.find(x=>x.id===plantaoAtivo);
+    if(r){r.data=data;r.imovel=imovel;r.situacao=situacao;r.detalhes=detalhes;r.status=status;}
+  } else {
+    plantaoItems.unshift({id:Date.now(),data,imovel,situacao,detalhes,status,updates:[]});
   }
+  saveAll();renderPlantao();
+  showToast('Ocorrência salva!','sage');
+  closeModal('modal-plantao');
 }
 
-function salvarReuniao(){
-  const r=transcricoes.find(x=>x.id===transcricaoAtiva);if(!r)return;
-  r.titulo=document.getElementById('r-titulo').value.trim();
-  r.data=document.getElementById('r-data').value;
-  r.link=document.getElementById('r-link').value.trim();
-  r.texto=document.getElementById('r-texto').value;
-  r.resumo=document.getElementById('r-resumo').value;
-  r.projetoId=document.getElementById('r-projeto').value;
-  r.taskId=document.getElementById('r-tarefa').value;
-  renderReunioes();
-  showToast('Reunião salva!','sage');
-  closeModal('modal-reuniao');
+function apagarPlantao(){
+  if(!plantaoAtivo)return;
+  const r=plantaoItems.find(x=>x.id===plantaoAtivo);
+  if(!confirm('Apagar "'+(r&&r.situacao?r.situacao:'esta ocorrência')+'"?'))return;
+  plantaoItems=plantaoItems.filter(x=>x.id!==plantaoAtivo);
+  saveAll();closeModal('modal-plantao');renderPlantao();
+  showToast('Ocorrência apagada.','peach');
 }
 
-function apagarReuniao(){
-  const r=transcricoes.find(x=>x.id===transcricaoAtiva);if(!r)return;
-  if(!confirm('Apagar "'+(r.titulo||'esta reunião')+'"?'))return;
-  transcricoes=transcricoes.filter(x=>x.id!==transcricaoAtiva);
-  closeModal('modal-reuniao');
-  renderReunioes();
-  showToast('Reunião apagada.','peach');
-}
-
-function adicionarUpdateReuniao(){
-  const r=transcricoes.find(x=>x.id===transcricaoAtiva);if(!r)return;
-  const txt=document.getElementById('r-nova-update').value.trim();if(!txt)return;
+function adicionarUpdatePlantao(){
+  if(!plantaoAtivo)return;
+  const r=plantaoItems.find(x=>x.id===plantaoAtivo);if(!r)return;
+  const txt=document.getElementById('pt-nova-update').value.trim();if(!txt)return;
   if(!r.updates)r.updates=[];
   r.updates.push({texto:txt,data:new Date().toISOString()});
-  document.getElementById('r-nova-update').value='';
-  renderReuniaoUpdates();
+  document.getElementById('pt-nova-update').value='';
+  renderPlantaoUpdates();saveAll();
 }
 
-function renderReuniaoUpdates(){
-  const r=transcricoes.find(x=>x.id===transcricaoAtiva);if(!r)return;
+function renderPlantaoUpdates(){
+  if(!plantaoAtivo)return;
+  const r=plantaoItems.find(x=>x.id===plantaoAtivo);if(!r)return;
   const ups=r.updates||[];
-  document.getElementById('r-updates-list').innerHTML=ups.length===0
+  document.getElementById('pt-updates-list').innerHTML=ups.length===0
     ?'<div style="font-size:12px;color:var(--text3);text-align:center;padding:8px;">Nenhuma atualização.</div>'
-    :ups.map((u,i)=>'<div style="padding:7px 0;border-bottom:1px solid var(--border);"><div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:var(--text3);">'+new Date(u.data).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</span><button onclick="removerUpdateReuniao('+i+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;"><i class="fa-solid fa-xmark"></i></button></div><div style="font-size:12.5px;white-space:pre-wrap;">'+esc(u.texto)+'</div></div>').reverse().join('');
+    :ups.map((u,i)=>'<div style="background:var(--bg3);border-radius:var(--r-sm);padding:8px 10px;margin-bottom:6px;display:flex;gap:8px;align-items:flex-start;"><div style="flex:1;"><div style="font-size:12px;white-space:pre-wrap;">'+esc(u.texto)+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">'+new Date(u.data).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</div></div><button onclick="removerUpdatePlantao('+i+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:2px 4px;" onmouseover="this.style.color=\'var(--vermelha)\'" onmouseout="this.style.color=\'var(--text3)\'"><i class="fa-solid fa-xmark"></i></button></div>').join('');
 }
 
-function removerUpdateReuniao(idx){
-  const r=transcricoes.find(x=>x.id===transcricaoAtiva);if(!r||!r.updates)return;
-  r.updates.splice(idx,1);renderReuniaoUpdates();
+function removerUpdatePlantao(idx){
+  if(!plantaoAtivo)return;
+  const r=plantaoItems.find(x=>x.id===plantaoAtivo);if(!r||!r.updates)return;
+  r.updates.splice(idx,1);renderPlantaoUpdates();saveAll();
 }
 
-function renderReunioes(){
-  const el=document.getElementById('reunioes-grid');if(!el)return;
-  if(transcricoes.length===0){el.innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--text3);font-size:13px;padding:30px;">Nenhuma reunião registrada. Clique em "Nova Reunião".</div>';return;}
-  el.innerHTML=transcricoes.map(r=>{
-    const proj=r.projetoId?projetos.find(p=>String(p.id)===String(r.projetoId)):null;
-    const tk=r.taskId?tasks.find(t=>String(t.id)===String(r.taskId)):null;
-    return '<div onclick="abrirReuniaoModal('+r.id+')" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:14px;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\'var(--bg2)\'">'+
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><i class="fa-solid fa-microphone-lines" style="color:var(--rose);"></i><div style="font-size:14px;font-weight:600;flex:1;">'+esc(r.titulo||'(sem título)')+'</div></div>'+
-      (r.data?'<div style="font-size:11px;color:var(--text3);margin-bottom:6px;"><i class="fa-regular fa-calendar"></i> '+fd(r.data)+'</div>':'')+
-      (r.resumo?'<div style="font-size:12px;color:var(--text2);max-height:60px;overflow:hidden;margin-bottom:8px;">'+esc(r.resumo.substring(0,140))+'...</div>':'<div style="font-size:12px;color:var(--text3);margin-bottom:8px;">Sem resumo ainda.</div>')+
-      '<div style="display:flex;gap:5px;flex-wrap:wrap;">'+
-      (r.link?'<span style="font-size:9.5px;background:var(--sky-light);color:var(--sky);padding:1px 6px;border-radius:8px;"><i class="fa-solid fa-paperclip"></i> arquivo</span>':'')+
-      (proj?'<span style="font-size:9.5px;background:var(--lav-light);color:var(--lavender);padding:1px 6px;border-radius:8px;">'+esc(proj.nome||'projeto')+'</span>':'')+
-      (tk?'<span style="font-size:9.5px;background:var(--sage-light);color:var(--sage);padding:1px 6px;border-radius:8px;">✓ tarefa</span>':'')+
-      ((r.updates&&r.updates.length)?'<span style="font-size:9.5px;color:var(--text3);"><i class="fa-solid fa-message"></i> '+r.updates.length+'</span>':'')+
-      '</div></div>';
+function renderPlantao(){
+  const el=document.getElementById('plantao-lista');if(!el)return;
+  const sf=document.getElementById('pt-filter-status');
+  const sv=sf?sf.value:'todos';
+  const tf=document.getElementById('pt-filter-busca');
+  const tv=tf?tf.value.trim().toLowerCase():'';
+  let list=[...plantaoItems].sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+  if(sv!=='todos') list=list.filter(r=>r.status===sv);
+  if(tv) list=list.filter(r=>(r.imovel||'').toLowerCase().includes(tv)||(r.situacao||'').toLowerCase().includes(tv)||(r.detalhes||'').toLowerCase().includes(tv));
+  if(list.length===0){
+    el.innerHTML='<div style="text-align:center;color:var(--text3);font-size:13px;padding:40px 20px;">Nenhuma ocorrência encontrada. Clique em "Nova Ocorrência" para registrar.</div>';return;
+  }
+  el.innerHTML=list.map(r=>{
+    const si=_plantaoStatusInfo(r.status);
+    const ups=(r.updates||[]).length;
+    return '<div onclick="abrirPlantaoModal('+r.id+')" style="background:var(--bg2);border:1px solid var(--border);border-left:3px solid '+si.color+';border-radius:var(--r);padding:14px 16px;cursor:pointer;transition:background 0.15s;display:flex;gap:14px;align-items:flex-start;" onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\'var(--bg2)\'">'+
+      '<div style="min-width:44px;text-align:center;padding-top:2px;flex-shrink:0;"><div style="font-size:13px;font-weight:700;color:var(--text2);">'+(r.data?r.data.substring(8,10)+'/'+r.data.substring(5,7):'-')+'</div><div style="font-size:10px;color:var(--text3);">'+(r.data?r.data.substring(0,4):'')+'</div></div>'+
+      '<div style="flex:1;min-width:0;">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap;">'+
+      (r.imovel?'<span style="font-size:11px;font-weight:600;color:var(--sky);background:var(--sky-light);padding:1px 8px;border-radius:8px;white-space:nowrap;">'+esc(r.imovel)+'</span>':'')+
+      '<span style="font-size:10px;font-weight:700;padding:1px 8px;border-radius:8px;background:'+si.bg+';color:'+si.color+';">'+si.label+'</span>'+
+      '</div>'+
+      '<div style="font-size:13.5px;font-weight:600;margin-bottom:4px;color:var(--text1);">'+esc(r.situacao||'(sem título)')+'</div>'+
+      (r.detalhes?'<div style="font-size:12px;color:var(--text3);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">'+esc((r.detalhes).substring(0,200))+'</div>':'')+
+      '</div>'+
+      (ups?'<div style="font-size:11px;color:var(--text3);white-space:nowrap;padding-top:2px;flex-shrink:0;"><i class="fa-solid fa-comments"></i> '+ups+'</div>':'')+
+      '</div>';
   }).join('');
 }
 
@@ -5541,14 +5550,12 @@ function renderProjetosKanban(){
       cards.map(p=>{
         const tarefasTotal=tasks.filter(t=>t.projetoId===p.id).length;
         const tarefasDone=tasks.filter(t=>t.projetoId===p.id&&t.done).length;
-        return '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px;margin-bottom:8px;position:relative;">'+
-          '<button onclick="event.stopPropagation();deletarProjeto('+p.id+')" style="position:absolute;top:8px;right:8px;background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:2px 4px;" title="Apagar projeto" onmouseover="this.style.color=\'var(--vermelha)\'" onmouseout="this.style.color=\'var(--text3)\'"><i class="fa-solid fa-xmark"></i></button>'+
-          '<div onclick="abrirProjetoModal('+p.id+')" style="cursor:pointer;">'+
+        return '<div onclick="abrirProjetoModal('+p.id+')" style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px;cursor:pointer;margin-bottom:8px;transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'var(--bg3)\'">'+
           '<div style="font-size:13px;font-weight:600;margin-bottom:4px;">'+esc(p.nome||'(sem nome)')+'</div>'+
           (p.tempoEstimado?'<div style="font-size:11px;color:var(--text3);margin-bottom:3px;"><i class="fa-regular fa-clock"></i> '+esc(p.tempoEstimado)+'</div>':'')+
           (p.colaboradores?'<div style="font-size:11px;color:var(--text3);margin-bottom:3px;"><i class="fa-solid fa-users" style="font-size:10px;"></i> '+esc(p.colaboradores)+'</div>':'')+
           (tarefasTotal>0?'<div style="font-size:11px;color:var(--sage);">✅ '+tarefasDone+'/'+tarefasTotal+' tarefas</div>':'')+
-          '</div></div>';
+          '</div>';
       }).join('')+
       '</div>';
   }).join('');
@@ -5559,6 +5566,8 @@ let _compraEditId = null;
 
 function abrirNovaCompra(){
   _compraEditId = null;
+  const btnApagar = document.getElementById('btn-apagar-compra');
+  if(btnApagar) btnApagar.style.display='none';
   document.getElementById('modal-compra-title').textContent = 'Nova Compra';
   const hoje = new Date().toISOString().split('T')[0];
   const mes = hoje.substring(0,7);
@@ -5597,6 +5606,8 @@ function abrirEditarCompra(id){
   document.getElementById('c-margem').checked=!!c.margemOperacional;
   _preencherSelectImoveisCompra();
   document.getElementById('c-imovel').value = c.imovelId||'';
+  const btnApagar = document.getElementById('btn-apagar-compra');
+  if(btnApagar) btnApagar.style.display='';
   document.getElementById('modal-compra').classList.add('open');
 }
 
@@ -5674,6 +5685,18 @@ function deletarProjeto(id){
   if(typeof saveAll==='function') saveAll();
   renderProjetosKanban();
   showToast('Projeto apagado.','peach');
+}
+
+function deletarProjetoAtivo(){
+  if(!projetoAtivo) return;
+  deletarProjeto(projetoAtivo);
+  closeModal('modal-projeto');
+}
+
+function deletarCompraAtiva(){
+  if(!_compraEditId) return;
+  deletarCompra(_compraEditId);
+  closeModal('modal-compra');
 }
 
 function renderCompras(){

@@ -163,7 +163,7 @@ const MODULOS_LISTA=[
 function getMinhaAtt(){ const u=getCurrentUser(); if(!u||!u.attId) return null; return ATTS.find(a=>a.id===u.attId)||null; }
 function getCurrentUser(){ try{ return JSON.parse(sessionStorage.getItem('nx_currentuser')||'null'); }catch(e){ return null; } }
 function isAdmin(){ const u=getCurrentUser(); return u && u.perfil==='admin'; }
-function podeAcessar(modId){ const u=getCurrentUser(); if(!u) return false; if(u.perfil==='admin') return true; return (u.modulos||[]).includes(modId); }
+function podeAcessar(modId){ const u=getCurrentUser(); if(!u) return false; if(u.perfil==='admin') return true; if(modId==='tasks'&&u.perfil==='atendente'&&u.attId) return true; return (u.modulos||[]).includes(modId); }
 function attsDoUsuario(){
   const u=getCurrentUser();
   if(!u) return [];
@@ -219,11 +219,6 @@ function aplicarPermissoes(){
   if(ativoId && ativoId!=='usuarios' && !(u.perfil==='admin'||podeAcessar(ativoId))){
     const primeiro=MODULOS_LISTA.find(m=>u.perfil==='admin'||podeAcessar(m.id));
     if(primeiro){ const btn=document.querySelector('#sidebar .nav-item[onclick*="showPanel(\''+primeiro.id+'\'"]'); showPanel(primeiro.id, btn||null); }
-  }
-  // Atendentes com attId sempre veem Tarefas (mesmo se o preset antigo tinha 'team')
-  if(u.perfil==='atendente' && u.attId){
-    const navTasks=document.querySelector('#sidebar .nav-item[onclick*="showPanel(\'tasks\'"]');
-    if(navTasks) navTasks.style.display='';
   }
   // Redesenhar telas dependentes de permissão (importante: o 1º render ocorre antes do login)
   if(typeof renderOverview==='function') renderOverview();
@@ -864,8 +859,8 @@ function _getEffectiveTasks(){
         prio:d.prio||'med',
         due:d.due||'',
         dataInicio:d.dataInicio||d.due||'',
-        done:d.s==='done',
-        status:d.s==='done'?'done':(d.s==='doing'?'doing':'todo'),
+        done:d.s==='done'||d.s==='concluida',
+        status:d.s==='done'||d.s==='concluida'?'done':(d.s==='doing'||d.s==='fazendo'?'doing':'todo'),
         recorrente:d.recorrente||false,
         tipoRecorrencia:d.tipoRecorrencia||null,
         updates:d.updates||[],
@@ -2194,7 +2189,34 @@ function openSettings(){
   document.getElementById('s-gclientid').value=ls('nx_gclientid')||'';
   document.getElementById('s-hostaway-url').value=ls('nx_hostaway_url')||'';
   refreshGoogleStatus();
+  renderSettingsImoveis();
   document.getElementById('modal-settings').classList.add('open');
+}
+function renderSettingsImoveis(){
+  const el=document.getElementById('settings-imoveis-list'); if(!el) return;
+  if(!imovelsCatalog.length){el.innerHTML='<div style="font-size:12px;color:var(--text3);padding:6px 0;">Nenhum imóvel cadastrado.</div>';return;}
+  el.innerHTML=imovelsCatalog.map((im,i)=>
+    '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);">'+
+    '<span style="flex:1;font-size:13px;">'+esc(im.nome)+'</span>'+
+    '<button onclick="settingsRemoverImovel(\''+im.id+'\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;" title="Remover" onmouseover="this.style.color=\'var(--vermelha)\'" onmouseout="this.style.color=\'var(--text3)\'"><i class="fa-solid fa-trash"></i></button>'+
+    '</div>'
+  ).join('');
+}
+function settingsAdicionarImovel(){
+  const inp=document.getElementById('settings-novo-imovel'); if(!inp) return;
+  const nome=inp.value.trim(); if(!nome){showToast('Informe o nome do imóvel.','peach');return;}
+  imovelsCatalog.push({id:'c-'+Date.now(), code:'', nome});
+  inp.value='';
+  saveAll();
+  renderSettingsImoveis();
+  showToast('Imóvel adicionado!','sage');
+}
+function settingsRemoverImovel(id){
+  if(!confirm('Remover este imóvel do sistema?')) return;
+  imovelsCatalog=imovelsCatalog.filter(x=>x.id!==id);
+  saveAll();
+  renderSettingsImoveis();
+  showToast('Imóvel removido.','peach');
 }
 function saveSettings(){
   const name=document.getElementById('s-name').value.trim()||'Nicole';

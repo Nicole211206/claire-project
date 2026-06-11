@@ -918,6 +918,15 @@ function _validarLogin(){
       O token Google expira em ~1h. Clique em <strong>Conectar Google</strong> novamente quando precisar renovar. Certifique-se de adicionar sua URL do Netlify como origem autorizada no Google Cloud.
     </div>
 
+    <!-- Imóveis -->
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin:14px 0 8px;">Imóveis do Sistema</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:8px;">Lista usada em Manutenção, Cancelamentos e demais módulos.</div>
+    <div id="settings-imoveis-list" style="margin-bottom:8px;"></div>
+    <div style="display:flex;gap:8px;">
+      <input type="text" class="form-input" id="settings-novo-imovel" placeholder="Ex: WC-00200 - Nome do imóvel" style="flex:1;">
+      <button class="btn btn-rose" onclick="settingsAdicionarImovel()"><i class="fa-solid fa-plus"></i> Adicionar</button>
+    </div>
+
     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin:14px 0 8px;">Hostaway (Avaliações)</div>
     <div class="form-group">
       <label class="form-label">URL do Worker (proxy)</label>
@@ -1403,10 +1412,10 @@ function _validarLogin(){
 <!-- Modal: Cancelamento -->
 <div class="modal-overlay" id="modal-cancelamento">
   <div class="modal" style="max-width:520px;">
-    <div class="modal-header"><h3 class="modal-title">Cancelamento</h3><button class="modal-close" onclick="closeModal('modal-cancelamento')"><i class="fa-solid fa-xmark"></i></button></div>
+    <div class="modal-header"><h3 class="modal-title">Cancelamento</h3></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
       <div class="form-group"><label class="form-label">Hóspede</label><input type="text" class="form-input" id="canc-hospede" placeholder="Nome do hóspede"></div>
-      <div class="form-group"><label class="form-label">Imóvel</label><input type="text" class="form-input" id="canc-imovel" placeholder="Nome do imóvel"></div>
+      <div class="form-group"><label class="form-label">Imóvel</label><select class="form-select" id="canc-imovel"><option value="">Selecione...</option></select></div>
       <div class="form-group"><label class="form-label">Período (check-in/out)</label><input type="text" class="form-input" id="canc-periodo" placeholder="01/06 – 05/06/2026"></div>
       <div class="form-group"><label class="form-label">Política de cancelamento</label><select class="form-select" id="canc-politica"><option value="100%">100% reembolso</option><option value="50%">50% reembolso</option><option value="0%">Não reembolsável</option><option value="flex">Flexível</option><option value="outro">Outro</option></select></div>
       <div class="form-group"><label class="form-label">Valor original (R$)</label><input type="number" class="form-input" id="canc-valor-orig" step="0.01" min="0" placeholder="0,00"></div>
@@ -1416,8 +1425,19 @@ function _validarLogin(){
       <select class="form-select" id="canc-split" onchange="calcularSplitCancelamento()">
         <option value="50-50">50% WeCare / 50% Proprietário</option>
         <option value="20-80">20% WeCare / 80% Proprietário</option>
+        <option value="custom">Personalizar</option>
       </select>
       <div id="canc-split-preview" style="font-size:12px;margin-top:6px;color:var(--text3);"></div>
+    </div>
+    <div id="canc-custom-fields" style="display:none;background:var(--bg2);border-radius:var(--r-sm);padding:12px;margin-bottom:8px;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:10px;">Detalhamento do valor</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="form-group" style="margin:0;"><label class="form-label">Receita bruta (R$)</label><input type="number" class="form-input" id="canc-custom-bruto" step="0.01" min="0" placeholder="0,00" oninput="calcularSplitCancelamento()"></div>
+        <div class="form-group" style="margin:0;"><label class="form-label">Taxa de plataforma (R$)</label><input type="number" class="form-input" id="canc-custom-plataforma" step="0.01" min="0" placeholder="0,00" oninput="calcularSplitCancelamento()"></div>
+        <div class="form-group" style="margin:0;"><label class="form-label">Comissão WeCare (R$)</label><input type="number" class="form-input" id="canc-custom-comissao" step="0.01" min="0" placeholder="0,00" oninput="calcularSplitCancelamento()"></div>
+        <div class="form-group" style="margin:0;"><label class="form-label">Taxa de limpeza (R$)</label><input type="number" class="form-input" id="canc-custom-limpeza" step="0.01" min="0" placeholder="0,00" oninput="calcularSplitCancelamento()"></div>
+        <div class="form-group" style="margin:0;grid-column:1/-1;"><label class="form-label">Repasse ao proprietário (R$)</label><input type="number" class="form-input" id="canc-custom-repasse" step="0.01" min="0" placeholder="0,00" oninput="calcularSplitCancelamento()"></div>
+      </div>
     </div>
     <div class="form-group"><label class="form-label">Observações</label><textarea class="form-input" id="canc-obs" rows="2"></textarea></div>
     <div class="modal-footer"><button class="btn" onclick="closeModal('modal-cancelamento')">Cancelar</button><button class="btn btn-rose" onclick="salvarCancelamento()"><i class="fa-solid fa-check"></i> Salvar</button></div>

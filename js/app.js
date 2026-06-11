@@ -289,7 +289,7 @@ function aplicarPresetPerfil(perfil){
   if(attsPermGrp) attsPermGrp.style.display = perfil==='coordenacao'?'':'none';
   if(perfil==='coordenacao') _renderAttsPermChecks([]);
   const attSel=document.getElementById('u-att');
-  if(attSel) attSel.innerHTML = ATTS.map(a=>'<option value="'+a.id+'">'+esc(a.name)+'</option>').join('');
+  if(attSel) attSel.innerHTML = '<option value="">— Nenhum —</option>'+ATTS.map(a=>'<option value="'+a.id+'">'+esc(a.name)+'</option>').join('');
   if(perfil==='admin'){ grp.style.opacity='0.5'; _renderModulosChecks(MODULOS_LISTA.map(m=>m.id)); return; }
   grp.style.opacity='1';
   let preset=[];
@@ -323,7 +323,7 @@ function abrirEditarUsuario(email){
   if(attsPermGrp) attsPermGrp.style.display = u.perfil==='coordenacao'?'':'none';
   if(u.perfil==='coordenacao') _renderAttsPermChecks(u.attsPermitidos||[]);
   const attSel=document.getElementById('u-att');
-  if(attSel){ attSel.innerHTML = ATTS.map(a=>'<option value="'+a.id+'">'+esc(a.name)+'</option>').join(''); if(u.attId) attSel.value=u.attId; }
+  if(attSel){ attSel.innerHTML = '<option value="">— Nenhum —</option>'+ATTS.map(a=>'<option value="'+a.id+'">'+esc(a.name)+'</option>').join(''); if(u.attId) attSel.value=u.attId; }
   if(u.perfil==='admin'){ document.getElementById('u-modulos-group').style.opacity='0.5'; _renderModulosChecks(MODULOS_LISTA.map(m=>m.id)); }
   else { document.getElementById('u-modulos-group').style.opacity='1'; _renderModulosChecks(u.modulos||[]); }
   document.getElementById('modal-usuario').classList.add('open');
@@ -1824,6 +1824,8 @@ function renderSalary(){
   const isHead = !ehAdmin && cu && headIds.includes((cu.nome||'').toLowerCase());
   const headsCard=document.getElementById('sal-heads-card'); if(headsCard) headsCard.style.display=(ehAdmin||isHead)?'':'none';
   const folhaCard=document.getElementById('sal-folha-card'); if(folhaCard) folhaCard.style.display=ehAdmin?'':'none';
+  const btnNovoMembro=document.querySelector('#panel-salary button[onclick*="abrirNovoOutroMembro"]'); if(btnNovoMembro) btnNovoMembro.style.display=ehAdmin?'':'none';
+  const btnPDF=document.querySelector('#panel-salary button[onclick*="exportarSalariosPDF"]'); if(btnPDF) btnPDF.style.display=ehAdmin?'':'none';
   // Atendentes — admin vê todos; head vê apenas os seus; outros veem os permitidos
   const attsParaSal = isHead ? [] : attsVis;
   document.getElementById('sal-att-body').innerHTML=attsParaSal.map(a=>{
@@ -3320,9 +3322,13 @@ async function kvPull(){
     const r=await fetch(s.url.replace(/\/$/,'')+'/load?token='+encodeURIComponent(s.token||''));
     const j=await r.json();
     if(j&&j.data){
+      // só aplica se o servidor tem dados mais recentes que o local
+      const localTs=parseInt(localStorage.getItem('nx_lastSaved')||'0');
+      const serverTs=parseInt((j.data.nx_lastSaved)||0);
+      if(serverTs<=localTs && localTs>0){ _kvLastPushed=_kvBuildBlob(); return true; } // local é mais novo, não sobrescreve
       for(const k in j.data){ try{ localStorage.setItem(k, JSON.stringify(j.data[k])); }catch(e){} }
       loadAll();
-      _kvLastPushed=_kvBuildBlob(); // o que veio do KV não precisa ser reenviado
+      _kvLastPushed=_kvBuildBlob();
       return true;
     }
   }catch(e){}

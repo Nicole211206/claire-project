@@ -1396,8 +1396,11 @@ function _validarLogin(){
 <!-- Modal: Superhost -->
 <div class="modal-overlay" id="modal-superhost">
   <div class="modal" style="max-width:480px;">
-    <div class="modal-header"><h3 class="modal-title">Período Superhost</h3><button class="modal-close" onclick="closeModal('modal-superhost')"><i class="fa-solid fa-xmark"></i></button></div>
-    <div class="form-group"><label class="form-label">Período (ex: Q1 2026)</label><input type="text" class="form-input" id="sh-periodo" placeholder="Q1 2026"></div>
+    <div class="modal-header"><h3 class="modal-title">Período Superhost</h3><button class="modal-close" onclick="closeModal('modal-superhost')">✕</button></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group"><label class="form-label">Data início</label><input type="date" class="form-input" id="sh-data-inicio"></div>
+      <div class="form-group"><label class="form-label">Data fim</label><input type="date" class="form-input" id="sh-data-fim"></div>
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
       <div class="form-group"><label class="form-label">Avaliação geral (★) <span style="font-size:10px;color:var(--text3);">critério ≥ 4,8</span></label><input type="number" class="form-input" id="sh-nota" step="0.01" min="1" max="5" placeholder="4.8"></div>
       <div class="form-group"><label class="form-label">Taxa de resposta (%) <span style="font-size:10px;color:var(--text3);">critério ≥ 90%</span></label><input type="number" class="form-input" id="sh-taxa-resp" step="0.1" min="0" max="100" placeholder="100"></div>

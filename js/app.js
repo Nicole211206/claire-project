@@ -1250,7 +1250,7 @@ function toggleTask(id){
 }
 function delTask(id){tasks=tasks.filter(t=>t.id!==id);if(typeof saveAll==='function')saveAll();renderTasks();renderKanban();fillFocusSel();}
 function filterTasks(v){renderTasks(v);}
-function switchView(v,btn){btn.parentNode.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');document.getElementById('task-crono-view').style.display=v==='crono'?'':'none';document.getElementById('task-kanban-view').style.display=v==='kanban'?'':'none';if(v==='crono')renderTaskGantt();}
+function switchView(v,btn){btn.parentNode.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');document.getElementById('task-crono-view').style.display=v==='crono'?'':'none';document.getElementById('task-kanban-view').style.display=v==='kanban'?'':'none';if(v==='crono')renderTaskGantt();else if(v==='kanban')renderKanban();}
 let tcalM=new Date().getMonth(), tcalY=new Date().getFullYear();
 let tcalView='mes';
 let tcalRef=new Date();
@@ -1382,13 +1382,16 @@ function renderKanban(){
     {id:'done',   label:'Concluído',   c:'var(--sage)'}
   ];
   let base=_getEffectiveTasks();
-  const cs=document.getElementById('task-filter-sel');
-  if(cs&&cs.value&&cs.value!=='all')base=base.filter(t=>t.cat===cs.value);
-  const tf=document.getElementById('task-tipo-filter');const tv=tf?tf.value:'todos';
-  if(tv==='projetos') base=base.filter(t=>t.projetoId);
-  else if(tv==='sem-projeto') base=base.filter(t=>!t.projetoId);
-  base=filtrarSequenciaProjetos(base);
-  base=aplicarFiltroPrazo(base);
+  const isDemandView=base.length>0&&base[0]&&base[0]._isDemand;
+  if(!isDemandView){
+    const cs=document.getElementById('task-filter-sel');
+    if(cs&&cs.value&&cs.value!=='all')base=base.filter(t=>t.cat===cs.value);
+    const tf=document.getElementById('task-tipo-filter');const tv=tf?tf.value:'todos';
+    if(tv==='projetos') base=base.filter(t=>t.projetoId);
+    else if(tv==='sem-projeto') base=base.filter(t=>!t.projetoId);
+    base=filtrarSequenciaProjetos(base);
+    base=aplicarFiltroPrazo(base);
+  }
   document.getElementById('kanban-board').innerHTML=cols.map(col=>{
     const cards=base.filter(t=>t.status===col.id);
     return '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:12px;min-height:220px;transition:background 0.15s,border-style 0.15s;" '+
@@ -1398,15 +1401,19 @@ function renderKanban(){
       '<div style="font-size:11px;background:var(--bg3);padding:1px 7px;border-radius:10px;color:var(--text3);">'+cards.length+'</div></div>'+
       cards.map(t=>{
         const cat=getCatInfo(t.cat);
-        return '<div draggable="true" '+
-          'ondragstart="kanbanDragStart(event,'+t.id+')" '+
-          'ondragend="kanbanDragEnd(event)" '+
-          'onclick="abrirDetalheTask('+t.id+')" '+
-          'style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px;margin-bottom:7px;cursor:grab;user-select:none;transition:opacity 0.15s;'+((col.id==='done'||t.done)?'opacity:0.6;':'')+'">'+
-          '<button onclick="event.stopPropagation();delTask('+t.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;float:right;" title="Apagar"><i class="fa-solid fa-xmark"></i></button>'+
+        const clickFn=t._isDemand?'abrirDemandaModal(\''+t._attId+'\','+t._demIdx+')':'abrirDetalheTask('+t.id+')';
+        const dragAttr=t._isDemand?'':'draggable="true" ondragstart="kanbanDragStart(event,'+t.id+')" ondragend="kanbanDragEnd(event)" ';
+        const delBtn=t._isDemand?'':'<button onclick="event.stopPropagation();delTask('+t.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;float:right;" title="Apagar"><i class="fa-solid fa-xmark"></i></button>';
+        const tagHtml=t._isDemand
+          ?'<span style="font-size:9.5px;padding:1px 6px;border-radius:10px;font-weight:600;background:var(--bg3);color:var(--text3);">'+(t.status==='doing'?'Em andamento':t.status==='done'?'Concluída':'A fazer')+'</span>'
+          :'<span style="font-size:9.5px;padding:1px 6px;border-radius:10px;font-weight:600;background:'+cat.color+'22;color:'+cat.color+';">'+cat.label+'</span>';
+        return '<div '+dragAttr+
+          'onclick="'+clickFn+'" '+
+          'style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px;margin-bottom:7px;cursor:'+(t._isDemand?'pointer':'grab')+';user-select:none;transition:opacity 0.15s;'+((col.id==='done'||t.done)?'opacity:0.6;':'')+'">'+
+          delBtn+
           '<div style="font-size:13px;font-weight:500;margin-bottom:5px;">'+esc(t.text)+'</div>'+
           '<div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;">'+
-          '<span style="font-size:9.5px;padding:1px 6px;border-radius:10px;font-weight:600;background:'+cat.color+'22;color:'+cat.color+';">'+cat.label+'</span>'+
+          tagHtml+
           (t.due?'<span style="font-size:10.5px;color:var(--text3);">'+fd(t.due)+'</span>':'')+
           (t.recorrente?'<span style="font-size:10px;color:var(--lavender);">🔁</span>':'')+
           ((t.updates&&t.updates.length>0)?'<span style="font-size:10px;color:var(--text3);margin-left:4px;"><i class="fa-solid fa-message fa-xs"></i> '+t.updates.length+'</span>':'')+

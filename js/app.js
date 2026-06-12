@@ -3337,27 +3337,40 @@ function renderLegado(){
   }).join('');
 }
 
+function _cqSetApagar(show){ const b=document.getElementById('cq-btn-apagar'); if(b) b.style.display=show?'':'none'; }
+
 function abrirNovaConquista(){
   _conquistaEditId=null;
-  document.getElementById('modal-conquista-titulo').textContent='Novo Feito';
+  document.getElementById('modal-conquista-titulo').textContent='Nova Conquista';
   document.getElementById('cq-titulo').value='';
   document.getElementById('cq-data').value=new Date().toISOString().substring(0,10);
   document.getElementById('cq-categoria').value='financeiro';
   document.getElementById('cq-impacto').value='';
   document.getElementById('cq-descricao').value='';
+  _cqSetApagar(false);
   document.getElementById('modal-conquista').classList.add('open');
 }
 
 function editarConquista(id){
   const c=conquistas.find(x=>x.id===id); if(!c) return;
   _conquistaEditId=id;
-  document.getElementById('modal-conquista-titulo').textContent='Editar Feito';
+  document.getElementById('modal-conquista-titulo').textContent='Editar Conquista';
   document.getElementById('cq-titulo').value=c.titulo||'';
   document.getElementById('cq-data').value=c.data||'';
   document.getElementById('cq-categoria').value=c.categoria||'financeiro';
   document.getElementById('cq-impacto').value=c.impacto||'';
   document.getElementById('cq-descricao').value=c.descricao||'';
+  _cqSetApagar(true);
   document.getElementById('modal-conquista').classList.add('open');
+}
+
+function excluirConquistaModal(){
+  if(!_conquistaEditId||!confirm('Apagar esta conquista?')) return;
+  conquistas=conquistas.filter(x=>x.id!==_conquistaEditId);
+  closeModal('modal-conquista');
+  if(typeof saveAll==='function') saveAll();
+  renderLegado();
+  showToast('Conquista removida.','peach');
 }
 
 function salvarConquista(){

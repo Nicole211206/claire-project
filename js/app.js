@@ -154,6 +154,9 @@ function setAvView(modo,btn){
 }
 
 // ═══════════════════ LOGIN MULTIUSUÁRIO ═══════════════════
+let conquistas=[];
+let _legadoFiltro='';
+let _conquistaEditId=null;
 let usuarios=[]; // gerenciados pelo admin (espelha localStorage nx_users)
 const MODULOS_LISTA=[
   {id:'overview',label:'Visão Geral'},{id:'kpis',label:'Meus KPIs'},{id:'performance',label:'Performance'},
@@ -164,7 +167,8 @@ const MODULOS_LISTA=[
   {id:'gmail',label:'Gmail'},{id:'projetos',label:'Projetos'},{id:'plantao',label:'Passagem de Turno'},
   {id:'turnos',label:'Turnos'},
   {id:'extras',label:'Extras'},
-  {id:'manual',label:'Manual'}
+  {id:'manual',label:'Manual'},
+  {id:'legado',label:'Meu Legado'}
 ];
 function getMinhaAtt(){ const u=getCurrentUser(); if(!u||!u.attId) return null; return ATTS.find(a=>a.id===u.attId)||null; }
 function getCurrentUser(){ try{ return JSON.parse(sessionStorage.getItem('nx_currentuser')||'null'); }catch(e){ return null; } }
@@ -3271,6 +3275,118 @@ let PRECOS_ITENS = {
 };
 
 // ═══════════════════ PERSISTÊNCIA ═══════════════════
+// ═══════════════════ MEU LEGADO ═══════════════════
+const LEGADO_CATS={
+  financeiro:{label:'Financeiro',emoji:'💰',color:'sage'},
+  tecnologia:{label:'Tecnologia',emoji:'⚙️',color:'sky'},
+  processo:{label:'Processo',emoji:'📋',color:'lav'},
+  equipe:{label:'Equipe',emoji:'🤝',color:'peach'},
+  produto:{label:'Produto',emoji:'🏠',color:'gold'},
+};
+
+function filtrarLegado(cat, btn){
+  _legadoFiltro=cat;
+  document.querySelectorAll('#legado-filtros .tab-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  renderLegado();
+}
+
+function renderLegado(){
+  const el=document.getElementById('legado-lista'); if(!el) return;
+  const resumoEl=document.getElementById('legado-resumo');
+
+  const lista=conquistas.slice().sort((a,b)=>b.data.localeCompare(a.data));
+  const filtrada=_legadoFiltro?lista.filter(c=>c.categoria===_legadoFiltro):lista;
+
+  // Resumo cards
+  if(resumoEl){
+    const total=conquistas.length;
+    const porCat=Object.keys(LEGADO_CATS).map(k=>({key:k,...LEGADO_CATS[k],n:conquistas.filter(c=>c.categoria===k).length}));
+    resumoEl.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;">'
+      +'<div class="card"><div class="card-body" style="padding:14px;text-align:center;"><div style="font-size:28px;font-weight:700;font-family:var(--font-display);color:var(--rose);">'+total+'</div><div style="font-size:11px;color:var(--text3);text-transform:uppercase;font-weight:700;">Total de Feitos</div></div></div>'
+      +porCat.filter(c=>c.n>0).map(c=>'<div class="card"><div class="card-body" style="padding:14px;text-align:center;"><div style="font-size:22px;font-weight:700;font-family:var(--font-display);color:var(--'+c.color+');">'+c.n+'</div><div style="font-size:11px;color:var(--text3);">'+c.emoji+' '+c.label+'</div></div></div>').join('')
+      +'</div>';
+  }
+
+  if(filtrada.length===0){
+    el.innerHTML='<div class="card"><div class="card-body" style="text-align:center;padding:40px 24px;"><i class="fa-solid fa-trophy" style="font-size:36px;color:var(--text3);opacity:0.3;margin-bottom:14px;display:block;"></i><div style="font-size:14px;color:var(--text3);">Nenhum feito registrado ainda.<br>Clique em "+ Novo Feito" para começar!</div></div></div>';
+    return;
+  }
+
+  el.innerHTML=filtrada.map(c=>{
+    const cat=LEGADO_CATS[c.categoria]||LEGADO_CATS.processo;
+    const dataFmt=c.data?new Date(c.data+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'numeric'}):'—';
+    return '<div class="card" style="margin-bottom:10px;">'
+      +'<div class="card-body" style="padding:16px 18px;">'
+      +'<div style="display:flex;align-items:flex-start;gap:14px;">'
+      +'<div class="metric-icon '+cat.color+'" style="width:36px;height:36px;font-size:16px;flex-shrink:0;margin-top:2px;">'+cat.emoji+'</div>'
+      +'<div style="flex:1;min-width:0;">'
+      +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px;">'
+      +'<span style="font-size:15px;font-weight:700;">'+esc(c.titulo)+'</span>'
+      +'<span style="font-size:10.5px;background:var(--bg3);color:var(--text3);padding:2px 8px;border-radius:8px;font-weight:600;">'+cat.emoji+' '+cat.label+'</span>'
+      +'<span style="font-size:11px;color:var(--text3);margin-left:auto;">'+dataFmt+'</span>'
+      +'</div>'
+      +(c.impacto?'<div style="font-size:12.5px;font-weight:600;color:var(--'+cat.color+');margin-bottom:6px;"><i class="fa-solid fa-bolt"></i> '+esc(c.impacto)+'</div>':'')
+      +(c.descricao?'<div style="font-size:13px;color:var(--text2);white-space:pre-wrap;line-height:1.55;">'+esc(c.descricao)+'</div>':'')
+      +'</div>'
+      +'<div style="display:flex;gap:6px;flex-shrink:0;">'
+      +'<button onclick="editarConquista(\''+c.id+'\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:4px;"><i class="fa-solid fa-pencil"></i></button>'
+      +'<button onclick="excluirConquista(\''+c.id+'\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:4px;"><i class="fa-solid fa-trash"></i></button>'
+      +'</div>'
+      +'</div></div></div>';
+  }).join('');
+}
+
+function abrirNovaConquista(){
+  _conquistaEditId=null;
+  document.getElementById('modal-conquista-titulo').textContent='Novo Feito';
+  document.getElementById('cq-titulo').value='';
+  document.getElementById('cq-data').value=new Date().toISOString().substring(0,10);
+  document.getElementById('cq-categoria').value='financeiro';
+  document.getElementById('cq-impacto').value='';
+  document.getElementById('cq-descricao').value='';
+  document.getElementById('modal-conquista').classList.add('open');
+}
+
+function editarConquista(id){
+  const c=conquistas.find(x=>x.id===id); if(!c) return;
+  _conquistaEditId=id;
+  document.getElementById('modal-conquista-titulo').textContent='Editar Feito';
+  document.getElementById('cq-titulo').value=c.titulo||'';
+  document.getElementById('cq-data').value=c.data||'';
+  document.getElementById('cq-categoria').value=c.categoria||'financeiro';
+  document.getElementById('cq-impacto').value=c.impacto||'';
+  document.getElementById('cq-descricao').value=c.descricao||'';
+  document.getElementById('modal-conquista').classList.add('open');
+}
+
+function salvarConquista(){
+  const titulo=document.getElementById('cq-titulo').value.trim();
+  if(!titulo){ showToast('Informe um título.','peach'); return; }
+  const obj={
+    id:_conquistaEditId||('cq'+Date.now()),
+    titulo,
+    data:document.getElementById('cq-data').value,
+    categoria:document.getElementById('cq-categoria').value||'processo',
+    impacto:document.getElementById('cq-impacto').value.trim(),
+    descricao:document.getElementById('cq-descricao').value.trim(),
+  };
+  if(_conquistaEditId){ const i=conquistas.findIndex(x=>x.id===_conquistaEditId); if(i>=0) conquistas[i]=obj; }
+  else conquistas.push(obj);
+  closeModal('modal-conquista');
+  if(typeof saveAll==='function') saveAll();
+  renderLegado();
+  showToast('Feito salvo!','sage');
+}
+
+function excluirConquista(id){
+  if(!confirm('Apagar este feito?')) return;
+  conquistas=conquistas.filter(x=>x.id!==id);
+  if(typeof saveAll==='function') saveAll();
+  renderLegado();
+  showToast('Feito removido.','peach');
+}
+
 const _PERSIST_KEYS = {
   nx_tasks:()=>tasks, nx_imoveis:()=>imoveis, nx_notes:()=>notes,
   nx_compras:()=>comprasList, nx_projetos:()=>projetos, nx_atts:()=>ATTS,
@@ -3290,7 +3406,8 @@ const _PERSIST_KEYS = {
   nx_manual:()=>manualEntradas,
   nx_superhost:()=>superhostPeriodos,
   nx_cancelamentos:()=>cancelamentos,
-  nx_notasfiscais:()=>notasFiscais
+  nx_notasfiscais:()=>notasFiscais,
+  nx_conquistas:()=>conquistas
 };
 
 function saveAll(){
@@ -3306,7 +3423,7 @@ function saveAll(){
 // ─── Sincronização com o backend KV (compartilhado entre dispositivos) ───
 // Chaves que sincronizam (dados de equipe/operação). Credenciais e a lista
 // pesada de avaliações ficam SEMPRE locais.
-const SYNC_KEYS=['nx_lastSaved','nx_users','nx_tasks','nx_imoveis','nx_notes','nx_compras','nx_projetos','nx_atts','nx_workP1','nx_workP2','nx_headfixo','nx_headcom','nx_headfotos','nx_kpivals','nx_kpisub','nx_taskcats','nx_catalog','nx_precos','nx_precoenx','nx_niveldx','nx_nicolecom','nx_nextatt','nx_transcricoes','nx_plantao','nx_turnos','nx_salpagos','nx_outros','nx_extras','nx_manutencoes','nx_manual','nx_superhost','nx_cancelamentos','nx_notasfiscais','nx_name','nx_fornecedores_cad'];
+const SYNC_KEYS=['nx_lastSaved','nx_users','nx_tasks','nx_conquistas','nx_imoveis','nx_notes','nx_compras','nx_projetos','nx_atts','nx_workP1','nx_workP2','nx_headfixo','nx_headcom','nx_headfotos','nx_kpivals','nx_kpisub','nx_taskcats','nx_catalog','nx_precos','nx_precoenx','nx_niveldx','nx_nicolecom','nx_nextatt','nx_transcricoes','nx_plantao','nx_turnos','nx_salpagos','nx_outros','nx_extras','nx_manutencoes','nx_manual','nx_superhost','nx_cancelamentos','nx_notasfiscais','nx_name','nx_fornecedores_cad'];
 let _kvDirty=false;       // há mudança local não enviada?
 let _kvLastPushed=null;   // último blob enviado (string) — evita gravações repetidas
 let _kvPushing=false;
@@ -3363,6 +3480,7 @@ function _renderTudo(){
     if(typeof renderPlantao==='function') renderPlantao();
     if(typeof renderExtras==='function') renderExtras();
     if(typeof renderManutencaoKanban==='function') renderManutencaoKanban();
+    if(typeof renderLegado==='function') renderLegado();
     if(typeof aplicarPermissoes==='function') aplicarPermissoes();
   }catch(e){ console.warn('render falhou', e); }
 }
@@ -3411,6 +3529,7 @@ function loadAll(){
     v=g('nx_superhost');  if(Array.isArray(v)) superhostPeriodos=v;
     v=g('nx_cancelamentos'); if(Array.isArray(v)) cancelamentos=v;
     v=g('nx_notasfiscais'); if(v&&typeof v==='object') notasFiscais=v;
+    v=g('nx_conquistas'); if(Array.isArray(v)) conquistas=v;
   }catch(e){ console.warn('loadAll falhou', e); }
 }
 

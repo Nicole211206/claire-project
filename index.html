@@ -156,6 +156,7 @@ function _validarLogin(){
     <button class="nav-item" onclick="showPanel('projetos',this)"><i class="fa-solid fa-folder-open"></i> Projetos</button>
     <button class="nav-item" onclick="showPanel('plantao',this)"><i class="fa-solid fa-arrow-right-arrow-left"></i> Passagem de Turno</button>
     <button class="nav-item" id="nav-manual" onclick="showPanel('manual',this)"><i class="fa-solid fa-book-open"></i> Manual</button>
+    <button class="nav-item" onclick="showPanel('legado',this)"><i class="fa-solid fa-trophy"></i> Meu Legado</button>
     <div class="nav-section" id="navsec-admin">Administração</div>
     <button class="nav-item" id="nav-usuarios" onclick="showPanelUsuarios(this)"><i class="fa-solid fa-users-gear"></i> Usuários</button>
   </div>
@@ -712,6 +713,27 @@ function _validarLogin(){
         <input type="text" class="form-input" id="pt-filter-busca" placeholder="Buscar imóvel ou assunto..." oninput="renderPlantao()" style="width:220px;padding:6px 10px;font-size:13px;">
       </div>
       <div style="display:flex;flex-direction:column;gap:8px;" id="plantao-lista"></div>
+    </div>
+
+    <!-- ── MEU LEGADO ── -->
+    <div class="panel" id="panel-legado">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
+        <div>
+          <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Meu Legado</h2>
+          <p style="color:var(--text3);font-size:13px;margin-top:2px;">Conquistas e impactos reais na sua jornada na WeCare</p>
+        </div>
+        <button class="btn btn-rose" onclick="abrirNovaConquista()"><i class="fa-solid fa-plus"></i> Novo Feito</button>
+      </div>
+      <div id="legado-resumo" style="margin-bottom:18px;"></div>
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;" id="legado-filtros">
+        <button class="tab-btn active" onclick="filtrarLegado('',this)">Todos</button>
+        <button class="tab-btn" onclick="filtrarLegado('financeiro',this)">💰 Financeiro</button>
+        <button class="tab-btn" onclick="filtrarLegado('tecnologia',this)">⚙️ Tecnologia</button>
+        <button class="tab-btn" onclick="filtrarLegado('processo',this)">📋 Processo</button>
+        <button class="tab-btn" onclick="filtrarLegado('equipe',this)">🤝 Equipe</button>
+        <button class="tab-btn" onclick="filtrarLegado('produto',this)">🏠 Produto</button>
+      </div>
+      <div id="legado-lista"></div>
     </div>
 
     <!-- ── USUÁRIOS (ADMIN) ── -->
@@ -1409,6 +1431,45 @@ function _validarLogin(){
   </div>
 </div>
 <!-- Modal: Superhost -->
+<!-- Modal Meu Legado -->
+<div class="modal-overlay" id="modal-conquista">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header"><h3 class="modal-title" id="modal-conquista-titulo">Novo Feito</h3><button class="modal-close" onclick="closeModal('modal-conquista')">✕</button></div>
+    <div class="form-group">
+      <label class="form-label">Título *</label>
+      <input type="text" class="form-input" id="cq-titulo" placeholder="Ex: Implementação do Booking">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group">
+        <label class="form-label">Data *</label>
+        <input type="date" class="form-input" id="cq-data">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Categoria</label>
+        <select class="form-select" id="cq-categoria">
+          <option value="financeiro">💰 Financeiro</option>
+          <option value="tecnologia">⚙️ Tecnologia</option>
+          <option value="processo">📋 Processo</option>
+          <option value="equipe">🤝 Equipe</option>
+          <option value="produto">🏠 Produto</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Impacto</label>
+      <input type="text" class="form-input" id="cq-impacto" placeholder="Ex: R$ 19.800 recuperados · +15% de receita · -2h/dia de trabalho manual">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Descrição</label>
+      <textarea class="form-input" id="cq-descricao" rows="4" placeholder="Conte o que aconteceu, qual era o problema e como você resolveu..."></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-conquista')">Cancelar</button>
+      <button class="btn btn-rose" onclick="salvarConquista()"><i class="fa-solid fa-check"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-superhost">
   <div class="modal" style="max-width:480px;">
     <div class="modal-header"><h3 class="modal-title">Período Superhost</h3><button class="modal-close" onclick="closeModal('modal-superhost')">✕</button></div>

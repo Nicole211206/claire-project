@@ -973,6 +973,14 @@ function _validarLogin(){
       <div style="font-size:11px;color:var(--text3);margin-top:4px;">Endereço do Cloudflare Worker que o TI vai publicar (veja o arquivo hostaway-worker.js). Conecta as avaliações ao KPI.</div>
     </div>
 
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin:18px 0 8px;">Backup de Dados</div>
+    <div style="display:flex;gap:8px;margin-bottom:4px;">
+      <button class="btn btn-sm" onclick="exportarBackup()" style="flex:1;"><i class="fa-solid fa-download"></i> Exportar backup (.json)</button>
+      <button class="btn btn-sm" onclick="document.getElementById('import-backup-file').click()" style="flex:1;"><i class="fa-solid fa-upload"></i> Importar backup</button>
+      <input type="file" id="import-backup-file" accept=".json" style="display:none;" onchange="importarBackup(event)">
+    </div>
+    <div style="font-size:11px;color:var(--text3);">Exporte regularmente para nunca perder dados. O arquivo contém todas as tarefas, projetos, imóveis, NFs e configurações.</div>
+
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-settings')">Cancelar</button>
       <button class="btn btn-rose" onclick="saveSettings()"><i class="fa-solid fa-check"></i> Salvar</button>

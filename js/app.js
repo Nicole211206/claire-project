@@ -2272,6 +2272,36 @@ function renderFocusInsights(){
 }
 
 // ═══════════════════ SETTINGS ═══════════════════
+function exportarBackup(){
+  const blob={};
+  const SYNC_KEYS_LOCAL=['nx_lastSaved','nx_users','nx_tasks','nx_conquistas','nx_imoveis','nx_notes','nx_compras','nx_projetos','nx_atts','nx_workP1','nx_workP2','nx_headfixo','nx_headcom','nx_headfotos','nx_kpivals','nx_kpisub','nx_taskcats','nx_catalog','nx_precos','nx_precoenx','nx_niveldx','nx_nicolecom','nx_nextatt','nx_transcricoes','nx_plantao','nx_turnos','nx_salpagos','nx_outros','nx_extras','nx_manutencoes','nx_manual','nx_superhost','nx_cancelamentos','nx_notasfiscais','nx_name','nx_fornecedores_cad'];
+  SYNC_KEYS_LOCAL.forEach(k=>{ const v=localStorage.getItem(k); if(v!==null){ try{ blob[k]=JSON.parse(v); }catch(e){ blob[k]=v; } } });
+  const data=JSON.stringify(blob, null, 2);
+  const a=document.createElement('a');
+  a.href='data:application/json;charset=utf-8,'+encodeURIComponent(data);
+  const d=new Date().toISOString().substring(0,10);
+  a.download='claire-backup-'+d+'.json';
+  a.click();
+  showToast('Backup exportado com sucesso!','sage');
+}
+function importarBackup(event){
+  const file=event.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const blob=JSON.parse(e.target.result);
+      if(!blob||typeof blob!=='object'||!blob.nx_tasks){ showToast('Arquivo inválido — não é um backup do Claire.','vermelha'); return; }
+      if(!confirm('Importar este backup vai SUBSTITUIR todos os dados atuais. Continuar?')) return;
+      for(const k in blob){ try{ localStorage.setItem(k, JSON.stringify(blob[k])); }catch(er){} }
+      loadAll();
+      _renderTudo();
+      _kvDirty=true;
+      showToast('✅ Backup importado! Dados restaurados.','sage');
+    }catch(err){ showToast('Erro ao ler o arquivo: '+err.message,'vermelha'); }
+  };
+  reader.readAsText(file);
+  event.target.value='';
+}
 function openSettings(){
   document.getElementById('s-name').value=ls('nx_name')||'Nicole';
   document.getElementById('s-api').value=ls('nx_apikey')||'';
@@ -6167,7 +6197,7 @@ document.head.appendChild(toastStyle);
 // localStorage é gratuito → salva local com frequência. O backend KV (limite diário)
 // só recebe quando há mudança REAL, espaçado (a cada 25s) e deduplicado.
 setInterval(saveAll, 5000);              // salva no navegador (local), barato
-setInterval(_kvFlush, 25000);            // sincroniza com o backend só se mudou
+setInterval(_kvFlush, 300000);           // sincroniza a cada 5 min (respeita limite KV gratuito)
 window.addEventListener('beforeunload', function(){ saveAll(); _kvFlush(); });
 window.addEventListener('visibilitychange', function(){ if(document.visibilityState==='hidden'){ saveAll(); _kvFlush(); } });
 // ═══════════════════ ACOMPANHAMENTO — ABAS ═══════════════════

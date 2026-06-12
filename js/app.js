@@ -343,7 +343,8 @@ function salvarUsuario(){
   if(!nome||!email||!senha){ showToast('Preencha nome, e-mail e senha.','peach'); return; }
   const modulos=Array.from(document.querySelectorAll('.u-mod-check:checked')).map(c=>c.value);
   const attId = (perfil==='atendente'||perfil==='coordenacao') ? (document.getElementById('u-att').value||'') : '';
-  const attsPermitidos = Array.from(document.querySelectorAll('.u-attperm-check:checked')).map(c=>c.value);
+  // attsPermitidos só se aplica a coordenação; atendente nunca herda perms de outros ATTs
+  const attsPermitidos = perfil==='coordenacao' ? Array.from(document.querySelectorAll('.u-attperm-check:checked')).map(c=>c.value) : [];
   // email duplicado?
   const jaExiste=usuarios.find(u=>u.email===email);
   if(jaExiste && email!==_usuarioEditEmail){ showToast('Já existe um usuário com este e-mail.','vermelha'); return; }

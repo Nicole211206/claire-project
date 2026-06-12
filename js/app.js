@@ -862,6 +862,31 @@ function renderExtras(){
 }
 
 // ═══════════════════ TASKS ═══════════════════
+// Coleta tarefas internas de manutenções, filtrando por ATT responsável se fornecido
+function _getManutTarefas(filtroAttId){
+  const lista=[];
+  if(typeof manutencoes==='undefined') return lista;
+  manutencoes.forEach(function(m){
+    (m.tarefasManut||[]).forEach(function(t,i){
+      if(filtroAttId && t.responsavel!==filtroAttId) return;
+      lista.push({
+        id:'mt_'+m.id+'_'+i,
+        text:(t.titulo||'(sem título)')+(m.imovelNome?' — '+m.imovelNome:''),
+        cat:'work',prio:'med',
+        due:t.dataPrazo||'',
+        dataInicio:t.dataInicio||t.dataPrazo||'',
+        done:t.status==='done',
+        status:t.status||'todo',
+        recorrente:false,tipoRecorrencia:null,
+        updates:t.updates||[],
+        projetoId:null,projetoNome:null,
+        _isManutTarefa:true,_manutId:m.id,_tarefaIdx:i,_imovelNome:m.imovelNome||''
+      });
+    });
+  });
+  return lista;
+}
+
 // Para não-admin com attId, as "tarefas" são as demandas atribuídas a elas no Equipe
 function _getEffectiveTasks(){
   const u=typeof getCurrentUser==='function'?getCurrentUser():null;
@@ -885,14 +910,16 @@ function _getEffectiveTasks(){
         projetoId:null,projetoNome:null,
         _isDemand:true,_demIdx:i,_attId:att.id
       }));
-      // tarefas pessoais criadas pela própria atendente
       const proprias=tasks.filter(t=>t.attId===att.id);
-      return [...demandas,...proprias];
+      const manutTarefas=_getManutTarefas(att.id);
+      return [...demandas,...proprias,...manutTarefas];
     }
-    // Não-admin sem ATT vinculado: só as tarefas pessoais dela
-    return tasks.filter(t=>u.attId&&t.attId===u.attId);
+    const proprias=tasks.filter(t=>u.attId&&t.attId===u.attId);
+    const manutTarefas=_getManutTarefas(u.attId||null);
+    return [...proprias,...manutTarefas];
   }
-  return tasks;
+  // admin: tarefas globais + todas as tarefas de manutenção
+  return [...tasks,..._getManutTarefas(null)];
 }
 function toggleDemanda(attId,idx){
   const att=ATTS.find(a=>a.id===attId);if(!att||!att.demands[idx])return;
@@ -916,6 +943,17 @@ let taskCats=[
 ];
 function getCatInfo(id){return taskCats.find(c=>c.id===id)||{id,label:id,color:'#94a3b8'};}
 const PC={high:'var(--vermelha)',med:'var(--amarela)',low:'var(--sage)'};
+
+function manutToggleTarefa(manutId,idx){
+  const m=manutencoes.find(x=>x.id===manutId); if(!m||!m.tarefasManut[idx]) return;
+  m.tarefasManut[idx].status=m.tarefasManut[idx].status==='done'?'todo':'done';
+  if(typeof saveAll==='function') saveAll();
+  renderTasks(); renderKanban();
+}
+function abrirManutTarefaDetalhe(manutId){
+  manutAba='tarefas';
+  abrirManutModal(manutId);
+}
 
 function aplicarFiltroPrazo(lista){
   const sel=document.getElementById('task-sort-prazo');
@@ -962,23 +1000,24 @@ function renderTasks(f){
   const _listaEl=document.getElementById('all-tasks-list');
   if(_listaEl) _listaEl.innerHTML=list.map(t=>{
     const cat=getCatInfo(t.cat);
-    const toggleFn=t._isDemand?'toggleDemanda(\''+t._attId+'\','+t._demIdx+')':'toggleTask('+t.id+')';
-    const detalheFn=t._isDemand?'abrirDemandaModal(\''+t._attId+'\','+t._demIdx+')':'abrirDetalheTask('+t.id+')';
-    const statusLabel=t._isDemand?({todo:'A fazer',doing:'Em andamento',done:'Concluída'}[t.status]||'A fazer'):'';
-    const statusBadge=t._isDemand?'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--bg3);color:var(--text3);">'+statusLabel+'</span>':'';
+    const toggleFn=t._isDemand?'toggleDemanda(\''+t._attId+'\','+t._demIdx+')':t._isManutTarefa?'manutToggleTarefa('+t._manutId+','+t._tarefaIdx+')':'toggleTask('+t.id+')';
+    const detalheFn=t._isDemand?'abrirDemandaModal(\''+t._attId+'\','+t._demIdx+')':t._isManutTarefa?'abrirManutTarefaDetalhe('+t._manutId+')':'abrirDetalheTask('+t.id+')';
+    const statusLabel=(t._isDemand||t._isManutTarefa)?({todo:'A fazer',doing:'Em andamento',done:'Concluída'}[t.status]||'A fazer'):'';
+    const statusBadge=(t._isDemand||t._isManutTarefa)?'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--bg3);color:var(--text3);">'+statusLabel+'</span>':'';
     return '<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);'+(t.done?'opacity:0.5;':'')+'">'+
       '<div style="width:3px;height:36px;border-radius:2px;background:'+(PC[t.prio]||'var(--text3)')+';flex-shrink:0;margin-top:2px;"></div>'+
       '<div onclick="'+toggleFn+'" style="width:18px;height:18px;border-radius:50%;border:1.5px solid '+(t.done?'var(--sage)':'var(--border2)')+';background:'+(t.done?'var(--sage)':'transparent')+';cursor:pointer;flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;font-size:9px;color:'+(t.done?'#fff':'transparent')+';transition:all 0.15s;">'+(t.done?'<i class="fa-solid fa-check"></i>':'')+
       '</div>'+
       '<div style="flex:1;min-width:0;"><div onclick="'+detalheFn+'" style="font-size:13.5px;cursor:pointer;'+(t.done?'text-decoration:line-through;color:var(--text3);':'')+'" title="Ver detalhes">'+esc(t.text)+(t.recorrente&&t.tipoRecorrencia?'<span style="font-size:10px;color:var(--lavender);margin-left:6px;">🔁</span>':'')+'</div>'+
       '<div style="display:flex;gap:6px;margin-top:3px;align-items:center;flex-wrap:wrap;">'+
-      (t._isDemand?statusBadge:'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:'+cat.color+'22;color:'+cat.color+';border:1px solid '+cat.color+'44;">'+cat.label+'</span>')+
+      (t._isManutTarefa?statusBadge+'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--peach)22;color:var(--peach);border:1px solid var(--peach)44;"><i class="fa-solid fa-wrench"></i> Manutenção</span>':t._isDemand?statusBadge:'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:'+cat.color+'22;color:'+cat.color+';border:1px solid '+cat.color+'44;">'+cat.label+'</span>')+
       (t.due?'<span style="font-size:11px;color:var(--text3);"><i class="fa-regular fa-calendar fa-xs"></i> '+fd(t.due)+'</span>':'')+
       ((t.updates&&t.updates.length>0)?'<span style="font-size:10px;color:var(--text3);"><i class="fa-solid fa-message fa-xs"></i> '+t.updates.length+'</span>':'')+
       (t._isDemand&&!t.done?'<select onchange="mudarStatusDemanda(\''+t._attId+'\','+t._demIdx+',this.value);this.blur();" onclick="event.stopPropagation();" style="font-size:10px;padding:1px 6px;border-radius:8px;border:1px solid var(--border2);background:var(--bg2);color:var(--text);cursor:pointer;"><option value="todo"'+(t.status==='todo'?' selected':'')+'>A fazer</option><option value="doing"'+(t.status==='doing'?' selected':'')+'>Em andamento</option><option value="done"'+(t.status==='done'?' selected':'')+'>Concluída</option></select>':'')+
+      (t._isManutTarefa&&!t.done?'<select onchange="manutSetTarefaField('+t._manutId+','+t._tarefaIdx+',\'status\',this.value);this.blur();" onclick="event.stopPropagation();" style="font-size:10px;padding:1px 6px;border-radius:8px;border:1px solid var(--border2);background:var(--bg2);color:var(--text);cursor:pointer;"><option value="todo"'+(t.status==='todo'?' selected':'')+'>A fazer</option><option value="doing"'+(t.status==='doing'?' selected':'')+'>Em andamento</option><option value="done"'+(t.status==='done'?' selected':'')+'>Concluída</option></select>':'')+
       '</div></div>'+
-      (!t._isDemand?'<button onclick="delTask('+t.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 4px;transition:color 0.15s;" onmouseover="this.style.color=\'var(--vermelha)\'" onmouseout="this.style.color=\'var(--text3)\'"><i class="fa-solid fa-xmark"></i></button>':'')+
-      ((!t.done&&t.due&&!t._isDemand)?'<button onclick="criarEventoGCal(\''+escQ(t.text)+'\',\''+t.due+'\',\''+(t.hora||'09:00')+'\',60,\'Tarefa Claire\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:2px 4px;" title="Criar no Google Agenda"><i class="fa-brands fa-google"></i></button>':'')+
+      (!t._isDemand&&!t._isManutTarefa?'<button onclick="delTask('+t.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 4px;transition:color 0.15s;" onmouseover="this.style.color=\'var(--vermelha)\'" onmouseout="this.style.color=\'var(--text3)\'"><i class="fa-solid fa-xmark"></i></button>':'')+
+      ((!t.done&&t.due&&!t._isDemand&&!t._isManutTarefa)?'<button onclick="criarEventoGCal(\''+escQ(t.text)+'\',\''+t.due+'\',\''+(t.hora||'09:00')+'\',60,\'Tarefa Claire\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:2px 4px;" title="Criar no Google Agenda"><i class="fa-brands fa-google"></i></button>':'')+
       '</div>';
   }).join('');
   const p=effective.filter(t=>!t.done).length;
@@ -1077,11 +1116,11 @@ function renderTaskGantt(){
   const items=ganttBase.map(t=>({
     id:t.id,
     label:t.text,
-    tagHtml:t._isDemand
-      ?'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:var(--bg3);color:var(--text3);font-weight:600;flex-shrink:0;">'+(t.status==='doing'?'Em andamento':t.status==='done'?'Concluída':'A fazer')+'</span>'
+    tagHtml:(t._isDemand||t._isManutTarefa)
+      ?'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:var(--bg3);color:var(--text3);font-weight:600;flex-shrink:0;">'+(t.status==='doing'?'Em andamento':t.status==='done'?'Concluída':'A fazer')+'</span>'+(t._isManutTarefa?'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:var(--peach)22;color:var(--peach);font-weight:600;flex-shrink:0;margin-left:3px;"><i class="fa-solid fa-wrench"></i></span>':'')
       :'<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:'+getCatInfo(t.cat).color+'22;color:'+getCatInfo(t.cat).color+';font-weight:600;flex-shrink:0;">'+getCatInfo(t.cat).label+'</span>',
     inicio:t.dataInicio||t.due, fim:t.due||t.dataInicio, cor:_corPrio(t.prio),
-    onclick:t._isDemand?'abrirDemandaModal(\''+t._attId+'\','+t._demIdx+')':'abrirDetalheTask('+t.id+')'
+    onclick:t._isDemand?'abrirDemandaModal(\''+t._attId+'\','+t._demIdx+')':t._isManutTarefa?'abrirManutTarefaDetalhe('+t._manutId+')':'abrirDetalheTask('+t.id+')'
   }));
   _renderGantt('task-crono-view', items, { agrupar:function(arr){
     const g={}; arr.forEach(it=>{ const mk=(it.ini||'').substring(0,7); (g[mk]=g[mk]||[]).push(it); });
@@ -1405,15 +1444,17 @@ function renderKanban(){
       '<div style="font-size:11px;background:var(--bg3);padding:1px 7px;border-radius:10px;color:var(--text3);">'+cards.length+'</div></div>'+
       cards.map(t=>{
         const cat=getCatInfo(t.cat);
-        const clickFn=t._isDemand?'abrirDemandaModal(\''+t._attId+'\','+t._demIdx+')':'abrirDetalheTask('+t.id+')';
-        const dragAttr=t._isDemand?'':'draggable="true" ondragstart="kanbanDragStart(event,'+t.id+')" ondragend="kanbanDragEnd(event)" ';
-        const delBtn=t._isDemand?'':'<button onclick="event.stopPropagation();delTask('+t.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;float:right;" title="Apagar"><i class="fa-solid fa-xmark"></i></button>';
-        const tagHtml=t._isDemand
-          ?'<span style="font-size:9.5px;padding:1px 6px;border-radius:10px;font-weight:600;background:var(--bg3);color:var(--text3);">'+(t.status==='doing'?'Em andamento':t.status==='done'?'Concluída':'A fazer')+'</span>'
+        const isSpecial=t._isDemand||t._isManutTarefa;
+        const clickFn=t._isDemand?'abrirDemandaModal(\''+t._attId+'\','+t._demIdx+')':t._isManutTarefa?'abrirManutTarefaDetalhe('+t._manutId+')':'abrirDetalheTask('+t.id+')';
+        const dragAttr=isSpecial?'':'draggable="true" ondragstart="kanbanDragStart(event,'+t.id+')" ondragend="kanbanDragEnd(event)" ';
+        const delBtn=isSpecial?'':'<button onclick="event.stopPropagation();delTask('+t.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;float:right;" title="Apagar"><i class="fa-solid fa-xmark"></i></button>';
+        const tagHtml=t._isManutTarefa
+          ?'<span style="font-size:9.5px;padding:1px 6px;border-radius:10px;font-weight:600;background:var(--peach)22;color:var(--peach);"><i class="fa-solid fa-wrench"></i> Manutenção</span>'
+          :t._isDemand?'<span style="font-size:9.5px;padding:1px 6px;border-radius:10px;font-weight:600;background:var(--bg3);color:var(--text3);">'+(t.status==='doing'?'Em andamento':t.status==='done'?'Concluída':'A fazer')+'</span>'
           :'<span style="font-size:9.5px;padding:1px 6px;border-radius:10px;font-weight:600;background:'+cat.color+'22;color:'+cat.color+';">'+cat.label+'</span>';
         return '<div '+dragAttr+
           'onclick="'+clickFn+'" '+
-          'style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px;margin-bottom:7px;cursor:'+(t._isDemand?'pointer':'grab')+';user-select:none;transition:opacity 0.15s;'+((col.id==='done'||t.done)?'opacity:0.6;':'')+'">'+
+          'style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px;margin-bottom:7px;cursor:'+(isSpecial?'pointer':'grab')+';user-select:none;transition:opacity 0.15s;'+((col.id==='done'||t.done)?'opacity:0.6;':'')+'">'+
           delBtn+
           '<div style="font-size:13px;font-weight:500;margin-bottom:5px;">'+esc(t.text)+'</div>'+
           '<div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;">'+

@@ -190,7 +190,7 @@ function podeVerAtt(attId){
   return (u.attsPermitidos||[]).includes(attId);
 }
 function carregarUsuarios(){ try{ usuarios=JSON.parse(localStorage.getItem('nx_users')||'[]'); }catch(e){ usuarios=[]; } }
-function salvarUsuarios(){ localStorage.setItem('nx_users', JSON.stringify(usuarios)); _kvDirty=true; _kvFlush(); }
+function salvarUsuarios(){ localStorage.setItem('nx_users', JSON.stringify(usuarios)); _kvDirty=true; }
 
 function aplicarPermissoes(){
   const u=getCurrentUser();
@@ -381,6 +381,13 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     const ok=await kvPull();
     if(ok){ setTimeout(_renderTudo, 50); }
   }
+  // Barra de emergência: aparece se ainda estiver vazio após tentativas de carregamento
+  setTimeout(()=>{
+    const bar=document.getElementById('emergency-restore-bar');
+    if(bar && (!tasks||tasks.length===0) && (!imoveis||imoveis.length===0)){
+      bar.style.display='';
+    }
+  }, 2000);
   // guarda o estado atual como "já enviado" pra não regravar à toa logo no início
   try{ _kvLastPushed=_kvBuildBlob(); }catch(e){}
   ATTS.forEach(a=>{if(!a.respWeekly)a.respWeekly=[null,null,null,null];if(a.respMes===undefined)a.respMes=null;});
@@ -3533,6 +3540,26 @@ async function kvPull(){
     }
   }catch(e){}
   return false;
+}
+async function kvForceRestore(){
+  const s=window.CLAIRE_SYNC||{};
+  if(!s.url){ showToast('Backend KV não configurado.','peach'); return; }
+  showToast('Restaurando dados do servidor...','sage');
+  try{
+    const r=await fetch(s.url.replace(/\/$/,'')+'/load?token='+encodeURIComponent(s.token||''));
+    const j=await r.json();
+    if(j&&j.data&&Object.keys(j.data).length>1){
+      for(const k in j.data){ try{ localStorage.setItem(k, JSON.stringify(j.data[k])); }catch(e){} }
+      loadAll();
+      _kvLastPushed=_kvBuildBlob();
+      _renderTudo();
+      showToast('✅ Dados restaurados do servidor com sucesso!','sage');
+    } else {
+      showToast('⚠️ Servidor retornou dados vazios. Tente outro dispositivo.','vermelha');
+    }
+  }catch(e){
+    showToast('Erro ao conectar ao servidor: '+e.message,'vermelha');
+  }
 }
 // Re-renderiza as telas principais (após recuperar dados do KV)
 function _renderTudo(){

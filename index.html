@@ -174,6 +174,10 @@ function _validarLogin(){
      MAIN
 ══════════════════════════════════════════ -->
 <div id="main">
+  <div id="emergency-restore-bar" style="display:none;background:#ef4444;color:#fff;text-align:center;padding:10px 16px;font-size:13px;font-weight:600;position:fixed;top:0;left:0;right:0;z-index:99998;">
+    ⚠️ Dados não carregados? <button onclick="kvForceRestore()" style="background:#fff;color:#ef4444;border:none;border-radius:6px;padding:4px 14px;font-weight:700;cursor:pointer;margin:0 10px;">RESTAURAR DADOS DO SERVIDOR</button>
+    <button onclick="document.getElementById('emergency-restore-bar').style.display='none'" style="background:none;border:none;color:#fff;cursor:pointer;opacity:0.7;">✕</button>
+  </div>
   <header id="topbar">
     <span class="topbar-title" id="panel-title">Visão Geral</span>
     <span class="topbar-date" id="top-date"></span>

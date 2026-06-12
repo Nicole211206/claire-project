@@ -5338,11 +5338,24 @@ function manutAbaTarefas(m){
             '<button class="btn btn-sm" onclick="manutAdicionarUpdateTarefa('+m.id+','+i+')"><i class="fa-solid fa-plus"></i></button>'+
           '</div>'+
         '</div>'+
+        '<div style="display:flex;justify-content:flex-end;padding-top:4px;">'+
+          '<button class="btn btn-sage btn-sm" onclick="manutSalvarTarefa('+m.id+','+i+')"><i class="fa-solid fa-check"></i> Salvar tarefa</button>'+
+        '</div>'+
       '</div>';
     });
   }
   html+='</div>';
   return html;
+}
+
+function manutSalvarTarefa(id,i){
+  const m=manutencoes.find(function(x){return x.id===id;}); if(!m||!m.tarefasManut[i]) return;
+  const t=m.tarefasManut[i];
+  if(!t.titulo){showToast('Adicione um título antes de salvar.','peach');return;}
+  if(!t.responsavel){showToast('Selecione a responsável antes de salvar.','peach');return;}
+  if(typeof saveAll==='function') saveAll();
+  renderTasks(); renderKanban();
+  showToast('Tarefa salva! Aparece no cronograma de '+( (ATTS.find(function(a){return a.id===t.responsavel;})||{}).name||t.responsavel)+'.','sage');
 }
 
 function manutNovaTarefa(id){

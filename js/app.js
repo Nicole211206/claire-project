@@ -230,9 +230,9 @@ function aplicarPermissoes(){
     const primeiro=MODULOS_LISTA.find(m=>u.perfil==='admin'||podeAcessar(m.id));
     if(primeiro){ const btn=document.querySelector('#sidebar .nav-item[onclick*="showPanel(\''+primeiro.id+'\'"]'); showPanel(primeiro.id, btn||null); }
   }
-  // Botão "Nova Tarefa": visível para admin; oculto para quem tem attId (vê demandas atribuídas)
+  // Botão "Nova Tarefa": visível para todos com acesso ao módulo tarefas
   const btnNovaTarefa=document.getElementById('btn-nova-tarefa');
-  if(btnNovaTarefa) btnNovaTarefa.style.display=(u.attId&&u.perfil!=='admin')?'none':'';
+  if(btnNovaTarefa) btnNovaTarefa.style.display='';
   // Redesenhar telas dependentes de permissão (importante: o 1º render ocorre antes do login)
   if(typeof renderOverview==='function') renderOverview();
   if(typeof renderTeam==='function') renderTeam();
@@ -870,7 +870,7 @@ function _getEffectiveTasks(){
     // Não-admin: sempre mostra só as demandas do ATT vinculado, nunca as tarefas globais
     const att=typeof getMinhaAtt==='function'?getMinhaAtt():null;
     if(att){
-      return att.demands.map((d,i)=>({
+      const demandas=att.demands.map((d,i)=>({
         id:'dem_'+i,
         text:d.desc||'(sem descrição)',
         cat:'work',
@@ -885,9 +885,12 @@ function _getEffectiveTasks(){
         projetoId:null,projetoNome:null,
         _isDemand:true,_demIdx:i,_attId:att.id
       }));
+      // tarefas pessoais criadas pela própria atendente
+      const proprias=tasks.filter(t=>t.attId===att.id);
+      return [...demandas,...proprias];
     }
-    // Não-admin sem ATT vinculado: lista vazia (nunca expõe tarefas do sistema)
-    return [];
+    // Não-admin sem ATT vinculado: só as tarefas pessoais dela
+    return tasks.filter(t=>u.attId&&t.attId===u.attId);
   }
   return tasks;
 }
@@ -1469,6 +1472,7 @@ function addTask(){
   const hora=document.getElementById('t-hora').value||'';
   const recorrencia=document.getElementById('t-recorrencia').value;
   const criarGcal=document.getElementById('t-gcal').checked;
+  const _cu=typeof getCurrentUser==='function'?getCurrentUser():null;
   const nova={
     id:Date.now(),text,
     cat:document.getElementById('t-cat').value,
@@ -1478,6 +1482,7 @@ function addTask(){
     recorrente:!!recorrencia,
     tipoRecorrencia:recorrencia||null,
     updates:[],
+    attId:(_cu&&_cu.attId&&_cu.perfil!=='admin')?_cu.attId:null,
   };
   tasks.unshift(nova);
   closeModal('modal-task');
@@ -5006,9 +5011,9 @@ function manutAbaSolicitacao(m){
     '</div>'+
     '<button class="btn btn-sm" style="margin-top:6px;" onclick="manutAdicionarItem('+m.id+')"><i class="fa-solid fa-plus"></i> Adicionar item</button>'+
     '<div style="margin-top:10px;background:var(--bg3);border-radius:var(--r-sm);padding:10px 12px;font-size:13px;">'+
-      '<div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:var(--text3);">Subtotal dos itens</span><span style="font-weight:600;">R$ '+sub.toFixed(2).replace('.',',')+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:var(--text3);">Subtotal dos itens</span><span id="manut-subtotal-'+m.id+'" style="font-weight:600;">R$ '+sub.toFixed(2).replace('.',',')+'</span></div>'+
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><span style="color:var(--text3);">Margem operacional</span><span style="display:flex;align-items:center;gap:4px;"><input type="number" class="form-input" style="width:60px;padding:3px 6px;text-align:center;" value="'+margem+'" oninput="salvarCampoManut('+m.id+',\'margemPercent\',this.value)"><span style="color:var(--text3);">%</span></span></div>'+
-      '<div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:6px;margin-top:4px;"><span style="font-weight:700;">Total</span><span style="font-weight:700;color:var(--sage);">R$ '+total.toFixed(2).replace('.',',')+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:6px;margin-top:4px;"><span style="font-weight:700;">Total</span><span id="manut-total-'+m.id+'" style="font-weight:700;color:var(--sage);">R$ '+total.toFixed(2).replace('.',',')+'</span></div>'+
     '</div></div>'+
     '<div class="form-group"><label class="form-label">Fotos e Vídeos</label>'+
     '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">'+
@@ -5244,6 +5249,8 @@ function fornSalvarCad(){
   document.getElementById('forn-input-cpfcnpj').value='';
   if(typeof saveAll==='function') saveAll();
   renderListaFornCad();
+  // atualiza o select de fornecedores na aba de pagamento aberta
+  if(manutAtiva){const _m=manutencoes.find(function(x){return x.id===manutAtiva;});if(_m&&manutAba==='pagamento')manutRenderAba(_m);}
   showToast('Fornecedor salvo!','sage');
 }
 
@@ -5264,7 +5271,7 @@ function manutAbaTarefas(m){
       const statusLabel={todo:'A Fazer',doing:'Em Andamento',done:'Concluída'}[t.status]||t.status;
       html+='<div style="border:1px solid var(--border);border-radius:var(--r-sm);padding:12px;display:grid;gap:8px;">'+
         '<div style="display:flex;align-items:flex-start;gap:8px;">'+
-          '<div style="flex:1;font-size:13.5px;font-weight:600;">'+esc(t.titulo||'(sem título)')+'</div>'+
+          '<input type="text" class="form-input" style="flex:1;font-size:13.5px;font-weight:600;" placeholder="Título da tarefa..." value="'+esc(t.titulo||'')+'" oninput="manutSetTarefaField('+m.id+','+i+',\'titulo\',this.value)">'+
           '<select onchange="manutSetTarefaField('+m.id+','+i+',\'status\',this.value)" style="font-size:11px;padding:2px 6px;border-radius:10px;border:1px solid '+statusCor+';background:'+statusCor+'22;color:'+statusCor+';cursor:pointer;">'+
             ['todo','doing','done'].map(function(s){return '<option value="'+s+'"'+(t.status===s?' selected':'')+'>'+({todo:'A Fazer',doing:'Em Andamento',done:'Concluída'}[s])+'</option>';}).join('')+
           '</select>'+
@@ -5368,6 +5375,14 @@ function manutSetItem(id,i,campo,valor){
   m.itens[i][campo]=campo==='valor'?(parseFloat(valor)||0):valor;
   if(typeof saveAll==='function') saveAll();
   renderManutencaoKanban();
+  // atualiza subtotal/total em tempo real sem re-renderizar e perder foco
+  const sub=manutSubtotal(m);
+  const margem=isNaN(parseFloat(m.margemPercent))?20:parseFloat(m.margemPercent);
+  const total=sub*(1+margem/100);
+  const elSub=document.getElementById('manut-subtotal-'+id);
+  const elTot=document.getElementById('manut-total-'+id);
+  if(elSub) elSub.textContent='R$ '+sub.toFixed(2).replace('.',',');
+  if(elTot) elTot.textContent='R$ '+total.toFixed(2).replace('.',',');
 }
 function manutAdicionarItem(id){
   const m=manutencoes.find(function(x){return x.id===id;}); if(!m) return;

@@ -4870,16 +4870,19 @@ function manutAbaSolicitacao(m){
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><span style="color:var(--text3);">Margem operacional</span><span style="display:flex;align-items:center;gap:4px;"><input type="number" class="form-input" style="width:60px;padding:3px 6px;text-align:center;" value="'+margem+'" oninput="salvarCampoManut('+m.id+',\'margemPercent\',this.value)"><span style="color:var(--text3);">%</span></span></div>'+
       '<div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:6px;margin-top:4px;"><span style="font-weight:700;">Total</span><span style="font-weight:700;color:var(--sage);">R$ '+total.toFixed(2).replace('.',',')+'</span></div>'+
     '</div></div>'+
-    '<div class="form-group"><label class="form-label">Fotos (JPG)</label>'+
+    '<div class="form-group"><label class="form-label">Fotos e Vídeos</label>'+
     '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">'+
     (m.fotos||[]).map(function(f,i){
+      const isVideo=f.startsWith('data:video');
       return '<div style="position:relative;width:80px;height:80px;border-radius:var(--r-sm);overflow:hidden;border:1px solid var(--border);">'+
-        '<img src="'+f+'" style="width:100%;height:100%;object-fit:cover;">'+
+        (isVideo
+          ?'<video src="'+f+'" style="width:100%;height:100%;object-fit:cover;" onclick="abrirAnexo(\''+f+'\')" title="Clique para ver"></video>'
+          :'<img src="'+f+'" style="width:100%;height:100%;object-fit:cover;cursor:pointer;" onclick="abrirAnexo(\''+f+'\')">')+
         '<button onclick="manutRemoverFoto('+m.id+','+i+')" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);border:none;color:#fff;cursor:pointer;font-size:11px;border-radius:50%;width:20px;height:20px;">&#10005;</button>'+
       '</div>';
     }).join('')+
     '</div>'+
-    '<input type="file" accept="image/*" multiple onchange="manutUploadFotos('+m.id+',event)"></div>'+
+    '<input type="file" accept="image/*,video/*" multiple onchange="manutUploadFotos('+m.id+',event)"></div>'+
     '<div class="form-group"><label class="form-label">Quem paga?</label><select class="form-select" onchange="salvarCampoManut('+m.id+',\'quemPaga\',this.value)">'+
       '<option value="proprietario"'+(m.quemPaga==='proprietario'?' selected':'')+'>Proprietário</option>'+
       '<option value="hospede"'+(m.quemPaga==='hospede'?' selected':'')+'>Hóspede</option>'+
@@ -4920,7 +4923,7 @@ function manutAbaPagamento(m){
       Object.keys(MANUT_PAGADOR).map(function(k){return '<option value="'+k+'"'+(m.pagoPor===k?' selected':'')+'>'+MANUT_PAGADOR[k]+'</option>';}).join('')+
     '</select></div></div>'+
     '<div class="form-group"><label class="form-label">Valor Gasto (R$)</label><input type="number" class="form-input" value="'+(m.valorGasto||'')+'" placeholder="0" oninput="salvarCampoManut('+m.id+',\'valorGasto\',this.value)"></div>'+
-    '<div style="background:var(--bg3);border-radius:var(--r-sm);padding:10px 12px;display:flex;justify-content:space-between;font-size:13px;"><span style="font-weight:700;">Economia (pago - gasto)</span><span style="font-weight:700;color:'+(economia>=0?'var(--sage)':'var(--vermelha)')+';">R$ '+economia.toFixed(2).replace('.',',')+'</span></div>'+
+    '<div style="background:var(--bg3);border-radius:var(--r-sm);padding:10px 12px;display:flex;justify-content:space-between;font-size:13px;"><span style="font-weight:700;">Economia (pago - gasto)</span><span id="manut-eco-'+m.id+'" style="font-weight:700;color:'+(economia>=0?'var(--sage)':'var(--vermelha)')+';">R$ '+economia.toFixed(2).replace('.',',')+'</span></div>'+
     '<div class="form-group"><label class="form-label">Anexo NF/Recibo (PDF ou imagem)</label><input type="file" accept="image/*,application/pdf" onchange="manutUploadAnexoNF('+m.id+',event)"><div style="font-size:12px;color:var(--text3);margin-top:4px;">'+(m.anexoNF?'anexo ✓ <button type="button" onclick="abrirAnexo(manutencoes.find(function(x){return x.id==='+m.id+';}).anexoNF)" style="background:none;border:none;color:var(--rose);cursor:pointer;font-size:12px;">abrir</button>':'')+'</div></div>'+
     '</div>';
 }
@@ -5107,7 +5110,7 @@ function fornSalvarCad(){
 // ── Aba Tarefas de Manutenção ──
 function manutAbaTarefas(m){
   const tfs=m.tarefasManut||[];
-  const membros=usuarios.filter(function(u){return u.email;});
+  const membros=ATTS.filter(function(a){return a.name;});
   let html='<div style="display:grid;gap:12px;">'+
     '<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;">'+
       '<div style="font-size:12px;color:var(--text3);">Tarefas internas desta manutenção — aparecem no cronograma do responsável.</div>'+
@@ -5131,7 +5134,7 @@ function manutAbaTarefas(m){
           '<div class="form-group" style="flex:1;min-width:0;"><label class="form-label" style="font-size:11px;">Responsável</label>'+
             '<select class="form-select" style="font-size:12px;" onchange="manutSetTarefaField('+m.id+','+i+',\'responsavel\',this.value)">'+
               '<option value="">Selecione...</option>'+
-              membros.map(function(u){return '<option value="'+esc(u.email)+'"'+(t.responsavel===u.email?' selected':'')+'>'+esc(u.nome||u.email)+'</option>';}).join('')+
+              membros.map(function(a){return '<option value="'+esc(a.id)+'"'+(t.responsavel===a.id?' selected':'')+'>'+esc(a.name)+'</option>';}).join('')+
             '</select>'+
           '</div>'+
           '<div class="form-group"><label class="form-label" style="font-size:11px;">Início</label><input type="date" class="form-input" style="font-size:12px;" value="'+esc(t.dataInicio||'')+'" onchange="manutSetTarefaField('+m.id+','+i+',\'dataInicio\',this.value)"></div>'+
@@ -5196,7 +5199,14 @@ function salvarCampoManut(id,campo,valor){
   m[campo]=valor;
   if(typeof saveAll==='function') saveAll();
   renderManutencaoKanban();
-  if(campo==='valorPago'||campo==='valorGasto') sincronizarManutencaoKPI();
+  if(campo==='valorPago'||campo==='valorGasto'){
+    sincronizarManutencaoKPI();
+    const pago=parseFloat(m.valorPago)||0;
+    const gasto=parseFloat(m.valorGasto)||0;
+    const eco=pago-gasto;
+    const el=document.getElementById('manut-eco-'+id);
+    if(el){el.textContent='R$ '+eco.toFixed(2).replace('.',',');el.style.color=eco>=0?'var(--sage)':'var(--vermelha)';}
+  }
   if(campo==='imovelNome'){const el=document.getElementById('manut-imovel-nome');if(el)el.textContent=m.imovelNome||'Nova Solicitação';}
 }
 
@@ -5238,7 +5248,9 @@ function manutUploadFotos(id,event){
   if(!m.fotos)m.fotos=[];
   let pend=files.length;
   Array.prototype.forEach.call(files,function(file){
-    _lerImagemReduzida(file,function(dataUrl){
+    const isVideo=file.type.startsWith('video/');
+    const loader=isVideo?_lerArquivoBase64:_lerImagemReduzida;
+    loader(file,function(dataUrl){
       m.fotos.push(dataUrl); pend--;
       if(pend<=0){ if(typeof saveAll==='function') saveAll(); manutRenderAba(m); }
     });

@@ -190,7 +190,7 @@ function podeVerAtt(attId){
   return (u.attsPermitidos||[]).includes(attId);
 }
 function carregarUsuarios(){ try{ usuarios=JSON.parse(localStorage.getItem('nx_users')||'[]'); }catch(e){ usuarios=[]; } }
-function salvarUsuarios(){ localStorage.setItem('nx_users', JSON.stringify(usuarios)); }
+function salvarUsuarios(){ localStorage.setItem('nx_users', JSON.stringify(usuarios)); _kvDirty=true; _kvFlush(); }
 
 function aplicarPermissoes(){
   const u=getCurrentUser();

@@ -376,6 +376,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   // Espera o backend KV popular o localStorage (dispositivos compartilham os dados)
   if(window._claireKVPromise){ try{ await window._claireKVPromise; }catch(e){} }
   loadAll();
+  _dataLoaded=true; // libera _kvFlush — só agora os dados estão prontos
   // Rede de segurança: se os dados vieram vazios mas há backend, tenta puxar de novo
   if(window.CLAIRE_SYNC && window.CLAIRE_SYNC.url && (!tasks || tasks.length===0)){
     const ok=await kvPull();
@@ -3531,6 +3532,7 @@ const SYNC_KEYS=['nx_lastSaved','nx_users','nx_tasks','nx_conquistas','nx_imovei
 let _kvDirty=false;       // há mudança local não enviada?
 let _kvLastPushed=null;   // último blob enviado (string) — evita gravações repetidas
 let _kvPushing=false;
+let _dataLoaded=false;    // bloqueia flush antes de loadAll() completar
 function _kvBuildBlob(){
   const blob={};
   SYNC_KEYS.forEach(k=>{ const v=localStorage.getItem(k); if(v!==null){ try{ blob[k]=JSON.parse(v); }catch(e){} } });
@@ -3539,7 +3541,7 @@ function _kvBuildBlob(){
 // Envia ao KV SOMENTE se houver mudança real (deduplicado). Chamado por um intervalo espaçado.
 async function _kvFlush(){
   const s=window.CLAIRE_SYNC||{};
-  if(!s.url || !_kvDirty || _kvPushing) return;
+  if(!_dataLoaded || !s.url || !_kvDirty || _kvPushing) return;
   const body=_kvBuildBlob();
   if(body===_kvLastPushed){ _kvDirty=false; return; } // nada mudou de fato → não grava
   _kvPushing=true;
@@ -3590,6 +3592,48 @@ async function kvForceRestore(){
   }catch(e){
     showToast('Erro ao conectar ao servidor: '+e.message,'vermelha');
   }
+}
+async function kvListBackups(){
+  const s=window.CLAIRE_SYNC||{};
+  if(!s.url){ showToast('Backend KV não configurado.','peach'); return; }
+  try{
+    const r=await fetch(s.url.replace(/\/$/,'')+'/backups?token='+encodeURIComponent(s.token||''));
+    const j=await r.json();
+    if(!j.backups||j.backups.length===0){ showToast('Nenhum backup disponível ainda.','peach'); return; }
+    const opts=j.backups.map(b=>`<option value="${b.date}">${b.date}</option>`).join('');
+    const sel=document.createElement('div');
+    sel.innerHTML=`<div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99999;display:flex;align-items:center;justify-content:center">
+      <div style="background:#fff;border-radius:14px;padding:28px 32px;min-width:320px;box-shadow:0 8px 32px rgba(0,0,0,.18)">
+        <h3 style="margin:0 0 16px;font-size:16px">Restaurar Backup</h3>
+        <p style="font-size:13px;color:#666;margin:0 0 14px">Selecione a data do backup. Os dados serão restaurados para aquele momento.</p>
+        <select id="_bkp-sel" style="width:100%;padding:8px;border-radius:8px;border:1px solid #ddd;font-size:14px">${opts}</select>
+        <div style="display:flex;gap:10px;margin-top:18px">
+          <button onclick="kvRestoreFromBackup(document.getElementById('_bkp-sel').value);this.closest('div[style*=fixed]').remove()" style="flex:1;background:#e07a7a;color:#fff;border:none;border-radius:8px;padding:10px;font-weight:700;cursor:pointer">Restaurar</button>
+          <button onclick="this.closest('div[style*=fixed]').remove()" style="flex:1;background:#f0f0f0;border:none;border-radius:8px;padding:10px;cursor:pointer">Cancelar</button>
+        </div>
+      </div>
+    </div>`;
+    document.body.appendChild(sel.firstElementChild);
+  }catch(e){ showToast('Erro ao listar backups: '+e.message,'vermelha'); }
+}
+async function kvRestoreFromBackup(date){
+  if(!date){ showToast('Selecione uma data.','peach'); return; }
+  const s=window.CLAIRE_SYNC||{};
+  if(!s.url){ showToast('Backend KV não configurado.','peach'); return; }
+  showToast('Restaurando backup de '+date+'...','sage');
+  try{
+    const r=await fetch(s.url.replace(/\/$/,'')+'/load-backup?date='+encodeURIComponent(date)+'&token='+encodeURIComponent(s.token||''));
+    const j=await r.json();
+    if(j&&j.data&&Object.keys(j.data).length>1){
+      for(const k in j.data){ try{ localStorage.setItem(k, JSON.stringify(j.data[k])); }catch(e){} }
+      loadAll();
+      _kvLastPushed=_kvBuildBlob();
+      _renderTudo();
+      showToast('✅ Backup de '+date+' restaurado com sucesso!','sage');
+    } else {
+      showToast('⚠️ Backup vazio para essa data.','vermelha');
+    }
+  }catch(e){ showToast('Erro ao restaurar backup: '+e.message,'vermelha'); }
 }
 // Re-renderiza as telas principais (após recuperar dados do KV)
 function _renderTudo(){

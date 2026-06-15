@@ -33,6 +33,8 @@
  */
 
 const KEY = 'claire-state-v1';
+const BACKUP_PREFIX = 'claire-backup-';
+const BACKUP_TTL = 8 * 24 * 3600; // 8 dias em segundos
 
 export default {
   async fetch(request, env) {
@@ -61,9 +63,30 @@ export default {
       if (url.pathname.endsWith('/save') && request.method === 'POST') {
         const body = await request.text();
         // valida que é JSON antes de gravar
-        JSON.parse(body);
+        const parsed = JSON.parse(body);
         await env.CLAIRE_KV.put(KEY, body);
+        // Snapshot diário: salva uma vez por dia (primeira gravação do dia), expira em 8 dias
+        const today = new Date().toISOString().substring(0, 10);
+        const backupKey = BACKUP_PREFIX + today;
+        const existing = await env.CLAIRE_KV.get(backupKey);
+        if (!existing) {
+          await env.CLAIRE_KV.put(backupKey, body, { expirationTtl: BACKUP_TTL });
+        }
         return jsonResp({ ok: true }, cors);
+      }
+      // Lista snapshots disponíveis
+      if (url.pathname.endsWith('/backups')) {
+        const list = await env.CLAIRE_KV.list({ prefix: BACKUP_PREFIX });
+        const backups = list.keys.map(k => ({ date: k.name.replace(BACKUP_PREFIX, '') }));
+        backups.sort((a, b) => b.date.localeCompare(a.date));
+        return jsonResp({ backups }, cors);
+      }
+      // Carrega um snapshot específico
+      if (url.pathname.endsWith('/load-backup')) {
+        const date = url.searchParams.get('date');
+        if (!date) return jsonResp({ error: 'parametro date obrigatorio' }, cors, 400);
+        const v = await env.CLAIRE_KV.get(BACKUP_PREFIX + date);
+        return jsonResp({ data: v ? JSON.parse(v) : null }, cors);
       }
       if (url.pathname.endsWith('/health')) {
         return jsonResp({ ok: true, kv: !!env.CLAIRE_KV }, cors);

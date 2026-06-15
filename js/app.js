@@ -6313,7 +6313,7 @@ document.head.appendChild(toastStyle);
 // localStorage é gratuito → salva local com frequência. O backend KV (limite diário)
 // só recebe quando há mudança REAL, espaçado (a cada 25s) e deduplicado.
 setInterval(saveAll, 5000);              // salva no navegador (local), barato
-setInterval(_kvFlush, 300000);           // sincroniza a cada 5 min (respeita limite KV gratuito)
+setInterval(_kvFlush, 1800000);           // sincroniza a cada 5 min (respeita limite KV gratuito)
 window.addEventListener('beforeunload', function(){ saveAll(); _kvFlush(); });
 window.addEventListener('visibilitychange', function(){ if(document.visibilityState==='hidden'){ saveAll(); _kvFlush(); } });
 // ═══════════════════ ACOMPANHAMENTO — ABAS ═══════════════════

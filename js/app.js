@@ -101,19 +101,17 @@ let notasFiscais={};
 let tasks=[
   {id:1,text:'Verificar tempo médio de resposta',cat:'work',prio:'high',due:'2026-05-29',done:false,status:'todo'},
   {id:2,text:'Lançar KPIs de maio',cat:'work',prio:'high',due:'2026-05-31',done:false,status:'todo'},
-  {id:3,text:'Feedback individual — Patrícia',cat:'meeting',prio:'med',due:'2026-06-02',done:false,status:'todo'},
 ];
 
 let ATTS=[
-  {id:'patricia',name:'Patrícia', av:'av-rose', ini:'P',  rate:17, escala:'12×36', note:'',resp:'',respWeekly:[null,null,null,null],respMes:null,demands:[]},
   {id:'sara',    name:'Sara',     av:'av-lav',  ini:'S',  rate:14, escala:'12×36', note:'',resp:'',respWeekly:[null,null,null,null],respMes:null,demands:[]},
   {id:'lisarb',  name:'Lisarb',   av:'av-sage', ini:'Li', rate:14, escala:'12×36', note:'',resp:'',respWeekly:[null,null,null,null],respMes:null,demands:[]},
   {id:'lais',    name:'Laís',     av:'av-peach',ini:'La', rate:14, escala:'12×36', note:'',resp:'',respWeekly:[null,null,null,null],respMes:null,demands:[]},
 ];
 let nextAttId = 5;
 
-let workDaysP1={patricia:8,sara:8,lisarb:8,lais:8};  // turnos dias 01-15
-let workDaysP2={patricia:7,sara:7,lisarb:7,lais:7};  // turnos dias 16-31
+let workDaysP1={sara:8,lisarb:8,lais:8};  // turnos dias 01-15
+let workDaysP2={sara:7,lisarb:7,lais:7};  // turnos dias 16-31
 let turnos=[]; // {id, data:'YYYY-MM-DD', turno:'dia'|'noite', attId, confirmado:false}
 let turnosMesSel=''; // mês selecionado no admin (YYYY-MM)
 let salPagos={}; // { 'attId_2026-06': true }
@@ -629,8 +627,8 @@ function renderKPIs(){
         (pct2!==null?'<div style="font-size:12px;font-weight:700;color:var(--sage);margin-top:2px;">Conversão: '+pct2+'%</div>':'')+'</div>';
     } else if(k.id==='tr'){
       const sub=_ksv().tr||{};
-      const atts=['patricia','sara','lisarb','lais'];
-      const attLabels=['Patrícia','Sara','Lisarb','Laís'];
+      const atts=ATTS.map(a=>a.id);
+      const attLabels=ATTS.map(a=>a.name);
       const vals=atts.map(a=>sub[a]!==undefined&&sub[a]!==''?+sub[a]:null);
       const filled=vals.filter(v=>v!==null);
       const avg2=filled.length>0?(filled.reduce((a,b)=>a+b,0)/filled.length).toFixed(1):null;
@@ -3747,7 +3745,32 @@ function loadAll(){
     v=g('nx_cancelamentos'); if(Array.isArray(v)) cancelamentos=v;
     v=g('nx_notasfiscais'); if(v&&typeof v==='object') notasFiscais=v;
     v=g('nx_conquistas'); if(Array.isArray(v)) conquistas=v;
+    // Migração: remove a ex-atendente Patrícia (saiu da equipe) de todos os
+    // dados persistidos. Idempotente — roda a cada load e propaga ao KV.
+    _migRemoverAtt('patricia');
   }catch(e){ console.warn('loadAll falhou', e); }
+}
+
+// Remove um atendente de TODAS as estruturas (ATTS, dias, salários pagos,
+// turnos, vínculos de usuário). Persiste e marca para sincronizar com o KV.
+function _migRemoverAtt(attId){
+  let mudou=false;
+  if(ATTS.some(a=>a.id===attId)){ ATTS=ATTS.filter(a=>a.id!==attId); mudou=true; }
+  if(workDaysP1 && (attId in workDaysP1)){ delete workDaysP1[attId]; mudou=true; }
+  if(workDaysP2 && (attId in workDaysP2)){ delete workDaysP2[attId]; mudou=true; }
+  Object.keys(salPagos||{}).forEach(k=>{ if(k.indexOf(attId+'_')===0){ delete salPagos[k]; mudou=true; } });
+  if(Array.isArray(turnos)){ const n=turnos.length; turnos=turnos.filter(t=>t.attId!==attId); if(turnos.length!==n) mudou=true; }
+  try{
+    let us=JSON.parse(localStorage.getItem('nx_users')||'[]'); let mu=false;
+    us=us.map(u=>{
+      let nu=u;
+      if(u.attId===attId){ nu={...nu,attId:''}; mu=true; }
+      if(Array.isArray(u.attsPermitidos)&&u.attsPermitidos.includes(attId)){ nu={...nu,attsPermitidos:u.attsPermitidos.filter(x=>x!==attId)}; mu=true; }
+      return nu;
+    });
+    if(mu){ localStorage.setItem('nx_users',JSON.stringify(us)); usuarios=us; mudou=true; }
+  }catch(e){}
+  if(mudou && typeof saveAll==='function'){ saveAll(); }
 }
 
 // ═══════════════════ TURNOS (ESCALA 12×36) ═══════════════════

@@ -1844,51 +1844,100 @@ function removerNotaFiscal(id, parcela){
 function renderPerformance(){
   const el=document.getElementById('performance-body');if(!el)return;
   const g=calcGlobal(), band=getBand(g);
-  let html='<div class="card" style="margin-bottom:16px;"><div class="card-body" style="padding:20px;display:flex;align-items:center;gap:30px;flex-wrap:wrap;">'+
-    '<div><div style="font-size:11px;color:var(--text3);text-transform:uppercase;">Atingimento Global</div><div style="font-family:var(--font-display);font-size:42px;font-weight:700;color:var(--rose);">'+g+'%</div></div>'+
-    '<div><div style="font-size:11px;color:var(--text3);text-transform:uppercase;margin-bottom:4px;">Bandeira</div><div style="font-size:18px;font-weight:700;">'+(band?bandHTML(band.name):'—')+'</div></div>'+
-    '</div></div>';
-  html+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);letter-spacing:0.5px;margin-bottom:10px;">KPIs do Mês</div>';
-  html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:24px;">';
+  const flagStyle=
+    g>=150?{txt:'🏆 ELITE', c:'#7C3AED'}:
+    g>=121?{txt:'💎 AZUL',  c:'#1D4ED8'}:
+    g>=100?{txt:'✅ VERDE', c:'#065F46'}:
+    g>=80 ?{txt:'⚠️ AMARELA',c:'#B45309'}:
+           {txt:'— sem bandeira',c:'#9CA3AF'};
+
+  let kpiRows='';
   KPI_DEFS.forEach(k=>{
-    const p=k.calc(_kv()[k.id]); const ps=p!==null?Math.round(p):null;
-    const cor=ps===null?'var(--text3)':ps>=100?'var(--sage)':ps>=80?'var(--amarela)':'var(--vermelha)';
-    html+='<div class="card"><div class="card-body" style="padding:14px;">'+
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><div class="metric-icon '+k.color+'" style="width:24px;height:24px;font-size:11px;margin:0;"><i class="fa-solid '+k.icon+'"></i></div><div style="font-size:12px;font-weight:600;flex:1;">'+k.label+'</div></div>'+
-      '<div style="font-family:var(--font-display);font-size:26px;font-weight:700;color:'+cor+';">'+(ps!==null?ps+'%':'—')+'</div>'+
-      '<div style="font-size:10.5px;color:var(--text3);">Peso '+Math.round(k.peso*100)+'% · Meta '+k.meta+' '+k.unit+'</div>'+
-      '<div class="kpi-track" style="margin-top:6px;"><div class="kpi-fill '+k.color+'" style="width:'+(p?Math.min(p,150)+'%':'0%')+'"></div></div>'+
-      '</div></div>';
+    const p=k.calc(_kv()[k.id]),ps=p!==null?Math.round(p):null;
+    const barC=ps===null?'#E5E7EB':ps>=100?'#3ECFB2':ps>0?'#F59E0B':'#E5E7EB';
+    const txtC=ps===null?'#9CA3AF':ps>=100?'#0D9488':ps>0?'#B45309':'#9CA3AF';
+    kpiRows+=`<div style="padding:12px 0;border-bottom:0.5px solid #E2E5EA;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;">
+        <span style="font-size:12px;font-weight:500;color:#374151;">${k.label}</span>
+        <span style="font-size:10px;color:#9CA3AF;">${Math.round(k.peso*100)}%</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+        <span style="font-family:'SF Mono','Fira Code',monospace;font-size:18px;font-weight:700;color:${txtC};min-width:46px;">${ps!==null?ps+'%':'—'}</span>
+        <div style="flex:1;height:4px;background:#E5E7EB;border-radius:2px;overflow:hidden;">
+          <div style="width:${ps!==null?Math.min(ps,100):0}%;height:100%;background:${barC};transition:width .22s,background .22s;"></div>
+        </div>
+      </div>
+      <p style="font-size:10px;color:#9CA3AF;line-height:1.5;">${k.hint} · meta ${k.meta} ${k.unit}</p>
+    </div>`;
   });
-  html+='</div>';
-  html+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);letter-spacing:0.5px;margin-bottom:10px;">Cronograma de Projetos</div>';
-  html+='<div id="perf-gantt"></div>';
-  // Resumo Superhost
-  const _ultimo = superhostPeriodos.length > 0 ? superhostPeriodos[superhostPeriodos.length-1] : null;
-  html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);letter-spacing:0.5px;margin-bottom:10px;margin-top:24px;">Superhost Airbnb</div>';
-  if (_ultimo) {
-    const _oks = SUPERHOST_CRITERIOS.filter(c => _shCriterioOk(c, _ultimo) === true).length;
-    const _status = _oks === SUPERHOST_CRITERIOS.length ? 'sage' : _oks >= 3 ? 'gold' : 'rose';
-    html += '<div class="card" style="margin-bottom:16px;"><div class="card-body" style="padding:16px;"><div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">'+
-      '<div><div style="font-size:11px;color:var(--text3);">Último período</div><div style="font-size:16px;font-weight:700;">'+esc(_ultimo.periodo||'—')+'</div></div>'+
-      '<div><div style="font-size:11px;color:var(--text3);">Critérios atingidos</div><div style="font-size:22px;font-weight:700;color:var(--'+_status+');">'+_oks+'/'+SUPERHOST_CRITERIOS.length+'</div></div>'+
-      SUPERHOST_CRITERIOS.map(c=>{const v=_ultimo[c.id];const ok=_shCriterioOk(c,_ultimo);return '<div><div style="font-size:10px;color:var(--text3);">'+c.label+'</div><div style="font-weight:600;color:'+(ok===null?'var(--text3)':ok?'var(--sage)':'var(--vermelha)')+';">'+(v!=null?(v+(c.unit?' '+c.unit:'')):'—')+'</div></div>';}).join('')+
-      '</div></div></div>';
+
+  el.innerHTML=`<div style="display:grid;grid-template-columns:340px 1fr;border-radius:12px;overflow:hidden;border:0.5px solid #E2E5EA;">
+    <div style="background:#F4F6F9;padding:28px 22px;display:flex;flex-direction:column;border-right:0.5px solid #E2E5EA;">
+      <div style="margin-bottom:20px;">
+        <p style="font-size:10px;color:#9CA3AF;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px;">${kpiPeriodo}</p>
+        <p style="font-size:11px;color:#6B7280;">Acompanhamento de Performance</p>
+      </div>
+      <div style="position:relative;margin-bottom:20px;padding-bottom:18px;border-bottom:0.5px solid #E2E5EA;overflow:hidden;">
+        <div style="position:absolute;bottom:-12px;right:-4px;font-size:88px;font-weight:800;color:rgba(0,0,0,0.04);line-height:1;user-select:none;pointer-events:none;letter-spacing:-3px;font-family:monospace;">${g}</div>
+        <p style="font-size:10px;color:#9CA3AF;letter-spacing:.8px;text-transform:uppercase;margin-bottom:5px;">score ponderado</p>
+        <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:4px;">
+          <span style="font-size:44px;font-weight:700;line-height:1;font-family:'SF Mono','Fira Code',monospace;color:${g>=100?'#0D9488':g>0?'#B45309':'#D1D5DB'}">${g}%</span>
+          <span style="font-size:13px;font-weight:500;color:${flagStyle.c}">${flagStyle.txt}</span>
+        </div>
+      </div>
+      <div style="flex:1;">
+        <p style="font-size:10px;color:#9CA3AF;letter-spacing:.8px;text-transform:uppercase;margin-bottom:2px;">KPIs do ciclo</p>
+        ${kpiRows}
+      </div>
+    </div>
+    <div style="background:#fff;padding:28px 32px;overflow-y:auto;">
+      <p style="font-size:11px;font-weight:600;color:#374151;letter-spacing:.4px;text-transform:uppercase;margin-bottom:14px;">Cronograma de Projetos</p>
+      <div id="perf-gantt"></div>
+      <div style="margin-top:28px;">
+        <p style="font-size:11px;font-weight:600;color:#374151;letter-spacing:.4px;text-transform:uppercase;margin-bottom:14px;">Superhost Airbnb</p>
+        <div id="perf-superhost-inner"></div>
+      </div>
+      <div style="margin-top:28px;">
+        <p style="font-size:11px;font-weight:600;color:#374151;letter-spacing:.4px;text-transform:uppercase;margin-bottom:14px;">Cancelamentos</p>
+        <div id="perf-canc-inner"></div>
+      </div>
+    </div>
+  </div>`;
+
+  // Superhost
+  const _ultimo=superhostPeriodos.length>0?superhostPeriodos[superhostPeriodos.length-1]:null;
+  const shEl=document.getElementById('perf-superhost-inner');
+  if(_ultimo){
+    const _oks=SUPERHOST_CRITERIOS.filter(c=>_shCriterioOk(c,_ultimo)===true).length;
+    const _sc=_oks===SUPERHOST_CRITERIOS.length?'#0D9488':_oks>=3?'#D97706':'#DC2626';
+    shEl.innerHTML=`<div style="background:#F4F6F9;border-radius:10px;padding:16px;">
+      <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-bottom:14px;">
+        <div><div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;">Último período</div><div style="font-size:15px;font-weight:700;">${esc(_ultimo.periodo||'—')}</div></div>
+        <div><div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;">Critérios atingidos</div><div style="font-size:22px;font-weight:700;color:${_sc}">${_oks}/${SUPERHOST_CRITERIOS.length}</div></div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;">
+        ${SUPERHOST_CRITERIOS.map(c=>{const v=_ultimo[c.id];const ok=_shCriterioOk(c,_ultimo);return `<div style="background:#fff;border-radius:8px;padding:10px 14px;border:0.5px solid #E2E5EA;">
+          <div style="font-size:10px;color:#9CA3AF;">${c.label}</div>
+          <div style="font-weight:600;font-size:14px;color:${ok===null?'#9CA3AF':ok?'#0D9488':'#DC2626'}">${v!=null?(v+(c.unit?' '+c.unit:'')):'—'}</div>
+        </div>`;}).join('')}
+      </div>
+    </div>`;
   } else {
-    html += '<div class="card" style="margin-bottom:16px;"><div class="card-body" style="padding:14px;color:var(--text3);font-size:13px;">Nenhum período Superhost registrado.</div></div>';
+    shEl.innerHTML=`<div style="background:#F4F6F9;border-radius:10px;padding:14px;color:#9CA3AF;font-size:13px;">Nenhum período Superhost registrado.</div>`;
   }
-  // Resumo Cancelamentos
-  html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);letter-spacing:0.5px;margin-bottom:10px;">Cancelamentos</div>';
-  const _totalCanc = cancelamentos.reduce((s,c)=>s+(c.valorAtualizado||0),0);
-  const _wecareCanc = cancelamentos.reduce((s,c)=>s+(c.valorWecare||0),0);
-  const _propCanc = cancelamentos.reduce((s,c)=>s+(c.valorProprietario||0),0);
-  html += '<div class="card" style="margin-bottom:16px;"><div class="card-body" style="padding:16px;"><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;">'+
-    '<div style="text-align:center;background:var(--bg3);border-radius:var(--r-sm);padding:12px;"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;">Total recebido</div><div style="font-family:var(--font-display);font-size:20px;font-weight:700;color:var(--sage);">'+brl(_totalCanc)+'</div></div>'+
-    '<div style="text-align:center;background:var(--bg3);border-radius:var(--r-sm);padding:12px;"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;">WeCare</div><div style="font-family:var(--font-display);font-size:20px;font-weight:700;color:var(--rose);">'+brl(_wecareCanc)+'</div></div>'+
-    '<div style="text-align:center;background:var(--bg3);border-radius:var(--r-sm);padding:12px;"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;">Proprietários</div><div style="font-family:var(--font-display);font-size:20px;font-weight:700;color:var(--sky);">'+brl(_propCanc)+'</div></div>'+
-    '<div style="text-align:center;background:var(--bg3);border-radius:var(--r-sm);padding:12px;"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;">Nº cancelamentos</div><div style="font-family:var(--font-display);font-size:20px;font-weight:700;color:var(--peach);">'+cancelamentos.length+'</div></div>'+
-    '</div></div></div>';
-  el.innerHTML=html;
+
+  // Cancelamentos
+  const _tC=cancelamentos.reduce((s,c)=>s+(c.valorAtualizado||0),0);
+  const _wC=cancelamentos.reduce((s,c)=>s+(c.valorWecare||0),0);
+  const _pC=cancelamentos.reduce((s,c)=>s+(c.valorProprietario||0),0);
+  document.getElementById('perf-canc-inner').innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;">
+    ${[{l:'Total recebido',v:brl(_tC),c:'#0D9488'},{l:'WeCare',v:brl(_wC),c:'#DC2626'},{l:'Proprietários',v:brl(_pC),c:'#1D4ED8'},{l:'Nº cancelamentos',v:cancelamentos.length,c:'#D97706'}]
+    .map(x=>`<div style="background:#F4F6F9;border-radius:10px;padding:12px;text-align:center;">
+      <div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;margin-bottom:4px;">${x.l}</div>
+      <div style="font-size:18px;font-weight:700;color:${x.c};font-family:'SF Mono','Fira Code',monospace;">${x.v}</div>
+    </div>`).join('')}
+  </div>`;
+
   renderProjetosGantt();
 }
 

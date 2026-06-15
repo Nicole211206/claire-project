@@ -26,10 +26,25 @@
  *     e o token escolhido — você vai colar os dois na Claire
  *     (arquivo index.html, no bloco window.CLAIRE_SYNC).
  *
- *  Endpoints:
- *    GET  <worker>/load          → devolve o estado salvo (JSON) ou null
- *    POST <worker>/save  (body)  → grava o estado (JSON) enviado
+ *  Endpoints internos (Claire app):
+ *    GET  <worker>/load               → devolve o estado completo (JSON)
+ *    POST <worker>/save  (body JSON)  → grava o estado completo
+ *    GET  <worker>/backups            → lista snapshots disponíveis
+ *    GET  <worker>/load-backup?date=  → restaura snapshot de uma data
  *    Autenticação: ?token=XXX  ou  header X-Token: XXX
+ *
+ *  API Jarvis (REST):
+ *    GET    /api/tasks              → lista tarefas
+ *    POST   /api/tasks              → cria tarefa  {text, cat?, prio?, due?, status?}
+ *    PATCH  /api/tasks/:id          → atualiza tarefa (campos parciais)
+ *    DELETE /api/tasks/:id          → apaga tarefa
+ *    GET    /api/demands            → lista demandas de todas as ATTs
+ *    POST   /api/demands            → cria demanda  {attId, text, prio?, due?, status?}
+ *    PATCH  /api/demands/:attId/:idx → atualiza demanda
+ *    GET    /api/projects           → lista projetos
+ *    POST   /api/projects           → cria projeto  {nome, status?, dataInicio?, dataFim?}
+ *    PATCH  /api/projects/:id       → atualiza projeto
+ *    GET    /api/summary            → resumo rápido para o Jarvis
  */
 
 const KEY = 'claire-state-v1';
@@ -41,7 +56,7 @@ export default {
     const url = new URL(request.url);
     const cors = {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, X-Token',
     };
     if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
@@ -91,6 +106,13 @@ export default {
       if (url.pathname.endsWith('/health')) {
         return jsonResp({ ok: true, kv: !!env.CLAIRE_KV }, cors);
       }
+
+      // ═══ API Jarvis ═══
+      const corsApi = { ...cors, 'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS' };
+      if (url.pathname.startsWith('/api/')) {
+        return handleApi(request, url, env, corsApi);
+      }
+
       return jsonResp({ error: 'rota nao encontrada' }, cors, 404);
     } catch (e) {
       return jsonResp({ error: String(e && e.message || e) }, cors, 500);
@@ -103,4 +125,195 @@ function jsonResp(obj, cors, status) {
     status: status || 200,
     headers: { 'Content-Type': 'application/json', ...cors },
   });
+}
+
+// ─── Helpers KV ───
+async function kvLoad(env) {
+  const v = await env.CLAIRE_KV.get(KEY);
+  return v ? JSON.parse(v) : {};
+}
+async function kvSave(env, state) {
+  state.nx_lastSaved = Date.now();
+  await env.CLAIRE_KV.put(KEY, JSON.stringify(state));
+}
+
+// ─── Roteador da API Jarvis ───
+async function handleApi(request, url, env, cors) {
+  const method = request.method;
+  const path = url.pathname.replace('/api/', '');   // ex: "tasks", "tasks/123"
+  const parts = path.split('/');                     // ["tasks"] ou ["tasks","123"]
+  const resource = parts[0];
+  const param1 = parts[1];
+  const param2 = parts[2];
+
+  try {
+    const state = await kvLoad(env);
+
+    // ── /api/summary ──────────────────────────────────────────
+    if (resource === 'summary' && method === 'GET') {
+      const tasks = state.nx_tasks || [];
+      const projects = state.nx_projetos || [];
+      const atts = state.nx_atts || [];
+      const demands = atts.flatMap(a => (a.demands || []).map(d => ({ ...d, attId: a.id, attName: a.name })));
+      return jsonResp({
+        tasks:    { total: tasks.length, pending: tasks.filter(t => !t.done).length, done: tasks.filter(t => t.done).length },
+        projects: { total: projects.length, active: projects.filter(p => p.status === 'andamento').length },
+        demands:  { total: demands.length, pending: demands.filter(d => d.status !== 'done').length },
+      }, cors);
+    }
+
+    // ── /api/tasks ────────────────────────────────────────────
+    if (resource === 'tasks') {
+      let tasks = state.nx_tasks || [];
+
+      if (method === 'GET' && !param1) {
+        const status = url.searchParams.get('status');
+        const list = status ? tasks.filter(t => status === 'done' ? t.done : !t.done) : tasks;
+        return jsonResp({ tasks: list }, cors);
+      }
+
+      if (method === 'POST' && !param1) {
+        const body = await request.json();
+        if (!body.text) return jsonResp({ error: 'campo text obrigatorio' }, cors, 400);
+        const task = {
+          id: Date.now(),
+          text: body.text,
+          cat: body.cat || 'work',
+          prio: body.prio || 'med',
+          due: body.due || null,
+          status: body.status || 'todo',
+          done: false,
+          updates: [],
+          createdBy: 'jarvis',
+        };
+        tasks.push(task);
+        state.nx_tasks = tasks;
+        await kvSave(env, state);
+        return jsonResp({ ok: true, task }, cors, 201);
+      }
+
+      if (method === 'PATCH' && param1) {
+        const id = parseInt(param1);
+        const idx = tasks.findIndex(t => t.id === id);
+        if (idx < 0) return jsonResp({ error: 'tarefa nao encontrada' }, cors, 404);
+        const body = await request.json();
+        if (body.done !== undefined || body.status === 'done') {
+          tasks[idx].done = true; tasks[idx].status = 'done';
+        } else if (body.status) {
+          tasks[idx].status = body.status; tasks[idx].done = false;
+        }
+        const campos = ['text','cat','prio','due','dataInicio','projetoId'];
+        campos.forEach(c => { if (body[c] !== undefined) tasks[idx][c] = body[c]; });
+        state.nx_tasks = tasks;
+        await kvSave(env, state);
+        return jsonResp({ ok: true, task: tasks[idx] }, cors);
+      }
+
+      if (method === 'DELETE' && param1) {
+        const id = parseInt(param1);
+        const before = tasks.length;
+        state.nx_tasks = tasks.filter(t => t.id !== id);
+        if (state.nx_tasks.length === before) return jsonResp({ error: 'tarefa nao encontrada' }, cors, 404);
+        await kvSave(env, state);
+        return jsonResp({ ok: true }, cors);
+      }
+    }
+
+    // ── /api/demands ──────────────────────────────────────────
+    if (resource === 'demands') {
+      const atts = state.nx_atts || [];
+
+      if (method === 'GET' && !param1) {
+        const attFilter = url.searchParams.get('attId');
+        const demands = atts.flatMap(a =>
+          (a.demands || []).map((d, i) => ({ ...d, attId: a.id, attName: a.name, _idx: i }))
+        );
+        return jsonResp({ demands: attFilter ? demands.filter(d => d.attId === attFilter) : demands }, cors);
+      }
+
+      if (method === 'POST' && !param1) {
+        const body = await request.json();
+        if (!body.attId || !body.text) return jsonResp({ error: 'campos attId e text obrigatorios' }, cors, 400);
+        const att = atts.find(a => a.id === body.attId);
+        if (!att) return jsonResp({ error: 'ATT nao encontrada' }, cors, 404);
+        if (!att.demands) att.demands = [];
+        const demand = {
+          id: Date.now(),
+          text: body.text,
+          prio: body.prio || 'med',
+          due: body.due || null,
+          status: body.status || 'todo',
+          done: false,
+          createdBy: 'jarvis',
+        };
+        att.demands.push(demand);
+        state.nx_atts = atts;
+        await kvSave(env, state);
+        return jsonResp({ ok: true, demand }, cors, 201);
+      }
+
+      // PATCH /api/demands/:attId/:idx
+      if (method === 'PATCH' && param1 && param2 !== undefined) {
+        const att = atts.find(a => a.id === param1);
+        if (!att) return jsonResp({ error: 'ATT nao encontrada' }, cors, 404);
+        const idx = parseInt(param2);
+        if (!att.demands || !att.demands[idx]) return jsonResp({ error: 'demanda nao encontrada' }, cors, 404);
+        const body = await request.json();
+        if (body.done !== undefined || body.status === 'done') {
+          att.demands[idx].done = true; att.demands[idx].status = 'done';
+        } else if (body.status) {
+          att.demands[idx].status = body.status; att.demands[idx].done = false;
+        }
+        ['text','prio','due'].forEach(c => { if (body[c] !== undefined) att.demands[idx][c] = body[c]; });
+        state.nx_atts = atts;
+        await kvSave(env, state);
+        return jsonResp({ ok: true, demand: att.demands[idx] }, cors);
+      }
+    }
+
+    // ── /api/projects ─────────────────────────────────────────
+    if (resource === 'projects') {
+      let projects = state.nx_projetos || [];
+
+      if (method === 'GET' && !param1) {
+        return jsonResp({ projects }, cors);
+      }
+
+      if (method === 'POST' && !param1) {
+        const body = await request.json();
+        if (!body.nome) return jsonResp({ error: 'campo nome obrigatorio' }, cors, 400);
+        const project = {
+          id: Date.now(),
+          nome: body.nome,
+          status: body.status || 'planejamento',
+          dataInicio: body.dataInicio || null,
+          dataFim: body.dataFim || null,
+          desc: body.desc || '',
+          tasks: [],
+          createdBy: 'jarvis',
+        };
+        projects.push(project);
+        state.nx_projetos = projects;
+        await kvSave(env, state);
+        return jsonResp({ ok: true, project }, cors, 201);
+      }
+
+      if (method === 'PATCH' && param1) {
+        const id = parseInt(param1);
+        const idx = projects.findIndex(p => p.id === id);
+        if (idx < 0) return jsonResp({ error: 'projeto nao encontrado' }, cors, 404);
+        const body = await request.json();
+        ['nome','status','dataInicio','dataFim','desc'].forEach(c => {
+          if (body[c] !== undefined) projects[idx][c] = body[c];
+        });
+        state.nx_projetos = projects;
+        await kvSave(env, state);
+        return jsonResp({ ok: true, project: projects[idx] }, cors);
+      }
+    }
+
+    return jsonResp({ error: 'rota nao encontrada' }, cors, 404);
+  } catch (e) {
+    return jsonResp({ error: String(e && e.message || e) }, cors, 500);
+  }
 }

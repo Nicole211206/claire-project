@@ -289,7 +289,7 @@ function aplicarPresetPerfil(perfil){
   const grp=document.getElementById('u-modulos-group');
   const attGrp=document.getElementById('u-att-group');
   const attsPermGrp=document.getElementById('u-attsperm-group');
-  if(attGrp) attGrp.style.display = (perfil==='atendente'||perfil==='coordenacao')?'':'none';
+  if(attGrp) attGrp.style.display = perfil==='atendente'?'':'none';
   if(attsPermGrp) attsPermGrp.style.display = perfil==='coordenacao'?'':'none';
   if(perfil==='coordenacao') _renderAttsPermChecks([]);
   const attSel=document.getElementById('u-att');
@@ -322,7 +322,7 @@ function abrirEditarUsuario(email){
   document.getElementById('u-senha').value=u.senha||'';
   document.getElementById('u-perfil').value=u.perfil||'atendente';
   const attGrp=document.getElementById('u-att-group');
-  if(attGrp) attGrp.style.display = (u.perfil==='atendente'||u.perfil==='coordenacao')?'':'none';
+  if(attGrp) attGrp.style.display = u.perfil==='atendente'?'':'none';
   const attsPermGrp=document.getElementById('u-attsperm-group');
   if(attsPermGrp) attsPermGrp.style.display = u.perfil==='coordenacao'?'':'none';
   if(u.perfil==='coordenacao') _renderAttsPermChecks(u.attsPermitidos||[]);
@@ -340,7 +340,7 @@ function salvarUsuario(){
   const perfil=document.getElementById('u-perfil').value;
   if(!nome||!email||!senha){ showToast('Preencha nome, e-mail e senha.','peach'); return; }
   const modulos=Array.from(document.querySelectorAll('.u-mod-check:checked')).map(c=>c.value);
-  const attId = (perfil==='atendente'||perfil==='coordenacao') ? (document.getElementById('u-att').value||'') : '';
+  const attId = perfil==='atendente' ? (document.getElementById('u-att').value||'') : '';
   // attsPermitidos só se aplica a coordenação; atendente nunca herda perms de outros ATTs
   const attsPermitidos = perfil==='coordenacao' ? Array.from(document.querySelectorAll('.u-attperm-check:checked')).map(c=>c.value) : [];
   // email duplicado?

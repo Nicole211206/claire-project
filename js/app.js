@@ -3565,12 +3565,21 @@ const _PERSIST_KEYS = {
 
 function saveAll(){
   try{
-    localStorage.setItem('nx_lastSaved', String(Date.now()));
+    // Grava só as chaves que realmente mudaram e só atualiza o carimbo de hora
+    // (nx_lastSaved) quando houve mudança de fato. Isso é essencial para o sync:
+    // o setInterval(saveAll,5000) roda toda hora, e antes ele empurrava o carimbo
+    // pra "agora" a cada 5s mesmo sem edição — o que fazia o dispositivo NUNCA
+    // puxar dados novos do servidor (a condição "servidor >= local" nunca batia).
+    let mudou=false;
     for(const k in _PERSIST_KEYS){
-      localStorage.setItem(k, JSON.stringify(_PERSIST_KEYS[k]()));
+      const novo=JSON.stringify(_PERSIST_KEYS[k]());
+      if(localStorage.getItem(k)!==novo){ localStorage.setItem(k, novo); mudou=true; }
+    }
+    if(mudou){
+      localStorage.setItem('nx_lastSaved', String(Date.now()));
+      _kvDirty=true; // marca pra sincronizar — o push real acontece espaçado em _kvFlush()
     }
   }catch(e){ console.warn('saveAll falhou', e); }
-  _kvDirty=true; // marca pra sincronizar — o push real acontece espaçado em _kvFlush()
 }
 
 // ─── Sincronização com o backend KV (compartilhado entre dispositivos) ───

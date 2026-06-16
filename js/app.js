@@ -376,8 +376,10 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   if(window._claireKVPromise){ try{ await window._claireKVPromise; }catch(e){} }
   loadAll();
   _dataLoaded=true; // libera _kvFlush — só agora os dados estão prontos
-  // Rede de segurança: se os dados vieram vazios mas há backend, tenta puxar de novo
-  if(window.CLAIRE_SYNC && window.CLAIRE_SYNC.url && (!tasks || tasks.length===0)){
+  // Converge com o servidor no carregamento. Como ainda não há edição pendente
+  // (_kvDirty=false), o kvPull traz o estado do servidor mesmo que o carimbo local
+  // esteja "à frente" — resolve o aparelho que ficava parado sem puxar as mudanças.
+  if(window.CLAIRE_SYNC && window.CLAIRE_SYNC.url){
     const ok=await kvPull();
     if(ok){ setTimeout(_renderTudo, 50); }
   }
@@ -3639,7 +3641,8 @@ async function _kvFlush(){
   }catch(e){ /* offline/limite: tenta no próximo ciclo */ }
   finally{ _kvPushing=false; }
 }
-// Recarrega o estado compartilhado do KV e aplica (usado para ver mudanças de outros usuários)
+// Recarrega o estado compartilhado do KV e aplica (usado para ver mudanças de outros usuários).
+// Retorna true se aplicou alguma mudança ao local (para a tela ser redesenhada).
 async function kvPull(){
   const s=window.CLAIRE_SYNC||{};
   if(!s.url) return false;
@@ -3647,14 +3650,29 @@ async function kvPull(){
     const r=await fetch(s.url.replace(/\/$/,'')+'/load?token='+encodeURIComponent(s.token||''));
     const j=await r.json();
     if(j&&j.data){
-      // só aplica se o servidor tem dados mais recentes que o local
       const localTs=parseInt(localStorage.getItem('nx_lastSaved')||'0');
       const serverTs=parseInt((j.data.nx_lastSaved)||0);
-      if(serverTs<=localTs && localTs>0){ _kvLastPushed=_kvBuildBlob(); return true; } // local é mais novo, não sobrescreve
-      for(const k in j.data){ try{ localStorage.setItem(k, JSON.stringify(j.data[k])); }catch(e){} }
-      loadAll();
+      // Se HÁ edições locais ainda não enviadas (_kvDirty) e o servidor não é mais
+      // novo, não sobrescreve (protege o que está sendo editado). Se NÃO há nada
+      // pendente, converge sempre para o servidor — isso resolve o "carimbo travado"
+      // que impedia um aparelho parado de puxar as mudanças dos outros.
+      if(_kvDirty && serverTs<=localTs && localTs>0){ _kvLastPushed=_kvBuildBlob(); return false; }
+      let aplicou=false;
+      for(const k in j.data){
+        try{
+          const sv=j.data[k];
+          // Proteção: array vazio do servidor não apaga lista local com itens.
+          if(Array.isArray(sv) && sv.length===0){
+            const lr=localStorage.getItem(k);
+            if(lr){ const lv=JSON.parse(lr); if(Array.isArray(lv)&&lv.length>0) continue; }
+          }
+          const novo=JSON.stringify(sv);
+          if(localStorage.getItem(k)!==novo){ localStorage.setItem(k, novo); aplicou=true; }
+        }catch(e){}
+      }
+      if(aplicou) loadAll();
       _kvLastPushed=_kvBuildBlob();
-      return true;
+      return aplicou;
     }
   }catch(e){}
   return false;
@@ -6361,6 +6379,14 @@ const _kvFlushThrottled = (function(){
 })();
 setInterval(saveAll, 5000);              // salva no navegador (local), barato
 setInterval(_kvFlushThrottled, 60000);   // rede de segurança: tenta flush a cada 1 min (no-op se nada mudou)
+// Sincronização automática: a cada 1 min, se NÃO há edição pendente nem envio em
+// curso, puxa o servidor e redesenha a tela se algo mudou. É assim que o que uma
+// pessoa lança passa a aparecer para as outras sem precisar recarregar a página.
+setInterval(function(){
+  if(_kvDirty || _kvPushing || !_dataLoaded) return;
+  if(document.visibilityState==='hidden') return;
+  kvPull().then(function(ok){ if(ok && typeof _renderTudo==='function') _renderTudo(); });
+}, 60000);
 window.addEventListener('beforeunload', function(){ saveAll(); _kvFlush(); }); // sempre salva ao fechar
 window.addEventListener('visibilitychange', function(){ if(document.visibilityState==='hidden'){ saveAll(); _kvFlushThrottled(); } }); // troca de aba respeita throttle
 // ═══════════════════ ACOMPANHAMENTO — ABAS ═══════════════════

@@ -3605,32 +3605,33 @@ function _kvBuildBlob(){
 async function _kvFlush(){
   const s=window.CLAIRE_SYNC||{};
   if(!_dataLoaded || !s.url || !_kvDirty || _kvPushing) return;
-  const body=_kvBuildBlob();
+  let body=_kvBuildBlob();
   if(body===_kvLastPushed){ _kvDirty=false; return; } // nada mudou de fato → não grava
   _kvPushing=true;
   try{
-    // ── Trava anti-perda (lado do ENVIO) ──
-    // Antes de gravar, confere o estado atual do servidor. Se este aparelho
-    // tentaria apagar uma lista CHEIA do servidor com uma lista VAZIA local
-    // (estado quebrado/não carregado), NÃO envia — em vez disso restaura o
-    // local a partir do servidor. Impede que um aparelho zere os dados de todos.
+    // ── Trava anti-perda (lado do ENVIO), POR CHAVE ──
+    // Antes de gravar, confere o servidor. Para cada lista em que este aparelho
+    // está VAZIO mas o servidor está CHEIO, mantém a versão do servidor (não
+    // apaga). As demais mudanças locais legítimas (ex.: uma manutenção nova)
+    // continuam no envio normalmente. Assim nada é apagado e nada deixa de subir.
     try{
       const rg=await fetch(s.url.replace(/\/$/,'')+'/load?token='+encodeURIComponent(s.token||''));
       const jg=await rg.json();
       if(jg && jg.data){
         const local=JSON.parse(body);
-        let conflito=false;
+        let ajustou=false;
         for(const k in jg.data){
           const sv=jg.data[k], lv=local[k];
-          if(Array.isArray(sv) && sv.length>0 && Array.isArray(lv) && lv.length===0){ conflito=true; break; }
+          if(Array.isArray(sv) && sv.length>0 && Array.isArray(lv) && lv.length===0){
+            local[k]=sv;                                          // mantém a lista cheia do servidor
+            try{ localStorage.setItem(k, JSON.stringify(sv)); }catch(e){}
+            ajustou=true;
+          }
         }
-        if(conflito){
-          for(const k in jg.data){ try{ localStorage.setItem(k, JSON.stringify(jg.data[k])); }catch(e){} }
+        if(ajustou){
           if(typeof loadAll==='function') loadAll();
           if(typeof _renderTudo==='function') _renderTudo();
-          _kvLastPushed=_kvBuildBlob();
-          _kvDirty=false;
-          return; // aborta o envio que apagaria dados
+          body=JSON.stringify(local);                             // envia o blob corrigido (listas do servidor + mudanças locais)
         }
       }
     }catch(e){ /* sem rede pra checar: segue o envio normal abaixo */ }

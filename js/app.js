@@ -3612,6 +3612,11 @@ function _kvBuildBlob(){
 async function _kvFlush(){
   const s=window.CLAIRE_SYNC||{};
   if(!_dataLoaded || !s.url || !_kvDirty || _kvPushing) return;
+  // TRAVA CRÍTICA: nunca envia antes de ter LIDO o servidor com sucesso nesta
+  // sessão. Se o carregamento falhou (rede), o app fica com os dados-padrão de
+  // fábrica; enviá-los apagaria os dados reais de todos. Só libera quando o
+  // bootstrap ou o kvPull confirmaram contato com o servidor.
+  if(!window.__claireServerSeen) return;
   let body=_kvBuildBlob();
   if(body===_kvLastPushed){ _kvDirty=false; return; } // nada mudou de fato → não grava
   _kvPushing=true;
@@ -3657,6 +3662,7 @@ async function kvPull(){
   try{
     const r=await fetch(s.url.replace(/\/$/,'')+'/load?token='+encodeURIComponent(s.token||''));
     const j=await r.json();
+    window.__claireServerSeen=true; // leitura do servidor confirmada → envio liberado
     if(j&&j.data){
       const localTs=parseInt(localStorage.getItem('nx_lastSaved')||'0');
       const serverTs=parseInt((j.data.nx_lastSaved)||0);

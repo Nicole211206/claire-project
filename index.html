@@ -25,6 +25,10 @@ window._claireKVPromise = (async function(){
     if(!s.url){ return; }
     var r = await fetch(s.url.replace(/\/$/,'') + '/load?token=' + encodeURIComponent(s.token||''));
     var j = await r.json();
+    // Confirmamos contato com o servidor. Só a partir daqui é seguro ENVIAR —
+    // senão um aparelho que falhou ao carregar empurraria os dados-padrão de
+    // fábrica por cima dos dados reais (foi o que apagou tarefas/fotos).
+    window.__claireServerSeen = true;
     if(j && j.data){
       var kvTs = parseInt(j.data.nx_lastSaved || '0');
       var localTs = parseInt(localStorage.getItem('nx_lastSaved') || '0');
@@ -1598,6 +1602,6 @@ function _validarLogin(){
   </div>
 </div>
 
-<script src="js/app.js?v=63"></script>
+<script src="js/app.js?v=64"></script>
 </body>
 </html>

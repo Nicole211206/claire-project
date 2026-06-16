@@ -6,10 +6,12 @@ publica o site). Por isso a trava abaixo, já escrita em `claire-dados-worker.js
 
 ## O que a trava faz
 No endpoint `POST /save`, antes de gravar, compara o que chega com o que já está
-salvo e **recusa (HTTP 409) gravações que apagariam dados** — ex.: uma lista cair
-para 0, ou uma lista grande (≥8) colapsar para ≤2 (assinatura de "voltou ao padrão
-de fábrica"), ou zerar todas as fotos. É **falha-segura**: qualquer erro na trava
-cai no salvamento normal. Exclusões pequenas do dia a dia continuam funcionando.
+salvo. Para cada lista que ENCOLHERIA catastroficamente (cair para 0, ou ≥8 caindo
+para ≤2) — ou que zeraria todas as fotos — ela **mantém a versão do servidor naquela
+chave** e **aceita o resto** (mescla). Assim nada é apagado, mas adições legítimas
+(ex.: uma manutenção nova feita por quem está com outra lista atrasada) **passam
+normalmente**. É **falha-segura**: qualquer erro cai no salvamento normal. Exclusões
+pequenas do dia a dia continuam funcionando.
 
 ## Como publicar (jeito mais simples — painel Cloudflare)
 1. Cloudflare Dashboard → **Workers & Pages** → abrir o worker **claire-dados**.
@@ -32,11 +34,13 @@ Criar um `wrangler.jsonc` próprio do backend (NÃO o do site) com:
 e rodar `wrangler deploy`.
 
 ## Como confirmar que ficou ativa
-Depois de publicar, este comando deve **falhar com 409** (e NÃO apagar nada):
+Depois de publicar, envie uma gravação "ruim" (tarefas vazias) e confirme que os
+dados **NÃO** somem (a trava mantém a lista do servidor):
 ```
-curl -s -o - -w "%{http_code}" -X POST \
-  "https://claire-dados.nicole-0e7.workers.dev/save?token=<token>" \
-  -H "Content-Type: application/json" \
-  --data '{"nx_tasks":[],"nx_lastSaved":"1"}'
+# manda tarefas vazias:
+curl -s -X POST "https://claire-dados.nicole-0e7.workers.dev/save?token=<token>" \
+  -H "Content-Type: application/json" --data '{"nx_tasks":[],"nx_lastSaved":"1"}'
+# confere que nx_tasks continua cheio:
+curl -s "https://claire-dados.nicole-0e7.workers.dev/load?token=<token>"
 ```
-Resposta esperada: `409` com `{"blocked":true,...}`. Se vier `200`, a trava não está ativa.
+Se as tarefas continuarem lá (não viraram 0), a trava está ativa.

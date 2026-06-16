@@ -79,38 +79,41 @@ export default {
         const body = await request.text();
         // valida que é JSON antes de gravar
         const parsed = JSON.parse(body);
-        // ── TRAVA ANTI-PERDA (lado do servidor) ──
-        // Recusa gravações que APAGARIAM dados já existentes (clobber por aba
-        // antiga, ou por um aparelho que carregou com os dados-padrão de fábrica).
-        // É falha-segura: qualquer erro aqui cai no salvamento normal. Permite
-        // exclusões pequenas do dia a dia; bloqueia só zeramentos/colapsos grandes.
+        // ── TRAVA ANTI-PERDA (lado do servidor), por MESCLAGEM ──
+        // Não RECUSA a gravação inteira (isso bloquearia adições legítimas de quem
+        // está com alguma lista atrasada). Em vez disso, para cada lista que
+        // ENCOLHERIA catastroficamente (zerar, ou ≥8 caindo p/ ≤2), mantém a versão
+        // do servidor NAQUELA chave, e ACEITA o resto (ex.: uma manutenção nova).
+        // Falha-segura: qualquer erro aqui cai no salvamento normal do body.
+        let bodyToSave = body;
         try {
           const prevRaw = await env.CLAIRE_KV.get(KEY);
           if (prevRaw) {
             const prev = JSON.parse(prevRaw);
             const PROT = ['nx_tasks','nx_projetos','nx_turnos','nx_conquistas','nx_manutencoes','nx_plantao','nx_compras','nx_extras','nx_users','nx_catalog','nx_notes','nx_imoveis'];
+            let merged = null;
+            const protege = (k) => { if (!merged) merged = JSON.parse(JSON.stringify(parsed)); merged[k] = prev[k]; };
             for (const k of PROT) {
               const nNew = Array.isArray(parsed[k]) ? parsed[k].length : null;
               const nOld = Array.isArray(prev[k]) ? prev[k].length : null;
               if (nOld != null && nNew != null && ((nNew === 0 && nOld >= 3) || (nOld >= 8 && nNew <= 2))) {
-                return jsonResp({ error: 'gravacao recusada: ' + k + ' iria de ' + nOld + ' para ' + nNew, blocked: true }, cors, 409);
+                protege(k); // mantém a lista do servidor (não deixa encolher)
               }
             }
             // não deixa zerar todas as fotos dos atendentes
             const fOld = (Array.isArray(prev.nx_atts) ? prev.nx_atts : []).filter(x => x && x.foto).length;
             const fNew = (Array.isArray(parsed.nx_atts) ? parsed.nx_atts : []).filter(x => x && x.foto).length;
-            if (fOld >= 2 && fNew === 0) {
-              return jsonResp({ error: 'gravacao recusada: apagaria todas as fotos', blocked: true }, cors, 409);
-            }
+            if (fOld >= 2 && fNew === 0) { protege('nx_atts'); }
+            if (merged) { merged.nx_lastSaved = String(Date.now()); bodyToSave = JSON.stringify(merged); }
           }
-        } catch (e) { /* falha-segura: ignora a trava e salva normal */ }
-        await env.CLAIRE_KV.put(KEY, body);
+        } catch (e) { /* falha-segura: salva o body original */ }
+        await env.CLAIRE_KV.put(KEY, bodyToSave);
         // Snapshot diário: salva uma vez por dia (primeira gravação do dia), expira em 8 dias
         const today = new Date().toISOString().substring(0, 10);
         const backupKey = BACKUP_PREFIX + today;
         const existing = await env.CLAIRE_KV.get(backupKey);
         if (!existing) {
-          await env.CLAIRE_KV.put(backupKey, body, { expirationTtl: BACKUP_TTL });
+          await env.CLAIRE_KV.put(backupKey, bodyToSave, { expirationTtl: BACKUP_TTL });
         }
         return jsonResp({ ok: true }, cors);
       }

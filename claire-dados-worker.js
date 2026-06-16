@@ -73,12 +73,37 @@ export default {
     try {
       if (url.pathname.endsWith('/load')) {
         const v = await env.CLAIRE_KV.get(KEY);
-        return jsonResp({ data: v ? JSON.parse(v) : null, _wv: 'guard-probe-1' }, cors);
+        return jsonResp({ data: v ? JSON.parse(v) : null }, cors);
       }
       if (url.pathname.endsWith('/save') && request.method === 'POST') {
         const body = await request.text();
         // valida que é JSON antes de gravar
         const parsed = JSON.parse(body);
+        // ── TRAVA ANTI-PERDA (lado do servidor) ──
+        // Recusa gravações que APAGARIAM dados já existentes (clobber por aba
+        // antiga, ou por um aparelho que carregou com os dados-padrão de fábrica).
+        // É falha-segura: qualquer erro aqui cai no salvamento normal. Permite
+        // exclusões pequenas do dia a dia; bloqueia só zeramentos/colapsos grandes.
+        try {
+          const prevRaw = await env.CLAIRE_KV.get(KEY);
+          if (prevRaw) {
+            const prev = JSON.parse(prevRaw);
+            const PROT = ['nx_tasks','nx_projetos','nx_turnos','nx_conquistas','nx_manutencoes','nx_plantao','nx_compras','nx_extras','nx_users','nx_catalog','nx_notes','nx_imoveis'];
+            for (const k of PROT) {
+              const nNew = Array.isArray(parsed[k]) ? parsed[k].length : null;
+              const nOld = Array.isArray(prev[k]) ? prev[k].length : null;
+              if (nOld != null && nNew != null && ((nNew === 0 && nOld >= 3) || (nOld >= 8 && nNew <= 2))) {
+                return jsonResp({ error: 'gravacao recusada: ' + k + ' iria de ' + nOld + ' para ' + nNew, blocked: true }, cors, 409);
+              }
+            }
+            // não deixa zerar todas as fotos dos atendentes
+            const fOld = (Array.isArray(prev.nx_atts) ? prev.nx_atts : []).filter(x => x && x.foto).length;
+            const fNew = (Array.isArray(parsed.nx_atts) ? parsed.nx_atts : []).filter(x => x && x.foto).length;
+            if (fOld >= 2 && fNew === 0) {
+              return jsonResp({ error: 'gravacao recusada: apagaria todas as fotos', blocked: true }, cors, 409);
+            }
+          }
+        } catch (e) { /* falha-segura: ignora a trava e salva normal */ }
         await env.CLAIRE_KV.put(KEY, body);
         // Snapshot diário: salva uma vez por dia (primeira gravação do dia), expira em 8 dias
         const today = new Date().toISOString().substring(0, 10);

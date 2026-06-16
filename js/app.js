@@ -3578,6 +3578,10 @@ function saveAll(){
     if(mudou){
       localStorage.setItem('nx_lastSaved', String(Date.now()));
       _kvDirty=true; // marca pra sincronizar — o push real acontece espaçado em _kvFlush()
+      // Agenda um envio ao servidor logo após a mudança (respeitando o intervalo
+      // mínimo). Assim o que uma pessoa lança aparece para as outras em ~1 min,
+      // sem precisar fechar a aba nem esperar o ciclo longo.
+      if(typeof _kvFlushThrottled==='function') _kvFlushThrottled();
     }
   }catch(e){ console.warn('saveAll falhou', e); }
 }
@@ -6316,7 +6320,7 @@ document.head.appendChild(toastStyle);
 // localStorage é gratuito → salva local com frequência. O backend KV (limite diário)
 // só recebe quando há mudança REAL, espaçado e deduplicado.
 // Throttle: mínimo KV_MIN_INTERVAL_MS entre escritas no KV (evita estourar 1.000/dia).
-const KV_MIN_INTERVAL_MS = 10 * 60 * 1000; // 10 minutos entre flushes
+const KV_MIN_INTERVAL_MS = 60 * 1000; // 1 minuto entre flushes (envio só ocorre quando há mudança real, então o gasto diário continua baixo)
 let _kvLastFlushed = 0;
 const _kvFlushThrottled = (function(){
   let _timer = null;
@@ -6331,7 +6335,7 @@ const _kvFlushThrottled = (function(){
   };
 })();
 setInterval(saveAll, 5000);              // salva no navegador (local), barato
-setInterval(_kvFlushThrottled, 600000);  // tenta flush a cada 10 min (throttle impede duplicatas)
+setInterval(_kvFlushThrottled, 60000);   // rede de segurança: tenta flush a cada 1 min (no-op se nada mudou)
 window.addEventListener('beforeunload', function(){ saveAll(); _kvFlush(); }); // sempre salva ao fechar
 window.addEventListener('visibilitychange', function(){ if(document.visibilityState==='hidden'){ saveAll(); _kvFlushThrottled(); } }); // troca de aba respeita throttle
 // ═══════════════════ ACOMPANHAMENTO — ABAS ═══════════════════

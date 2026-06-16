@@ -50,8 +50,11 @@ window._claireKVPromise = (async function(){
         };
         var kvCount = _countItems(j.data, true);
         var localCount = localTs > 0 ? _countItems(null, false) : 0;
-        // Só sincroniza se local está vazio OU KV tem ao menos tantos itens quanto local
-        if(localCount === 0 || kvCount >= localCount){
+        // Só bloqueia a sincronização quando o KV está realmente VAZIO (proteção
+        // contra wipe). Se o KV tem qualquer dado e é mais recente, sincroniza —
+        // a contagem não cobre Passagem de Turno (nx_plantao) nem usuários
+        // (nx_users), então comparar quantidades bloqueava mudanças legítimas.
+        if(localCount === 0 || kvCount > 0){
           for(var k in j.data){
             try{ localStorage.setItem(k, JSON.stringify(j.data[k])); }catch(e){}
           }
@@ -1602,6 +1605,6 @@ function _validarLogin(){
   </div>
 </div>
 
-<script src="js/app.js?v=52"></script>
+<script src="js/app.js?v=53"></script>
 </body>
 </html>

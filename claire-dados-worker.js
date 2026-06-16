@@ -73,7 +73,7 @@ export default {
     try {
       if (url.pathname.endsWith('/load')) {
         const v = await env.CLAIRE_KV.get(KEY);
-        return jsonResp({ data: v ? JSON.parse(v) : null }, cors);
+        return jsonResp({ data: v ? JSON.parse(v) : null, _wv: 'guard-probe-1' }, cors);
       }
       if (url.pathname.endsWith('/save') && request.method === 'POST') {
         const body = await request.text();

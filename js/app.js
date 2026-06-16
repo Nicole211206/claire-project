@@ -1072,13 +1072,13 @@ function _renderGantt(containerId, items, opts){
   let linhasHtml='';
   const grupos=opts.agrupar?opts.agrupar(validos):[{titulo:null,itens:validos}];
   grupos.forEach(g=>{
-    if(g.titulo) linhasHtml+='<div style="display:flex;"><div style="width:'+LABELW+'px;flex-shrink:0;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);padding:8px 10px 4px;">'+esc(g.titulo)+'</div><div style="width:'+totalW+'px;"></div></div>';
+    if(g.titulo) linhasHtml+='<div style="display:flex;"><div style="width:'+LABELW+'px;flex-shrink:0;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);padding:8px 10px 4px;position:sticky;left:0;z-index:6;background:var(--bg2);border-right:1px solid var(--border);">'+esc(g.titulo)+'</div><div style="width:'+totalW+'px;"></div></div>';
     g.itens.forEach(it=>{
       const a=idxDia(it.ini), b=idxDia(it.fimr);
       const left=(a<0?0:a)*DW, width=Math.max(DW-4,((b<0?a:b)-(a<0?0:a)+1)*DW-4);
       const umDia=(it.ini===it.fimr);
       linhasHtml+='<div style="display:flex;align-items:center;border-top:1px solid var(--border);min-height:36px;">'+
-        '<div style="width:'+LABELW+'px;flex-shrink:0;padding:6px 10px;font-size:12.5px;display:flex;align-items:center;gap:6px;overflow:hidden;"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(it.label)+'</span>'+(it.tagHtml||'')+'</div>'+
+        '<div style="width:'+LABELW+'px;flex-shrink:0;padding:6px 10px;font-size:12.5px;display:flex;align-items:center;gap:6px;overflow:hidden;position:sticky;left:0;z-index:6;background:var(--bg2);border-right:1px solid var(--border);"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(it.label)+'</span>'+(it.tagHtml||'')+'</div>'+
         '<div style="position:relative;width:'+totalW+'px;height:36px;">'+
         '<div onclick="'+(it.onclick||'')+'" title="'+esc(it.label)+' ('+(it.inicio||'')+(it.fim&&it.fim!==it.inicio?(' → '+it.fim):'')+')" style="position:absolute;top:8px;left:'+left+'px;width:'+width+'px;height:20px;background:'+(it.cor||'#5bbf8a')+';border-radius:5px;cursor:pointer;display:flex;align-items:center;padding:0 6px;color:#fff;font-size:10px;font-weight:600;white-space:nowrap;overflow:hidden;box-shadow:var(--shadow);">'+(umDia?'':(it.inicio?it.inicio.split('-').reverse().slice(0,2).join('/'):''))+'</div>'+
         '</div></div>';
@@ -1088,8 +1088,8 @@ function _renderGantt(containerId, items, opts){
   el.innerHTML=
     '<div id="'+scrollId+'" style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--r);cursor:grab;user-select:none;">'+
     '<div style="min-width:'+(LABELW+totalW)+'px;">'+
-    '<div style="display:flex;border-bottom:1px solid var(--border);background:var(--bg2);position:sticky;top:0;"><div style="width:'+LABELW+'px;flex-shrink:0;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);padding:8px 10px;">Atividade</div><div style="display:flex;">'+headMes+'</div></div>'+
-    '<div style="display:flex;border-bottom:1px solid var(--border);background:var(--bg2);"><div style="width:'+LABELW+'px;flex-shrink:0;"></div><div style="display:flex;">'+headDia+'</div></div>'+
+    '<div style="display:flex;border-bottom:1px solid var(--border);background:var(--bg2);position:sticky;top:0;z-index:8;"><div style="width:'+LABELW+'px;flex-shrink:0;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);padding:8px 10px;position:sticky;left:0;z-index:9;background:var(--bg2);border-right:1px solid var(--border);">Atividade</div><div style="display:flex;">'+headMes+'</div></div>'+
+    '<div style="display:flex;border-bottom:1px solid var(--border);background:var(--bg2);"><div style="width:'+LABELW+'px;flex-shrink:0;position:sticky;left:0;z-index:6;background:var(--bg2);border-right:1px solid var(--border);"></div><div style="display:flex;">'+headDia+'</div></div>'+
     '<div style="position:relative;">'+
     '<div style="position:absolute;top:0;bottom:0;left:'+LABELW+'px;right:0;overflow:hidden;pointer-events:none;"><div style="position:relative;width:'+totalW+'px;height:100%;pointer-events:none;">'+weekendBg+'<div style="position:absolute;top:0;bottom:0;left:'+hojeX+'px;width:2px;background:var(--rose);z-index:3;"></div></div></div>'+
     linhasHtml+

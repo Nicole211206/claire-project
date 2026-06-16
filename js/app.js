@@ -1139,11 +1139,7 @@ function renderTaskGantt(){
     inicio:t.dataInicio||t.due, fim:t.due||t.dataInicio, cor:_corPrio(t.prio),
     onclick:t._isDemand?'abrirDemandaModal(\''+t._attId+'\','+t._demIdx+')':t._isManutTarefa?'abrirManutTarefaDetalhe('+t._manutId+')':'abrirDetalheTask('+t.id+')'
   }));
-  _renderGantt('task-crono-view', items, { agrupar:function(arr){
-    const g={}; arr.forEach(it=>{ const mk=(it.ini||'').substring(0,7); (g[mk]=g[mk]||[]).push(it); });
-    const meses=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-    return Object.keys(g).sort().map(mk=>({titulo:mk?(meses[parseInt(mk.substring(5,7))-1]+'/'+mk.substring(0,4)):'Sem data', itens:g[mk]}));
-  }});
+  _renderGantt('task-crono-view', items, {}); // sem agrupar por mês — igual ao cronograma de Performance
 }
 function renderProjetosGantt(){
   const cores={planejamento:'#f0a24b',andamento:'#e05a5a',concluido:'#5bbf8a'};
@@ -1742,8 +1738,9 @@ function openAttModal(id){
   document.getElementById('modal-att').classList.add('open');
 }
 
-function addDemandTo(id){closeModal('modal-att');document.getElementById('d-att').value=id;document.getElementById('d-desc').value='';document.getElementById('d-date').value=new Date().toISOString().split('T')[0];document.getElementById('modal-demand').classList.add('open');}
-function openAddDemand(){document.getElementById('d-desc').value='';document.getElementById('d-date').value=new Date().toISOString().split('T')[0];document.getElementById('modal-demand').classList.add('open');}
+function _fillDemandEquipe(){const sel=document.getElementById('d-att');if(sel)sel.innerHTML=ATTS.map(a=>'<option value="'+a.id+'">'+esc(a.name)+'</option>').join('');}
+function addDemandTo(id){closeModal('modal-att');_fillDemandEquipe();document.getElementById('d-att').value=id;document.getElementById('d-desc').value='';document.getElementById('d-date').value=new Date().toISOString().split('T')[0];document.getElementById('modal-demand').classList.add('open');}
+function openAddDemand(){_fillDemandEquipe();document.getElementById('d-desc').value='';document.getElementById('d-date').value=new Date().toISOString().split('T')[0];document.getElementById('modal-demand').classList.add('open');}
 function addDemand(){
   const id=document.getElementById('d-att').value,a=ATTS.find(x=>x.id===id);if(!a)return;
   const desc=document.getElementById('d-desc').value.trim();if(!desc)return;
@@ -5785,6 +5782,11 @@ function sincronizarManutencaoKPI(){
   if(typeof renderKPIs==='function') renderKPIs();
 }
 
+function manutCardTitulo(m){
+  const item=(m.itens&&m.itens[0]&&m.itens[0].desc)?String(m.itens[0].desc).trim():'';
+  const imovel=(m.imovelNome||'').replace(/^WC-\d+\s*-\s*/,'').trim();
+  return [item,imovel].filter(Boolean).join(' — ')||'(sem título)';
+}
 function renderManutencaoKanban(){
   const el=document.getElementById('manutencao-kanban'); if(!el) return;
   const barEl=document.getElementById('manutencao-pausadas-bar');
@@ -5804,7 +5806,7 @@ function renderManutencaoKanban(){
             return '<div onclick="abrirManutModal('+m.id+')" style="background:var(--bg3);border:1px solid var(--peach)44;border-radius:var(--r-sm);padding:9px;min-width:200px;cursor:pointer;opacity:0.8;transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'var(--bg3)\'">'+
               '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">'+
                 '<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:var(--peach)22;color:var(--peach);font-weight:700;"><i class="fa-solid fa-pause"></i> PAUSADO</span>'+
-                '<span style="font-size:13px;font-weight:600;">'+esc(m.imovelNome||'(sem imóvel)')+'</span>'+
+                '<span style="font-size:13px;font-weight:600;">'+esc(manutCardTitulo(m))+'</span>'+
               '</div>'+
               '<div style="font-size:11px;color:var(--text3);margin-bottom:5px;">'+(MANUT_ORIGEM[m.origem]||m.origem)+' · '+(MANUT_COLS.find(function(c){return c.id===m.status;})||{label:m.status}).label+'</div>'+
               '<div style="display:flex;justify-content:space-between;align-items:center;">'+
@@ -5828,7 +5830,7 @@ function renderManutencaoKanban(){
         const cardOpacity=m.status==='pago'?'opacity:0.6;':'';
         const prazoStr=m.dataPrazo?'<span style="font-size:9.5px;color:var(--text3);"><i class="fa-regular fa-calendar"></i> '+fd(m.dataPrazo)+'</span>':'';
         return '<div onclick="abrirManutModal('+m.id+')" style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:9px;margin-bottom:6px;cursor:pointer;'+cardOpacity+'transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'var(--bg3)\'">'+
-          '<div style="font-size:13px;font-weight:600;margin-bottom:3px;">'+esc(m.imovelNome||'(sem imóvel)')+'</div>'+
+          '<div style="font-size:13px;font-weight:600;margin-bottom:3px;">'+esc(manutCardTitulo(m))+'</div>'+
           '<div style="font-size:11px;color:var(--text3);margin-bottom:5px;">'+(MANUT_ORIGEM[m.origem]||m.origem)+' · '+(m.tipo==='dano'?'Dano':m.tipo==='desgaste'?'Desgaste':'Perda')+'</div>'+
           '<div style="display:flex;justify-content:space-between;align-items:center;">'+
           '<span style="font-size:9.5px;padding:1px 6px;border-radius:8px;background:var(--sky-light);color:var(--sky);font-weight:600;">'+(MANUT_PAGADOR[m.quemPaga]||m.quemPaga)+'</span>'+

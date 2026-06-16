@@ -3607,6 +3607,31 @@ async function _kvFlush(){
   if(body===_kvLastPushed){ _kvDirty=false; return; } // nada mudou de fato → não grava
   _kvPushing=true;
   try{
+    // ── Trava anti-perda (lado do ENVIO) ──
+    // Antes de gravar, confere o estado atual do servidor. Se este aparelho
+    // tentaria apagar uma lista CHEIA do servidor com uma lista VAZIA local
+    // (estado quebrado/não carregado), NÃO envia — em vez disso restaura o
+    // local a partir do servidor. Impede que um aparelho zere os dados de todos.
+    try{
+      const rg=await fetch(s.url.replace(/\/$/,'')+'/load?token='+encodeURIComponent(s.token||''));
+      const jg=await rg.json();
+      if(jg && jg.data){
+        const local=JSON.parse(body);
+        let conflito=false;
+        for(const k in jg.data){
+          const sv=jg.data[k], lv=local[k];
+          if(Array.isArray(sv) && sv.length>0 && Array.isArray(lv) && lv.length===0){ conflito=true; break; }
+        }
+        if(conflito){
+          for(const k in jg.data){ try{ localStorage.setItem(k, JSON.stringify(jg.data[k])); }catch(e){} }
+          if(typeof loadAll==='function') loadAll();
+          if(typeof _renderTudo==='function') _renderTudo();
+          _kvLastPushed=_kvBuildBlob();
+          _kvDirty=false;
+          return; // aborta o envio que apagaria dados
+        }
+      }
+    }catch(e){ /* sem rede pra checar: segue o envio normal abaixo */ }
     const r=await fetch(s.url.replace(/\/$/,'')+'/save?token='+encodeURIComponent(s.token||''),{
       method:'POST', headers:{'Content-Type':'application/json'}, body:body
     });

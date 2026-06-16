@@ -3660,11 +3660,12 @@ async function kvPull(){
     if(j&&j.data){
       const localTs=parseInt(localStorage.getItem('nx_lastSaved')||'0');
       const serverTs=parseInt((j.data.nx_lastSaved)||0);
-      // Se HÁ edições locais ainda não enviadas (_kvDirty) e o servidor não é mais
-      // novo, não sobrescreve (protege o que está sendo editado). Se NÃO há nada
-      // pendente, converge sempre para o servidor — isso resolve o "carimbo travado"
-      // que impedia um aparelho parado de puxar as mudanças dos outros.
-      if(_kvDirty && serverTs<=localTs && localTs>0){ _kvLastPushed=_kvBuildBlob(); return false; }
+      // Só aplica o servidor se ele for ESTRITAMENTE mais novo que o local.
+      // Se o local é igual ou mais novo, NÃO sobrescreve — isso protege dados
+      // que acabaram de ser criados e ainda não foram enviados (ex.: projetos/
+      // tarefas adicionados e ainda não sincronizados). O carimbo de hora é
+      // confiável (só muda em mudança real), então essa comparação é segura.
+      if(serverTs<=localTs && localTs>0){ _kvLastPushed=_kvBuildBlob(); return false; }
       let aplicou=false;
       for(const k in j.data){
         try{

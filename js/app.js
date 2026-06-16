@@ -6311,11 +6311,26 @@ document.head.appendChild(toastStyle);
 
 // ═══════════════════ AUTOSAVE ═══════════════════
 // localStorage é gratuito → salva local com frequência. O backend KV (limite diário)
-// só recebe quando há mudança REAL, espaçado (a cada 25s) e deduplicado.
+// só recebe quando há mudança REAL, espaçado e deduplicado.
+// Throttle: mínimo KV_MIN_INTERVAL_MS entre escritas no KV (evita estourar 1.000/dia).
+const KV_MIN_INTERVAL_MS = 10 * 60 * 1000; // 10 minutos entre flushes
+let _kvLastFlushed = 0;
+const _kvFlushThrottled = (function(){
+  let _timer = null;
+  return function(force){
+    if(_timer) return; // já há um flush agendado
+    const elapsed = Date.now() - _kvLastFlushed;
+    const delay = force ? 0 : Math.max(0, KV_MIN_INTERVAL_MS - elapsed);
+    _timer = setTimeout(function(){
+      _timer = null;
+      _kvFlush().then(function(){ _kvLastFlushed = Date.now(); });
+    }, delay);
+  };
+})();
 setInterval(saveAll, 5000);              // salva no navegador (local), barato
-setInterval(_kvFlush, 1800000);           // sincroniza a cada 5 min (respeita limite KV gratuito)
-window.addEventListener('beforeunload', function(){ saveAll(); _kvFlush(); });
-window.addEventListener('visibilitychange', function(){ if(document.visibilityState==='hidden'){ saveAll(); _kvFlush(); } });
+setInterval(_kvFlushThrottled, 600000);  // tenta flush a cada 10 min (throttle impede duplicatas)
+window.addEventListener('beforeunload', function(){ saveAll(); _kvFlush(); }); // sempre salva ao fechar
+window.addEventListener('visibilitychange', function(){ if(document.visibilityState==='hidden'){ saveAll(); _kvFlushThrottled(); } }); // troca de aba respeita throttle
 // ═══════════════════ ACOMPANHAMENTO — ABAS ═══════════════════
 let _acompTab = 'avaliacoes';
 

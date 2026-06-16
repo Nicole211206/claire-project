@@ -455,6 +455,7 @@ function showPanel(id,btn){
   if(id==='salary'){renderSalary();}
   if(id==='kpis'){renderKPIs();}
   if(id==='extras'){renderExtras();}
+  if(id==='legado'){ if(typeof renderLegado==='function') renderLegado(); }
   if(id==='manual'){renderManual();}
 }
 

@@ -441,6 +441,7 @@ function showPanel(id,btn){
   if(id==='overview'){renderOverview();renderOvAgenda();var elDA=document.getElementById('ov-demandas-atrasadas');if(elDA)elDA.textContent=contarDemandasAtrasadas();if(ls('nx_gdrive'))loadCalendarEvents();}
   if(id==='calendar'){loadCalendarEvents();}
   if(id==='gmail'){checkGmailConfig();if(ls('nx_gmail'))loadEmails();}
+  if(id==='tasks'){ const cv=document.getElementById('task-crono-view'); if((!cv||cv.style.display!=='none') && typeof renderTaskGantt==='function') renderTaskGantt(); }
   if(id==='onboarding'){renderOnboardingKanban();}
   if(id==='projetos'){renderProjetosKanban();}
   if(id==='plantao'){renderPlantao();}
@@ -1102,8 +1103,14 @@ function _renderGantt(containerId, items, opts){
     scrollEl.addEventListener('mouseleave',()=>{isDown=false;scrollEl.style.cursor='grab';});
     scrollEl.addEventListener('mouseup',()=>{isDown=false;scrollEl.style.cursor='grab';});
     scrollEl.addEventListener('mousemove',e=>{if(!isDown)return;e.preventDefault();const x=e.pageX-scrollEl.offsetLeft;scrollEl.scrollLeft=scrollLeft-(x-startX);});
-    // scroll suave até hoje
-    setTimeout(()=>{const hi=idxDia(hojeDs);if(hi>3)scrollEl.scrollLeft=Math.max(0,(hi-3)*DW);},50);
+    // Abre a visão em "hoje": os dias passados ficam à esquerda, fora da tela,
+    // e podem ser vistos arrastando (estilo calendário de PMS). Reaplica em
+    // requestAnimationFrame + setTimeout para funcionar mesmo quando o painel
+    // acabou de ficar visível (senão o scroll não "fixa").
+    const _irParaHoje=function(){ const hi=idxDia(hojeDs); if(hi>1) scrollEl.scrollLeft=Math.max(0,(hi-1)*DW); };
+    _irParaHoje();
+    requestAnimationFrame(function(){ requestAnimationFrame(_irParaHoje); });
+    setTimeout(_irParaHoje,60);
   }
 }
 function renderTaskGantt(){

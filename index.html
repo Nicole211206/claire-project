@@ -31,33 +31,25 @@ window._claireKVPromise = (async function(){
       // Só sobrescreve o localStorage se o KV tiver dados mais recentes
       // Isso evita perder edições feitas antes dos 5min de flush
       if(kvTs >= localTs){
-        // Guarda de segurança: não sobrescreve local com KV vazio/default.
-        // Compara quantidade de itens em módulos críticos — se KV tem menos que o local, mantém local.
-        var _countItems = function(src, isKV) {
-          var total = 0;
-          ['nx_projetos','nx_compras','nx_manutencoes','nx_extras','nx_manual'].forEach(function(key){
-            try {
-              var v = isKV ? src[key] : JSON.parse(localStorage.getItem(key) || '[]');
-              if(Array.isArray(v)) total += v.length;
-            } catch(e){}
-          });
-          // Também conta demandas dentro de atts
-          try {
-            var atts = isKV ? src['nx_atts'] : JSON.parse(localStorage.getItem('nx_atts') || '[]');
-            if(Array.isArray(atts)) atts.forEach(function(a){ if(Array.isArray(a.demands)) total += a.demands.length; });
-          } catch(e){}
-          return total;
-        };
-        var kvCount = _countItems(j.data, true);
-        var localCount = localTs > 0 ? _countItems(null, false) : 0;
-        // Só bloqueia a sincronização quando o KV está realmente VAZIO (proteção
-        // contra wipe). Se o KV tem qualquer dado e é mais recente, sincroniza —
-        // a contagem não cobre Passagem de Turno (nx_plantao) nem usuários
-        // (nx_users), então comparar quantidades bloqueava mudanças legítimas.
-        if(localCount === 0 || kvCount > 0){
-          for(var k in j.data){
-            try{ localStorage.setItem(k, JSON.stringify(j.data[k])); }catch(e){}
-          }
+        // Aplica os dados do KV CHAVE POR CHAVE, com uma proteção:
+        // nunca deixa um array VAZIO do servidor apagar uma lista local que tem
+        // itens. Isso cobre dois casos ao mesmo tempo:
+        //  - sincroniza normalmente o que o servidor tem (ex.: Passagem de Turno,
+        //    usuários/acessos) — antes uma contagem global bloqueava isso;
+        //  - protege dados criados num dispositivo que ainda NÃO subiram ao KV
+        //    (ex.: manutenções da Patrícia) de serem apagados ao recarregar.
+        for(var k in j.data){
+          try{
+            var kvVal = j.data[k];
+            if(Array.isArray(kvVal) && kvVal.length === 0){
+              var localRaw = localStorage.getItem(k);
+              if(localRaw){
+                var localVal = JSON.parse(localRaw);
+                if(Array.isArray(localVal) && localVal.length > 0){ continue; } // mantém o local
+              }
+            }
+            localStorage.setItem(k, JSON.stringify(kvVal));
+          }catch(e){}
         }
       }
     }

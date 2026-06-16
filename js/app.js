@@ -1628,7 +1628,7 @@ function salvarPerfilAtt() {
   showToast('Perfil salvo!', 'sage');
 }
 
-function setAttFoto(id,v){const a=ATTS.find(x=>x.id===id);if(a){a.foto=v;if(typeof saveAll==='function')saveAll();renderTeam();renderTeamOv();}}
+function setAttFoto(id,v){const a=ATTS.find(x=>x.id===id);if(a){a.foto=v;if(typeof saveAll==='function')saveAll();renderTeam();renderTeamOv();if(typeof renderSalary==='function')renderSalary();}}
 function _lerImagemReduzida(file, cb){
   const reader=new FileReader();
   reader.onload=function(e){
@@ -1648,7 +1648,7 @@ function uploadAttFoto(id,event){
   const file=event.target.files[0];if(!file)return;
   _lerImagemReduzida(file,function(dataUrl){
     const a=ATTS.find(x=>x.id===id);
-    if(a){a.foto=dataUrl;renderTeam();renderTeamOv();if(typeof saveAll==='function')saveAll();}
+    if(a){a.foto=dataUrl;renderTeam();renderTeamOv();if(typeof renderSalary==='function')renderSalary();if(typeof saveAll==='function')saveAll();}
   });
 }
 function uploadHeadFoto(id,event){
@@ -1961,7 +1961,7 @@ function renderSalary(){
     const d2=workDaysP2[a.id]!==undefined?workDaysP2[a.id]:7;
     const v1=d1*12*a.rate, v2=d2*12*a.rate, total=v1+v2;
     return '<div class="salary-block">'+
-      '<div class="salary-name"><div class="avatar '+a.av+'" style="width:26px;height:26px;font-size:10px;">'+a.ini+'</div>'+esc(a.name)+'<span style="font-size:11px;color:var(--text3);margin-left:auto;">R$ '+a.rate+'/h</span></div>'+
+      '<div class="salary-name">'+(a.foto?'<img src="'+esc(a.foto)+'" style="width:26px;height:26px;border-radius:50%;object-fit:cover;">':'<div class="avatar '+a.av+'" style="width:26px;height:26px;font-size:10px;">'+a.ini+'</div>')+esc(a.name)+'<span style="font-size:11px;color:var(--text3);margin-left:auto;">R$ '+a.rate+'/h</span></div>'+
       '<div class="salary-row"><span class="salary-label">1ª parcela (dias 01-15)</span><span class="salary-val"><input type="number" min="0" max="16" class="editable" value="'+d1+'" onchange="setWD1(\''+a.id+'\',this.value)"> plantões = '+brl(v1)+'</span></div>'+
       '<div class="salary-row"><span class="salary-label">2ª parcela (dias 16-31)</span><span class="salary-val"><input type="number" min="0" max="16" class="editable" value="'+d2+'" onchange="setWD2(\''+a.id+'\',this.value)"> plantões = '+brl(v2)+'</span></div>'+
       '<div class="salary-row total"><span class="salary-label">Total do mês</span><span class="salary-val" style="color:var(--sage);">'+brl(total)+'</span></div>'+
@@ -5207,6 +5207,8 @@ function abrirManutModal(id){
   }
   const btnAv=document.getElementById('manut-btn-avancar');
   if(btnAv) btnAv.style.display=m.status==='pago'?'none':'';
+  const btnVoltar=document.getElementById('manut-btn-voltar');
+  if(btnVoltar) btnVoltar.style.display=m.status==='solicitacao'?'none':'';
   const pausadoBadge=document.getElementById('manut-pausado-badge');
   if(pausadoBadge) pausadoBadge.style.display=m.pausado?'':'none';
   const btnPausar=document.getElementById('manut-btn-pausar');
@@ -5724,6 +5726,18 @@ function manutAvancarFase(){
     if(typeof saveAll==='function') saveAll();
     abrirManutModal(m.id); renderManutencaoKanban();
     if(m.status==='pago') sincronizarManutencaoKPI();
+  }
+}
+function manutVoltarFase(){
+  const m=manutencoes.find(function(x){return x.id===manutAtiva;}); if(!m) return;
+  const ordem=['solicitacao','andamento','pago'];
+  const i=ordem.indexOf(m.status);
+  if(i>0){
+    const eraPago=m.status==='pago';
+    m.status=ordem[i-1];
+    if(typeof saveAll==='function') saveAll();
+    abrirManutModal(m.id); renderManutencaoKanban();
+    if(eraPago) sincronizarManutencaoKPI(); // saiu de "pago" → recalcula KPI
   }
 }
 

@@ -93,6 +93,7 @@ let manutencoes=[];
 let manutAtiva=null, manutAba='solicitacao';
 let fornecedoresCadastro=[]; // cadastro de fornecedores reutilizáveis
 let manutExibirPausadas=false;
+let manutTabAtiva='kanban';
 let manualEntradas=[];
 let superhostPeriodos=[];
 let cancelamentos=[];
@@ -997,8 +998,9 @@ function renderTasks(f){
   // filtro status (ativas/finalizadas/todas)
   const sf=document.getElementById('task-status-filter');
   const sv=sf?sf.value:'ativas';
-  if(sv==='ativas') list=list.filter(t=>!t.done);
+  if(sv==='ativas') list=list.filter(t=>!t.done&&t.status!=='backlog');
   else if(sv==='finalizadas') list=list.filter(t=>t.done);
+  else if(sv==='pausadas') list=list.filter(t=>t.status==='backlog'&&!t.done);
   // filtro tipo (projetos/sem-projeto/todos) — só para tarefas normais
   if(!isDemandView){
     const tf=document.getElementById('task-tipo-filter');
@@ -1218,7 +1220,7 @@ function abrirDetalheTask(id){
     '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:3px;">Início</label><input type="date" class="form-input" style="padding:5px 8px;font-size:12.5px;" value="'+(t.dataInicio||'')+'" onchange="editarTaskCampo('+t.id+',\'dataInicio\',this.value)"></div>'+
     '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:3px;">Prazo</label><input type="date" class="form-input" style="padding:5px 8px;font-size:12.5px;" value="'+(t.due||'')+'" onchange="editarTaskCampo('+t.id+',\'due\',this.value)"></div>'+
     '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:3px;">Prioridade</label><select class="form-select" style="padding:5px 8px;font-size:12.5px;" onchange="editarTaskCampo('+t.id+',\'prio\',this.value)"><option value="high"'+(t.prio==='high'?' selected':'')+'>Alta</option><option value="med"'+(t.prio==='med'?' selected':'')+'>Média</option><option value="low"'+(t.prio==='low'?' selected':'')+'>Baixa</option></select></div>'+
-    '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:3px;">Status</label><select class="form-select" style="padding:5px 8px;font-size:12.5px;" onchange="editarTaskStatus('+t.id+',this.value)"><option value="todo"'+((!t.done&&(t.status==='todo'||!t.status))?' selected':'')+'>A fazer</option><option value="doing"'+((!t.done&&t.status==="doing")?' selected':'')+'>Em andamento</option><option value="done"'+(t.done?' selected':'')+'>Concluída</option></select></div>'+
+    '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:3px;">Status</label><select class="form-select" style="padding:5px 8px;font-size:12.5px;" onchange="editarTaskStatus('+t.id+',this.value)"><option value="todo"'+((!t.done&&(t.status==='todo'||!t.status))?' selected':'')+'>A fazer</option><option value="doing"'+((!t.done&&t.status==="doing")?' selected':'')+'>Em andamento</option><option value="backlog"'+((!t.done&&t.status==='backlog')?' selected':'')+'>Pausada</option><option value="done"'+(t.done?' selected':'')+'>Concluída</option></select></div>'+
     '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:3px;">Categoria</label><select class="form-select" style="padding:5px 8px;font-size:12.5px;" onchange="editarTaskCampo('+t.id+',\'cat\',this.value)">'+taskCats.map(c=>'<option value="'+c.id+'"'+(t.cat===c.id?' selected':'')+'>'+c.label+'</option>').join('')+'</select></div>';
   renderTaskUpdates();
   document.getElementById('modal-task-detalhe').classList.add('open');
@@ -1944,6 +1946,22 @@ function renderPerformance(){
     </div>`).join('')}
   </div>`;
 
+  // Saldo seguro
+  const _saldoIni=parseFloat(localStorage.getItem('nx_saldo_seguro'))||0;
+  const _gastoSeg=(typeof manutencoes!=='undefined'?manutencoes:[]).filter(function(m){return m.quemPaga==='seguro'&&m.status==='pago';}).reduce(function(s,m){return s+(typeof manutTotalComMargem==='function'?manutTotalComMargem(m):0);},0);
+  const _saldoAtual=_saldoIni-_gastoSeg;
+  const _saldoC=_saldoAtual>=0?'#0D9488':'#DC2626';
+  const _saldoEl=document.getElementById('perf-saldo-seguro');
+  if(_saldoEl){
+    _saldoEl.innerHTML=`<div style="background:#F4F6F9;border-radius:10px;padding:16px 20px;display:inline-flex;align-items:center;gap:20px;margin-top:28px;">
+      <div>
+        <div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px;">Saldo Seguro EasyCover</div>
+        <div style="font-size:22px;font-weight:700;font-family:'SF Mono','Fira Code',monospace;color:${_saldoC};">R$ ${_saldoAtual.toFixed(2).replace('.',',')}</div>
+        ${_saldoIni>0?`<div style="font-size:10px;color:#9CA3AF;">de R$ ${_saldoIni.toFixed(2).replace('.',',')} iniciais · R$ ${_gastoSeg.toFixed(2).replace('.',',')} usado</div>`:'<div style="font-size:10px;color:#9CA3AF;">Configure o saldo inicial em Configurações</div>'}
+      </div>
+    </div>`;
+  }
+
   renderProjetosGantt();
 }
 
@@ -2366,6 +2384,7 @@ function openSettings(){
   toggleAIProvider(ls('nx_ai_provider')||'gemini');
   document.getElementById('s-gclientid').value=ls('nx_gclientid')||'';
   document.getElementById('s-hostaway-url').value=ls('nx_hostaway_url')||'';
+  document.getElementById('s-saldo-seguro').value=ls('nx_saldo_seguro')||'';
   refreshGoogleStatus();
   renderSettingsImoveis();
   document.getElementById('modal-settings').classList.add('open');
@@ -2404,6 +2423,8 @@ function saveSettings(){
   localStorage.setItem('nx_gemini_key',document.getElementById('s-gemini-key').value.trim());
   localStorage.setItem('nx_gclientid',document.getElementById('s-gclientid').value.trim());
   localStorage.setItem('nx_hostaway_url',document.getElementById('s-hostaway-url').value.trim());
+  const saldoVal=document.getElementById('s-saldo-seguro').value.trim();
+  if(saldoVal!=='') localStorage.setItem('nx_saldo_seguro',saldoVal);
   document.getElementById('sidebar-name').textContent=name;
   document.getElementById('sidebar-avatar').textContent=name.charAt(0).toUpperCase();
   _applyGoogleStatus();
@@ -5787,8 +5808,89 @@ function manutCardTitulo(m){
   const imovel=(m.imovelNome||'').replace(/^WC-\d+\s*-\s*/,'').trim();
   return [item,imovel].filter(Boolean).join(' — ')||'(sem título)';
 }
+function renderManutResumo(){
+  const el=document.getElementById('manutencao-resumo'); if(!el) return;
+  const hoje=new Date().toISOString().split('T')[0];
+  const atrasadas=manutencoes.filter(function(m){return m.dataPrazo&&m.dataPrazo<hoje&&m.status!=='pago';}).length;
+  const pendentes=manutencoes.filter(function(m){return m.status!=='pago';}).length;
+  const concluidas=manutencoes.filter(function(m){return m.status==='pago';}).length;
+  const saldoInicial=parseFloat(localStorage.getItem('nx_saldo_seguro'))||0;
+  const gastoSeguro=manutencoes.filter(function(m){return m.quemPaga==='seguro'&&m.status==='pago';}).reduce(function(s,m){return s+manutTotalComMargem(m);},0);
+  const saldoRestante=saldoInicial-gastoSeguro;
+  const saldoColor=saldoRestante>=0?'var(--sage)':'var(--vermelha)';
+  el.innerHTML='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:4px;">'+
+    '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;">'+
+      '<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--vermelha);margin-bottom:4px;">Atrasadas</div>'+
+      '<div style="font-size:22px;font-weight:700;color:var(--vermelha);">'+atrasadas+'</div>'+
+    '</div>'+
+    '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;">'+
+      '<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--peach);margin-bottom:4px;">Pendentes</div>'+
+      '<div style="font-size:22px;font-weight:700;color:var(--peach);">'+pendentes+'</div>'+
+    '</div>'+
+    '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;">'+
+      '<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--sage);margin-bottom:4px;">Concluídas</div>'+
+      '<div style="font-size:22px;font-weight:700;color:var(--sage);">'+concluidas+'</div>'+
+    '</div>'+
+    '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;">'+
+      '<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:'+saldoColor+';margin-bottom:4px;">Saldo Seguro</div>'+
+      '<div style="font-size:18px;font-weight:700;color:'+saldoColor+';">R$ '+(saldoRestante>=0?'+':'')+saldoRestante.toFixed(2).replace('.',',')+'</div>'+
+      (saldoInicial>0?'<div style="font-size:10px;color:var(--text3);">de R$ '+saldoInicial.toFixed(2).replace('.',',')+'</div>':'')+
+    '</div>'+
+  '</div>';
+}
+function renderManutSaldoGeral(){
+  const el=document.getElementById('manutencao-saldo-geral'); if(!el) return;
+  const saldoInicial=parseFloat(localStorage.getItem('nx_saldo_seguro'))||0;
+  const itens=manutencoes.filter(function(m){return m.quemPaga==='seguro';}).sort(function(a,b){return (a.dataCriacao||'')>(b.dataCriacao||'')?1:-1;});
+  let acumulado=saldoInicial;
+  let rows='';
+  itens.forEach(function(m){
+    const custo=m.status==='pago'?manutTotalComMargem(m):0;
+    if(m.status==='pago') acumulado-=custo;
+    const cor=acumulado>=0?'var(--sage)':'var(--vermelha)';
+    rows+='<tr>'+
+      '<td style="padding:8px 10px;font-size:12.5px;">'+esc(manutCardTitulo(m))+'</td>'+
+      '<td style="padding:8px 10px;font-size:12px;color:var(--text3);">'+(m.dataCriacao?m.dataCriacao.split('T')[0]:'—')+'</td>'+
+      '<td style="padding:8px 10px;font-size:12px;color:var(--text3);">'+(MANUT_COLS.find(function(c){return c.id===m.status;})||{label:m.status}).label+'</td>'+
+      '<td style="padding:8px 10px;font-size:12.5px;font-weight:600;color:var(--vermelha);">'+
+        (m.status==='pago'?'− R$ '+custo.toFixed(2).replace('.',','):'—')+
+      '</td>'+
+      '<td style="padding:8px 10px;font-size:12.5px;font-weight:700;color:'+cor+';">'+
+        (m.status==='pago'?'R$ '+acumulado.toFixed(2).replace('.',','):'—')+
+      '</td>'+
+    '</tr>';
+  });
+  const saldoFinal=saldoInicial-manutencoes.filter(function(m){return m.quemPaga==='seguro'&&m.status==='pago';}).reduce(function(s,m){return s+manutTotalComMargem(m);},0);
+  const corFinal=saldoFinal>=0?'var(--sage)':'var(--vermelha)';
+  el.innerHTML=
+    '<div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;">'+
+      '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 20px;">'+
+        '<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:3px;">Saldo Inicial</div>'+
+        '<div style="font-size:20px;font-weight:700;">R$ '+saldoInicial.toFixed(2).replace('.',',')+'</div>'+
+      '</div>'+
+      '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 20px;">'+
+        '<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:3px;">Saldo Atual</div>'+
+        '<div style="font-size:20px;font-weight:700;color:'+corFinal+';">R$ '+saldoFinal.toFixed(2).replace('.',',')+'</div>'+
+      '</div>'+
+      '<div style="font-size:12px;color:var(--text3);max-width:260px;">Considera apenas manutenções com pagador <strong>Seguro EasyCover</strong> e status <strong>Pago/Concluído</strong>. Configure o saldo inicial em Configurações.</div>'+
+    '</div>'+
+    (itens.length===0?
+      '<div style="padding:24px;text-align:center;color:var(--text3);font-size:13px;">Nenhuma manutenção com pagador Seguro EasyCover registrada.</div>':
+      '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;">'+
+        '<thead><tr style="border-bottom:2px solid var(--border);">'+
+          '<th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--text3);">Manutenção</th>'+
+          '<th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--text3);">Data</th>'+
+          '<th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--text3);">Status</th>'+
+          '<th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--text3);">Custo</th>'+
+          '<th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--text3);">Saldo</th>'+
+        '</tr></thead>'+
+        '<tbody>'+rows+'</tbody>'+
+      '</table></div>'
+    );
+}
 function renderManutencaoKanban(){
   const el=document.getElementById('manutencao-kanban'); if(!el) return;
+  renderManutResumo();
   const barEl=document.getElementById('manutencao-pausadas-bar');
   const pausadas=manutencoes.filter(function(m){return m.pausado;});
   // barra de pausadas — fora do grid
@@ -5844,6 +5946,14 @@ function renderManutencaoKanban(){
 function manutTogglePausadasView(){
   manutExibirPausadas=!manutExibirPausadas;
   renderManutencaoKanban();
+}
+function switchManutTab(tab,btn){
+  manutTabAtiva=tab;
+  document.getElementById('manutencao-tab-kanban').style.display=tab==='kanban'?'':'none';
+  document.getElementById('manutencao-tab-saldo').style.display=tab==='saldo'?'':'none';
+  document.querySelectorAll('#panel-manutencao .tab-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  if(tab==='saldo') renderManutSaldoGeral();
 }
 
 // ═══════════════════ PROJETOS ═══════════════════

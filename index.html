@@ -340,6 +340,7 @@ function _validarLogin(){
         <p style="color:var(--text3);font-size:13px;margin-top:2px;">Visão geral de KPIs e projetos</p>
       </div>
       <div id="performance-body"></div>
+      <div id="perf-saldo-seguro"></div>
     </div>
 
     <!-- ── AVALIAÇÕES / SUPERHOST / CANCELAMENTOS ── -->
@@ -415,6 +416,7 @@ function _validarLogin(){
           <option value="ativas">Ativas</option>
           <option value="todas">Todas</option>
           <option value="finalizadas">Finalizadas</option>
+          <option value="pausadas">Pausadas</option>
         </select>
         <select class="form-select" style="width:auto;padding:6px 10px;font-size:12.5px;" id="task-tipo-filter" onchange="renderTasks();renderKanban();">
           <option value="todos">Todos os tipos</option>
@@ -705,8 +707,18 @@ function _validarLogin(){
         <div><h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Manutenção</h2><p style="color:var(--text3);font-size:13px;margin-top:2px;">Solicitações de manutenção e reparos</p></div>
         <button class="btn btn-rose" onclick="abrirNovaManutencao()"><i class="fa-solid fa-plus"></i> Nova Solicitação</button>
       </div>
-      <div id="manutencao-pausadas-bar"></div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;" id="manutencao-kanban"></div>
+      <div id="manutencao-resumo" style="margin-bottom:14px;"></div>
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <button class="tab-btn active" id="manut-tab-kanban" onclick="switchManutTab('kanban',this)">Kanban</button>
+        <button class="tab-btn" id="manut-tab-saldo" onclick="switchManutTab('saldo',this)">Saldo Geral</button>
+      </div>
+      <div id="manutencao-tab-kanban">
+        <div id="manutencao-pausadas-bar"></div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;" id="manutencao-kanban"></div>
+      </div>
+      <div id="manutencao-tab-saldo" style="display:none;">
+        <div id="manutencao-saldo-geral"></div>
+      </div>
     </div>
 
     <!-- ── PROJETOS ── -->
@@ -987,6 +999,13 @@ function _validarLogin(){
     <div style="display:flex;gap:8px;">
       <input type="text" class="form-input" id="settings-novo-imovel" placeholder="Ex: WC-00200 - Nome do imóvel" style="flex:1;">
       <button class="btn btn-rose" onclick="settingsAdicionarImovel()"><i class="fa-solid fa-plus"></i> Adicionar</button>
+    </div>
+
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin:14px 0 8px;">Seguro EasyCover — Saldo</div>
+    <div class="form-group">
+      <label class="form-label">Saldo atual do seguro (R$)</label>
+      <input type="number" step="0.01" class="form-input" id="s-saldo-seguro" placeholder="0,00">
+      <div style="font-size:11px;color:var(--text3);margin-top:4px;">Informe o saldo disponível atual. O sistema vai descontando automaticamente conforme manutenções pagas pelo seguro são concluídas.</div>
     </div>
 
     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin:14px 0 8px;">Hostaway (Avaliações)</div>

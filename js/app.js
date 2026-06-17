@@ -1955,7 +1955,7 @@ function renderPerformance(){
   if(_saldoEl){
     _saldoEl.innerHTML=`<div style="background:#F4F6F9;border-radius:10px;padding:16px 20px;display:inline-flex;align-items:center;gap:20px;margin-top:28px;">
       <div>
-        <div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px;">Saldo Seguro EasyCover</div>
+        <div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px;">Saldo Manutenção</div>
         <div style="font-size:22px;font-weight:700;font-family:'SF Mono','Fira Code',monospace;color:${_saldoC};">R$ ${_saldoAtual.toFixed(2).replace('.',',')}</div>
         ${_saldoIni>0?`<div style="font-size:10px;color:#9CA3AF;">de R$ ${_saldoIni.toFixed(2).replace('.',',')} iniciais · R$ ${_gastoSeg.toFixed(2).replace('.',',')} usado</div>`:'<div style="font-size:10px;color:#9CA3AF;">Configure o saldo inicial em Configurações</div>'}
       </div>

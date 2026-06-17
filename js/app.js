@@ -5815,8 +5815,8 @@ function renderManutResumo(){
   const pendentes=manutencoes.filter(function(m){return m.status!=='pago';}).length;
   const concluidas=manutencoes.filter(function(m){return m.status==='pago';}).length;
   const saldoInicial=parseFloat(localStorage.getItem('nx_saldo_seguro'))||0;
-  const gastoSeguro=manutencoes.filter(function(m){return m.quemPaga==='seguro'&&m.status==='pago';}).reduce(function(s,m){return s+manutTotalComMargem(m);},0);
-  const saldoRestante=saldoInicial-gastoSeguro;
+  const economiaConcluidas=manutencoes.filter(function(m){return m.status==='pago'&&(m.valorPago||m.valorGasto);}).reduce(function(s,m){return s+(parseFloat(m.valorPago)||0)-(parseFloat(m.valorGasto)||0);},0);
+  const saldoRestante=saldoInicial+economiaConcluidas;
   const saldoColor=saldoRestante>=0?'var(--sage)':'var(--vermelha)';
   el.innerHTML='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:4px;">'+
     '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;">'+
@@ -5832,35 +5832,40 @@ function renderManutResumo(){
       '<div style="font-size:22px;font-weight:700;color:var(--sage);">'+concluidas+'</div>'+
     '</div>'+
     '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;">'+
-      '<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:'+saldoColor+';margin-bottom:4px;">Saldo Seguro</div>'+
+      '<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:'+saldoColor+';margin-bottom:4px;">Saldo Restante</div>'+
       '<div style="font-size:18px;font-weight:700;color:'+saldoColor+';">R$ '+(saldoRestante>=0?'+':'')+saldoRestante.toFixed(2).replace('.',',')+'</div>'+
-      (saldoInicial>0?'<div style="font-size:10px;color:var(--text3);">de R$ '+saldoInicial.toFixed(2).replace('.',',')+'</div>':'')+
+      (saldoInicial>0?'<div style="font-size:10px;color:var(--text3);">base R$ '+saldoInicial.toFixed(2).replace('.',',')+'</div>':'')+
     '</div>'+
   '</div>';
 }
 function renderManutSaldoGeral(){
   const el=document.getElementById('manutencao-saldo-geral'); if(!el) return;
   const saldoInicial=parseFloat(localStorage.getItem('nx_saldo_seguro'))||0;
-  const itens=manutencoes.filter(function(m){return m.quemPaga==='seguro';}).sort(function(a,b){return (a.dataCriacao||'')>(b.dataCriacao||'')?1:-1;});
+  const itens=manutencoes.filter(function(m){return m.valorPago||m.valorGasto;}).sort(function(a,b){return (a.dataCriacao||'')>(b.dataCriacao||'')?1:-1;});
   let acumulado=saldoInicial;
   let rows='';
   itens.forEach(function(m){
-    const custo=m.status==='pago'?manutTotalComMargem(m):0;
-    if(m.status==='pago') acumulado-=custo;
-    const cor=acumulado>=0?'var(--sage)':'var(--vermelha)';
+    const pago=parseFloat(m.valorPago)||0;
+    const gasto=parseFloat(m.valorGasto)||0;
+    const economia=pago-gasto;
+    const concluida=m.status==='pago';
+    if(concluida) acumulado+=economia;
+    const cor=economia>=0?'var(--sage)':'var(--vermelha)';
+    const corSaldo=acumulado>=0?'var(--sage)':'var(--vermelha)';
     rows+='<tr>'+
       '<td style="padding:8px 10px;font-size:12.5px;">'+esc(manutCardTitulo(m))+'</td>'+
       '<td style="padding:8px 10px;font-size:12px;color:var(--text3);">'+(m.dataCriacao?m.dataCriacao.split('T')[0]:'—')+'</td>'+
+      '<td style="padding:8px 10px;font-size:12px;color:var(--text3);">'+(MANUT_PAGADOR[m.quemPaga]||m.quemPaga||'—')+'</td>'+
       '<td style="padding:8px 10px;font-size:12px;color:var(--text3);">'+(MANUT_COLS.find(function(c){return c.id===m.status;})||{label:m.status}).label+'</td>'+
-      '<td style="padding:8px 10px;font-size:12.5px;font-weight:600;color:var(--vermelha);">'+
-        (m.status==='pago'?'− R$ '+custo.toFixed(2).replace('.',','):'—')+
+      '<td style="padding:8px 10px;font-size:12.5px;font-weight:600;color:'+cor+';">'+
+        (economia>=0?'+':'')+economia.toFixed(2).replace('.',',')+
       '</td>'+
-      '<td style="padding:8px 10px;font-size:12.5px;font-weight:700;color:'+cor+';">'+
-        (m.status==='pago'?'R$ '+acumulado.toFixed(2).replace('.',','):'—')+
+      '<td style="padding:8px 10px;font-size:12.5px;font-weight:700;color:'+corSaldo+';">'+
+        (concluida?'R$ '+acumulado.toFixed(2).replace('.',','):'—')+
       '</td>'+
     '</tr>';
   });
-  const saldoFinal=saldoInicial-manutencoes.filter(function(m){return m.quemPaga==='seguro'&&m.status==='pago';}).reduce(function(s,m){return s+manutTotalComMargem(m);},0);
+  const saldoFinal=saldoInicial+manutencoes.filter(function(m){return m.status==='pago'&&(m.valorPago||m.valorGasto);}).reduce(function(s,m){return s+(parseFloat(m.valorPago)||0)-(parseFloat(m.valorGasto)||0);},0);
   const corFinal=saldoFinal>=0?'var(--sage)':'var(--vermelha)';
   el.innerHTML=
     '<div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;">'+
@@ -5872,16 +5877,17 @@ function renderManutSaldoGeral(){
         '<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:3px;">Saldo Atual</div>'+
         '<div style="font-size:20px;font-weight:700;color:'+corFinal+';">R$ '+saldoFinal.toFixed(2).replace('.',',')+'</div>'+
       '</div>'+
-      '<div style="font-size:12px;color:var(--text3);max-width:260px;">Considera apenas manutenções com pagador <strong>Seguro EasyCover</strong> e status <strong>Pago/Concluído</strong>. Configure o saldo inicial em Configurações.</div>'+
+      '<div style="font-size:12px;color:var(--text3);max-width:300px;">Considera manutenções com Valor Pago e/ou Valor Gasto preenchidos, status <strong>Pago/Concluído</strong>. Independente do pagador. Configure o saldo inicial em Configurações.</div>'+
     '</div>'+
     (itens.length===0?
-      '<div style="padding:24px;text-align:center;color:var(--text3);font-size:13px;">Nenhuma manutenção com pagador Seguro EasyCover registrada.</div>':
+      '<div style="padding:24px;text-align:center;color:var(--text3);font-size:13px;">Nenhuma manutenção com valores preenchidos registrada.</div>':
       '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;">'+
         '<thead><tr style="border-bottom:2px solid var(--border);">'+
           '<th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--text3);">Manutenção</th>'+
           '<th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--text3);">Data</th>'+
+          '<th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--text3);">Pagador</th>'+
           '<th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--text3);">Status</th>'+
-          '<th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--text3);">Custo</th>'+
+          '<th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--text3);">Economia</th>'+
           '<th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:var(--text3);">Saldo</th>'+
         '</tr></thead>'+
         '<tbody>'+rows+'</tbody>'+

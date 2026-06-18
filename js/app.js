@@ -3653,10 +3653,19 @@ async function _kvFlush(){
         let ajustou=false;
         for(const k in jg.data){
           const sv=jg.data[k], lv=local[k];
-          if(Array.isArray(sv) && sv.length>0 && Array.isArray(lv) && lv.length===0){
-            local[k]=sv;                                          // mantém a lista cheia do servidor
+          // array: servidor tem mais itens → local está incompleto (ex.: 4 padrões vs 8 reais)
+          if(Array.isArray(sv) && Array.isArray(lv) && sv.length > lv.length){
+            local[k]=sv;
             try{ localStorage.setItem(k, JSON.stringify(sv)); }catch(e){}
             ajustou=true;
+          // objeto (ex.: kpiVals): conta valores não-nulos — servidor tem mais → local está incompleto
+          } else if(sv && typeof sv==='object' && !Array.isArray(sv) && lv && typeof lv==='object' && !Array.isArray(lv)){
+            const _cnt=o=>Object.values(o).flatMap(x=>typeof x==='object'&&x?Object.values(x):[x]).filter(v=>v!==null&&v!==undefined&&v!=='').length;
+            if(_cnt(sv) > _cnt(lv)){
+              local[k]=sv;
+              try{ localStorage.setItem(k, JSON.stringify(sv)); }catch(e){}
+              ajustou=true;
+            }
           }
         }
         if(ajustou){
@@ -3695,10 +3704,17 @@ async function kvPull(){
       for(const k in j.data){
         try{
           const sv=j.data[k];
-          // Proteção: array vazio do servidor não apaga lista local com itens.
-          if(Array.isArray(sv) && sv.length===0){
-            const lr=localStorage.getItem(k);
-            if(lr){ const lv=JSON.parse(lr); if(Array.isArray(lv)&&lv.length>0) continue; }
+          // Proteção: servidor com menos dados não apaga lista local mais completa.
+          const _lr=localStorage.getItem(k);
+          if(_lr){
+            try{
+              const lv=JSON.parse(_lr);
+              if(Array.isArray(sv)&&Array.isArray(lv)&&sv.length<lv.length) continue;
+              if(sv&&typeof sv==='object'&&!Array.isArray(sv)&&lv&&typeof lv==='object'&&!Array.isArray(lv)){
+                const _cnt=o=>Object.values(o).flatMap(x=>typeof x==='object'&&x?Object.values(x):[x]).filter(v=>v!==null&&v!==undefined&&v!=='').length;
+                if(_cnt(sv)<_cnt(lv)) continue;
+              }
+            }catch(e){}
           }
           const novo=JSON.stringify(sv);
           if(localStorage.getItem(k)!==novo){ localStorage.setItem(k, novo); aplicou=true; }

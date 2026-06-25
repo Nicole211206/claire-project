@@ -3627,6 +3627,33 @@ function _kvBuildBlob(){
   SYNC_KEYS.forEach(k=>{ const v=localStorage.getItem(k); if(v!==null){ try{ blob[k]=JSON.parse(v); }catch(e){} } });
   return JSON.stringify(blob);
 }
+// ── Mesclagem por item (evita que um aparelho desatualizado reverta o que outro
+// editou, ex.: dar baixa numa tarefa). Listas mescladas por 'id'. nx_atts fica de
+// fora (tem demandas aninhadas por índice) e segue a proteção por tamanho. ──
+const _NO_MERGE = new Set(['nx_atts']);
+function _ehListaComId(arr){ return Array.isArray(arr) && arr.every(o=>o && typeof o==='object' && o.id!==undefined && o.id!==null); }
+// 3-vias: base = última versão que ESTE aparelho sincronizou; local = agora;
+// server = KV atual. Mantém a versão de quem realmente mudou o item; respeita
+// exclusões só quando o outro lado não mexeu no item. Nunca dropa item criado/editado.
+function _mergeById(base, local, server){
+  server = Array.isArray(server)?server:[];
+  local  = Array.isArray(local)?local:[];
+  const bMap=new Map((Array.isArray(base)?base:[]).map(o=>[o.id, JSON.stringify(o)]));
+  const sMap=new Map(server.map(o=>[o.id,o]));
+  const lMap=new Map(local.map(o=>[o.id,o]));
+  const decide=(id)=>{
+    const inS=sMap.has(id), inL=lMap.has(id), inB=bMap.has(id);
+    const s=sMap.get(id), l=lMap.get(id), bJson=bMap.get(id);
+    if(inL && inS){ const localChanged = !inB || JSON.stringify(l)!==bJson; return localChanged ? l : s; }
+    if(inL && !inS){ if(!inB) return l; return (JSON.stringify(l)!==bJson) ? l : undefined; } // server apagou
+    if(!inL && inS){ if(!inB) return s; return (JSON.stringify(s)!==bJson) ? s : undefined; } // local apagou
+    return undefined;
+  };
+  const out=[], used=new Set();
+  for(const o of server){ if(used.has(o.id))continue; used.add(o.id); const d=decide(o.id); if(d!==undefined) out.push(d); }
+  for(const o of local){  if(used.has(o.id))continue; used.add(o.id); const d=decide(o.id); if(d!==undefined) out.push(d); }
+  return out;
+}
 // Envia ao KV SOMENTE se houver mudança real (deduplicado). Chamado por um intervalo espaçado.
 async function _kvFlush(){
   const s=window.CLAIRE_SYNC||{};
@@ -3650,14 +3677,25 @@ async function _kvFlush(){
       const jg=await rg.json();
       if(jg && jg.data){
         const local=JSON.parse(body);
+        let baseBlob=null; try{ baseBlob = _kvLastPushed ? JSON.parse(_kvLastPushed) : null; }catch(e){ baseBlob=null; }
         let ajustou=false;
         for(const k in jg.data){
           const sv=jg.data[k], lv=local[k];
-          // array: servidor tem mais itens → local está incompleto (ex.: 4 padrões vs 8 reais)
-          if(Array.isArray(sv) && Array.isArray(lv) && sv.length > lv.length){
-            local[k]=sv;
-            try{ localStorage.setItem(k, JSON.stringify(sv)); }catch(e){}
-            ajustou=true;
+          if(Array.isArray(sv) && Array.isArray(lv)){
+            // 1) vazio NUNCA apaga cheio (trava anti-perda preservada)
+            if(lv.length===0 && sv.length>0){
+              local[k]=sv; try{ localStorage.setItem(k, JSON.stringify(sv)); }catch(e){} ajustou=true;
+            // 2) listas com 'id' → mesclagem por item (3-vias): preserva o que outro
+            //    aparelho editou e impede este (desatualizado) de reverter.
+            } else if(_ehListaComId(sv) && _ehListaComId(lv) && !_NO_MERGE.has(k)){
+              const merged=_mergeById(baseBlob?baseBlob[k]:null, lv, sv);
+              if(JSON.stringify(merged)!==JSON.stringify(lv)){
+                local[k]=merged; try{ localStorage.setItem(k, JSON.stringify(merged)); }catch(e){} ajustou=true;
+              }
+            // 3) demais arrays: servidor com mais itens → local incompleto, adota servidor
+            } else if(sv.length > lv.length){
+              local[k]=sv; try{ localStorage.setItem(k, JSON.stringify(sv)); }catch(e){} ajustou=true;
+            }
           // objeto (ex.: kpiVals): conta valores não-nulos — servidor tem mais → local está incompleto
           } else if(sv && typeof sv==='object' && !Array.isArray(sv) && lv && typeof lv==='object' && !Array.isArray(lv)){
             const _cnt=o=>Object.values(o).flatMap(x=>typeof x==='object'&&x?Object.values(x):[x]).filter(v=>v!==null&&v!==undefined&&v!=='').length;

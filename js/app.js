@@ -4281,9 +4281,9 @@ function abrirNovoImovel(){
   const im={
     id:Date.now(),nome:'',endereco:'',status:'contrato',dataCriacao:new Date().toISOString(),
     proprietarioNome:'',proprietarioTel:'',comissaoWecare:20,comissaoBase:'liquida',linkRelatorio:'',plataformas:[],
-    quartos:'',banheiros:'',camas:[],salas:1,cozinha:true,lavanderia:false,areaExterna:false,
+    quartos:'',banheiros:'',camas:[],
     seguroEasyCover:false,kitAmenities:false,internetClaro:false,ecohost:false,fechaduraEletronica:false,
-    ops:{fotos:{data:'',responsavel:'',hora:''},limpeza:{data:'',responsavel:'',hora:''},vistoria:{data:'',responsavel:'',hora:'',comodos:[],aptaOperacao:null}},
+    ops:{fotos:{data:'',responsavel:'',hora:''},limpeza:{data:'',responsavel:'',hora:''},vistoria:{data:'',responsavel:'',hora:''}},
     custos:[],margemWecare:15,compras:{},comentarios:{},
     defLimpeza:{responsavel:''},
     defEnxoval:{tipo:'',fornecedor:'',valorAluguelMensal:'',valorSetupAluguel:''},
@@ -4389,14 +4389,7 @@ function obAbaDados(im){
     plats.map(p=>'<label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;"><input type="checkbox" '+(im.plataformas&&im.plataformas.includes(p)?'checked':'')+' onchange="obTogglePlat('+im.id+',\''+p+'\',this.checked)"> '+platLabels[p]+'</label>').join('')+
     '</div></div>'+
     '<div class="form-row"><div class="form-group"><label class="form-label">Quartos</label><input type="number" class="form-input" value="'+(im.quartos||'')+'" placeholder="0" oninput="salvarCampoImovel('+im.id+',\'quartos\',this.value)"></div>'+
-    '<div class="form-group"><label class="form-label">Banheiros</label><input type="number" class="form-input" value="'+(im.banheiros||'')+'" placeholder="0" oninput="salvarCampoImovel('+im.id+',\'banheiros\',this.value)"></div>'+
-    '<div class="form-group"><label class="form-label">Salas</label><input type="number" class="form-input" value="'+(im.salas!=null?im.salas:1)+'" placeholder="0" min="0" oninput="salvarCampoImovel('+im.id+',\'salas\',parseInt(this.value)||0)"></div></div>'+
-    '<div class="form-group"><label class="form-label">Cômodos adicionais</label>'+
-    '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:4px;">'+
-    '<label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;"><input type="checkbox" '+(im.cozinha!==false?'checked':'')+' onchange="salvarCampoImovel('+im.id+',\'cozinha\',this.checked)"> Cozinha</label>'+
-    '<label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;"><input type="checkbox" '+(im.lavanderia?'checked':'')+' onchange="salvarCampoImovel('+im.id+',\'lavanderia\',this.checked)"> Lavanderia</label>'+
-    '<label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;"><input type="checkbox" '+(im.areaExterna?'checked':'')+' onchange="salvarCampoImovel('+im.id+',\'areaExterna\',this.checked)"> Área Externa</label>'+
-    '</div></div>'+
+    '<div class="form-group"><label class="form-label">Banheiros</label><input type="number" class="form-input" value="'+(im.banheiros||'')+'" placeholder="0" oninput="salvarCampoImovel('+im.id+',\'banheiros\',this.value)"></div></div>'+
     '<div class="form-group"><label class="form-label">Camas</label>'+
     '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;" id="ob-camas-list">'+
     (im.camas||[]).map((c,i)=>'<span style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:3px 10px;font-size:12px;display:flex;align-items:center;gap:6px;">'+c.qtd+'x '+c.tipo+' <button onclick="obRemoverCama('+im.id+','+i+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;">&#10005;</button></span>').join('')+
@@ -4457,117 +4450,31 @@ function obAbaDefinicoes(im){
   return html;
 }
 
-function obGetComodos(im){
-  const list=[];
-  const nq=parseInt(im.quartos)||0;
-  for(let i=1;i<=nq;i++) list.push(nq>1?'Quarto '+i:'Quarto');
-  const ns=parseInt(im.salas!=null?im.salas:1)||0;
-  for(let i=1;i<=ns;i++) list.push(ns>1?'Sala '+i:'Sala');
-  if(im.cozinha!==false) list.push('Cozinha');
-  if(im.lavanderia) list.push('Lavanderia');
-  if(im.areaExterna) list.push('Área Externa');
-  return list;
-}
-
 function obAbaOperacional(im){
   const blocos=[
     {key:'fotos',label:'Sessão de Fotos',icon:'fa-camera'},
     {key:'limpeza',label:'Primeira Limpeza',icon:'fa-broom'},
+    {key:'vistoria',label:'Vistoria',icon:'fa-clipboard-check'},
   ];
-  let html='<div style="display:grid;gap:14px;">';
-  // Fotos e Limpeza — igual ao anterior
-  blocos.forEach(b=>{
-    const op=im.ops&&im.ops[b.key]||{data:'',responsavel:'',hora:'',custo:''};
-    html+='<div class="card"><div class="card-header"><div class="metric-icon sage" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-solid '+b.icon+'"></i></div><div class="card-title">'+b.label+'</div></div>'+
-      '<div class="card-body"><div class="form-row">'+
-      '<div class="form-group"><label class="form-label">Data</label><input type="date" class="form-input" value="'+(op.data||'')+'" onchange="obSalvarOps('+im.id+',\''+b.key+'\',\'data\',this.value)"></div>'+
-      '<div class="form-group"><label class="form-label">Responsável</label><input type="text" class="form-input" value="'+esc(op.responsavel||'')+'" placeholder="Nome..." oninput="obSalvarOps('+im.id+',\''+b.key+'\',\'responsavel\',this.value)"></div>'+
-      '<div class="form-group"><label class="form-label">Hora</label><input type="time" class="form-input" value="'+(op.hora||'')+'" onchange="obSalvarOps('+im.id+',\''+b.key+'\',\'hora\',this.value)"></div>'+
-      '</div>'+
-      '<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">'+
-      '<label style="font-size:11px;color:var(--text3);min-width:90px;">Custo (R$):</label>'+
-      '<input type="number" class="form-input" style="width:100px;padding:5px 8px;font-size:12px;" placeholder="0,00" value="'+(op.custo||'')+'" oninput="obSalvarOpsCusto('+im.id+',\''+b.key+'\',this.value)">'+
-      '</div>'+
-      '<button class="btn btn-sm" style="margin-top:8px;" onclick="obAdicionarTarefa('+im.id+',\''+b.label+'\',\''+b.key+'\')"><i class="fa-solid fa-plus"></i> Adicionar à agenda</button>'+
-      '<button class="btn btn-sm" onclick="obCriarEventoGCal('+im.id+',\''+b.key+'\')" style="font-size:10px;padding:3px 8px;margin-top:4px;"><i class="fa-brands fa-google"></i> Google Agenda</button>'+
-      '</div></div>';
-  });
-
-  // Vistoria
-  const vis=im.ops&&im.ops.vistoria||{data:'',responsavel:'',hora:'',custo:'',comodos:[],aptaOperacao:null};
-  const comodos=obGetComodos(im);
-  const storedComodos=vis.comodos||[];
-
-  html+='<div class="card"><div class="card-header"><div class="metric-icon sage" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-solid fa-clipboard-check"></i></div><div class="card-title">Vistoria</div></div>'+
-    '<div class="card-body">'+
-    '<div class="form-row">'+
-    '<div class="form-group"><label class="form-label">Data</label><input type="date" class="form-input" value="'+(vis.data||'')+'" onchange="obSalvarOps('+im.id+',\'vistoria\',\'data\',this.value)"></div>'+
-    '<div class="form-group"><label class="form-label">Responsável</label><input type="text" class="form-input" value="'+esc(vis.responsavel||'')+'" placeholder="Nome..." oninput="obSalvarOps('+im.id+',\'vistoria\',\'responsavel\',this.value)"></div>'+
-    '<div class="form-group"><label class="form-label">Hora</label><input type="time" class="form-input" value="'+(vis.hora||'')+'" onchange="obSalvarOps('+im.id+',\'vistoria\',\'hora\',this.value)"></div>'+
-    '</div>'+
-    '<div style="display:flex;align-items:center;gap:8px;margin-top:6px;margin-bottom:12px;">'+
-    '<label style="font-size:11px;color:var(--text3);min-width:90px;">Custo (R$):</label>'+
-    '<input type="number" class="form-input" style="width:100px;padding:5px 8px;font-size:12px;" placeholder="0,00" value="'+(vis.custo||'')+'" oninput="obSalvarOpsCusto('+im.id+',\'vistoria\',this.value)">'+
-    '</div>';
-
-  if(comodos.length===0){
-    html+='<div style="font-size:12px;color:var(--text3);padding:10px;background:var(--bg3);border-radius:var(--r-sm);">Defina os cômodos na aba <strong>Dados</strong> (quartos, salas, cozinha, etc.) para registrar a vistoria por cômodo.</div>';
-  } else {
-    html+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);letter-spacing:0.5px;margin-bottom:8px;">Cômodos</div>';
-    comodos.forEach(function(nome,idx){
-      const cd=storedComodos.find(function(c){return c.nome===nome;})||{nome:nome,videos:[],irregularidade:''};
-      const videos=cd.videos||[];
-      html+='<div style="border:1px solid var(--border);border-radius:var(--r-sm);padding:12px;margin-bottom:8px;">'+
-        '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;"><i class="fa-solid fa-door-open" style="color:var(--text3);margin-right:6px;font-size:11px;"></i>'+esc(nome)+'</div>'+
-        '<div style="margin-bottom:8px;">'+
-        '<div style="font-size:11px;color:var(--text3);margin-bottom:5px;">Vídeos (máx. 3)</div>'+
-        '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">'+
-        videos.map(function(v,vi){
-          const isVid=v.startsWith('data:video');
-          return '<div style="position:relative;width:72px;height:72px;border-radius:var(--r-sm);overflow:hidden;background:#000;border:1px solid var(--border);">'+
-            (isVid?'<video src="'+v+'" style="width:100%;height:100%;object-fit:cover;" muted></video>':'<img src="'+v+'" style="width:100%;height:100%;object-fit:cover;">') +
-            '<button onclick="obRemoverVideoVistoria('+im.id+','+idx+','+vi+')" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);border:none;border-radius:50%;width:18px;height:18px;color:#fff;font-size:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;"><i class="fa-solid fa-xmark"></i></button>'+
-            '</div>';
-        }).join('')+
-        (videos.length<3?'<label style="width:72px;height:72px;border:1.5px dashed var(--border2);border-radius:var(--r-sm);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;font-size:10px;color:var(--text3);gap:4px;">'+
-          '<i class="fa-solid fa-video" style="font-size:16px;"></i>Adicionar'+
-          '<input type="file" accept="video/*,image/*" style="display:none;" onchange="obUploadVideoVistoria('+im.id+','+idx+',event)"></label>':'')+
-        '</div></div>'+
-        '<div class="form-group" style="margin-bottom:0;">'+
-        '<label class="form-label">Irregularidades</label>'+
-        '<textarea class="form-input" rows="2" style="resize:none;font-size:12px;" placeholder="Descreva problemas encontrados neste cômodo..." oninput="obSalvarIrregularidade('+im.id+','+idx+',this.value)">'+esc(cd.irregularidade||'')+'</textarea>'+
+  return '<div style="display:grid;gap:14px;">'+
+    blocos.map(b=>{
+      const op=im.ops&&im.ops[b.key]||{data:'',responsavel:'',hora:'',custo:''};
+      return '<div class="card"><div class="card-header"><div class="metric-icon sage" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-solid '+b.icon+'"></i></div><div class="card-title">'+b.label+'</div></div>'+
+        '<div class="card-body"><div class="form-row">'+
+        '<div class="form-group"><label class="form-label">Data</label><input type="date" class="form-input" value="'+(op.data||'')+'" onchange="obSalvarOps('+im.id+',\''+b.key+'\',\'data\',this.value)"></div>'+
+        '<div class="form-group"><label class="form-label">Responsável</label><input type="text" class="form-input" value="'+esc(op.responsavel||'')+'" placeholder="Nome..." oninput="obSalvarOps('+im.id+',\''+b.key+'\',\'responsavel\',this.value)"></div>'+
+        '<div class="form-group"><label class="form-label">Hora</label><input type="time" class="form-input" value="'+(op.hora||'')+'" onchange="obSalvarOps('+im.id+',\''+b.key+'\',\'hora\',this.value)"></div>'+
+        '</div>'+
+        '<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">'+
+        '<label style="font-size:11px;color:var(--text3);min-width:90px;">Custo (R$):</label>'+
+        '<input type="number" class="form-input" style="width:100px;padding:5px 8px;font-size:12px;" placeholder="0,00" value="'+(op.custo||'')+'" oninput="obSalvarOpsCusto('+im.id+',\''+b.key+'\',this.value)">'+
+        '</div>'+
+        '<button class="btn btn-sm" style="margin-top:8px;" onclick="obAdicionarTarefa('+im.id+',\''+b.label+'\',\''+b.key+'\')"><i class="fa-solid fa-plus"></i> Adicionar à agenda</button>'+
+        '<button class="btn btn-sm" onclick="obCriarEventoGCal('+im.id+',\''+b.key+'\')" style="font-size:10px;padding:3px 8px;margin-top:4px;"><i class="fa-brands fa-google"></i> Google Agenda</button>'+
         '</div></div>';
-    });
-
-    // Apto para operação
-    const apta=vis.aptaOperacao;
-    html+='<div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px;">'+
-      '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px;">Imóvel apto para operação?</div>'+
-      '<div style="display:flex;gap:8px;">'+
-      '<button class="btn btn-sm'+(apta==='sim'?' btn-sage':'')+'" onclick="obSalvarAptaOperacao('+im.id+',\'sim\')"><i class="fa-solid fa-check"></i> Sim</button>'+
-      '<button class="btn btn-sm'+(apta==='nao'?' btn-rose':'')+'" onclick="obSalvarAptaOperacao('+im.id+',\'nao\')"><i class="fa-solid fa-xmark"></i> Não</button>'+
-      '</div>'+
-      (apta?'<div style="margin-top:6px;font-size:12px;color:'+(apta==='sim'?'var(--sage)':'var(--vermelha)')+';">'+(apta==='sim'?'✓ Apto para operar':'✗ Não apto — verifique as irregularidades')+'</div>':'')+
-      '</div>';
-
-    // Botão gerar manutenções
-    const temIrreg=comodos.some(function(nome){
-      const cd=(vis.comodos||[]).find(function(c){return c.nome===nome;});
-      return cd&&cd.irregularidade&&cd.irregularidade.trim();
-    });
-    if(temIrreg){
-      html+='<button class="btn btn-sm" style="margin-top:10px;background:var(--peach);color:#fff;border-color:var(--peach);" onclick="obGerarManutencoesVistoria('+im.id+')">'+
-        '<i class="fa-solid fa-wrench"></i> Gerar manutenções das irregularidades</button>';
-    }
-  }
-
-  html+='<div style="display:flex;gap:8px;margin-top:10px;">'+
-    '<button class="btn btn-sm" onclick="obAdicionarTarefa('+im.id+',\'Vistoria\',\'vistoria\')"><i class="fa-solid fa-plus"></i> Adicionar à agenda</button>'+
-    '<button class="btn btn-sm" onclick="obCriarEventoGCal('+im.id+',\'vistoria\')" style="font-size:10px;padding:3px 8px;"><i class="fa-brands fa-google"></i> Google Agenda</button>'+
+    }).join('')+
+    obRenderComentarios(im,'operacional')+
     '</div>';
-
-  html+='</div></div>'+obRenderComentarios(im,'operacional')+'</div>';
-  return html;
 }
 
 function obCriarEventoGCal(id, bloco) {
@@ -4578,98 +4485,6 @@ function obCriarEventoGCal(id, bloco) {
   const titulo = (labels[bloco] || bloco) + ' — ' + (im.nome || 'Imóvel');
   const desc = 'Responsável: ' + (op.responsavel || '—') + '\nImóvel: ' + (im.endereco || '—');
   criarEventoGCal(titulo, op.data, op.hora || '09:00', 90, desc);
-}
-
-function obUploadVideoVistoria(id, comodoIdx, event){
-  const files=event.target.files; if(!files||!files.length) return;
-  const im=imoveis.find(x=>x.id===id); if(!im) return;
-  if(!im.ops) im.ops={};
-  if(!im.ops.vistoria) im.ops.vistoria={data:'',responsavel:'',hora:'',custo:'',comodos:[],aptaOperacao:null};
-  const comodos=obGetComodos(im);
-  const nome=comodos[comodoIdx]; if(!nome) return;
-  let cd=im.ops.vistoria.comodos.find(c=>c.nome===nome);
-  if(!cd){ cd={nome:nome,videos:[],irregularidade:''}; im.ops.vistoria.comodos.push(cd); }
-  if((cd.videos||[]).length>=3){ showToast('Máximo de 3 vídeos por cômodo.','peach'); return; }
-  const file=files[0];
-  const isVideo=file.type.startsWith('video/');
-  const loader=isVideo?_lerArquivoBase64:_lerImagemReduzida;
-  loader(file,function(dataUrl){
-    cd.videos.push(dataUrl);
-    if(typeof saveAll==='function') saveAll();
-    const im2=imoveis.find(x=>x.id===id);
-    if(im2) obRenderAba(im2);
-  });
-  event.target.value='';
-}
-
-function obRemoverVideoVistoria(id, comodoIdx, videoIdx){
-  const im=imoveis.find(x=>x.id===id); if(!im) return;
-  const comodos=obGetComodos(im);
-  const nome=comodos[comodoIdx]; if(!nome) return;
-  const cd=im.ops&&im.ops.vistoria&&im.ops.vistoria.comodos&&im.ops.vistoria.comodos.find(c=>c.nome===nome);
-  if(!cd||!cd.videos) return;
-  cd.videos.splice(videoIdx,1);
-  if(typeof saveAll==='function') saveAll();
-  obRenderAba(im);
-}
-
-function obSalvarIrregularidade(id, comodoIdx, texto){
-  const im=imoveis.find(x=>x.id===id); if(!im) return;
-  if(!im.ops) im.ops={};
-  if(!im.ops.vistoria) im.ops.vistoria={data:'',responsavel:'',hora:'',custo:'',comodos:[],aptaOperacao:null};
-  const comodos=obGetComodos(im);
-  const nome=comodos[comodoIdx]; if(!nome) return;
-  let cd=im.ops.vistoria.comodos.find(c=>c.nome===nome);
-  if(!cd){ cd={nome:nome,videos:[],irregularidade:''}; im.ops.vistoria.comodos.push(cd); }
-  cd.irregularidade=texto;
-  if(typeof saveAll==='function') saveAll();
-}
-
-function obSalvarAptaOperacao(id, valor){
-  const im=imoveis.find(x=>x.id===id); if(!im) return;
-  if(!im.ops) im.ops={};
-  if(!im.ops.vistoria) im.ops.vistoria={data:'',responsavel:'',hora:'',custo:'',comodos:[],aptaOperacao:null};
-  im.ops.vistoria.aptaOperacao=valor;
-  if(typeof saveAll==='function') saveAll();
-  obRenderAba(im);
-}
-
-function obGerarManutencoesVistoria(id){
-  const im=imoveis.find(x=>x.id===id); if(!im) return;
-  const vis=im.ops&&im.ops.vistoria;
-  if(!vis||!vis.comodos) return;
-  let criadas=0;
-  vis.comodos.forEach(function(cd){
-    if(!cd.irregularidade||!cd.irregularidade.trim()) return;
-    const m={
-      id:Date.now()+criadas,
-      status:'solicitacao',pausado:false,
-      origem:'equipe',
-      imovelNome:im.nome||im.endereco||'Imóvel',
-      dataSolicitacao:new Date().toISOString().split('T')[0],
-      dataPrazo:'',
-      tipo:'dano',
-      itens:[{desc:cd.irregularidade.trim(),valor:0}],
-      margemPercent:20,fotos:[],
-      quemPaga:'proprietario',
-      fornecedor:{nome:'',contato:'',email:'',pix:''},
-      precisaComprar:false,linksItens:[],ondeEntregar:'',obsCompra:'',pagarFornecedor:false,
-      pagFornecedor:{valor:0,nome:'',email:'',pix:'',cpfCnpj:'',dataPagamento:'',fornCadId:null},
-      repassarHostaway:false,valorPago:0,pagoPor:'proprietario',valorGasto:0,
-      obs:'Vistoria — '+cd.nome,
-      tarefasManut:[],responsavel:'',
-      dataCriacao:new Date().toISOString()
-    };
-    manutencoes.unshift(m);
-    criadas++;
-  });
-  if(criadas>0){
-    if(typeof saveAll==='function') saveAll();
-    if(typeof renderManutencaoKanban==='function') renderManutencaoKanban();
-    showToast(criadas+' manutenção(ões) criada(s) com sucesso!','sage');
-  } else {
-    showToast('Nenhuma irregularidade encontrada.','peach');
-  }
 }
 
 function obAbaCustos(im){

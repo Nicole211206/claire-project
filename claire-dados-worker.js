@@ -340,6 +340,31 @@ async function handleApi(request, url, env, cors) {
       }
     }
 
+    // ── /api/manutencoes ──────────────────────────────────────
+    if (resource === 'manutencoes' && method === 'POST' && !param1) {
+      const body = await request.json();
+      if (!body.imovelNome) return jsonResp({ error: 'campo imovelNome obrigatorio' }, cors, 400);
+      let manutencoes = state.nx_manutencoes || [];
+      const m = {
+        id: Date.now(), status: 'solicitacao', pausado: false, origem: 'onboarding',
+        imovelNome: body.imovelNome,
+        dataSolicitacao: body.dataSolicitacao || new Date().toISOString().split('T')[0],
+        dataPrazo: '', tipo: 'reparo',
+        itens: [{ desc: body.nome || 'Manutenção', valor: body.valor || 0 }],
+        margemPercent: 20, fotos: [], quemPaga: 'proprietario',
+        fornecedor: { nome: '', contato: '', email: '', pix: '' },
+        precisaComprar: false, linksItens: [], ondeEntregar: '', obsCompra: '',
+        pagarFornecedor: false,
+        pagFornecedor: { valor: 0, nome: '', email: '', pix: '', cpfCnpj: '', dataPagamento: '', fornCadId: null },
+        repassarHostaway: false, valorPago: 0, pagoPor: 'proprietario', valorGasto: 0,
+        obs: body.obs || '', tarefasManut: [], responsavel: '', dataCriacao: new Date().toISOString(),
+      };
+      manutencoes.unshift(m);
+      state.nx_manutencoes = manutencoes;
+      await kvSave(env, state);
+      return jsonResp({ ok: true, manutencao: m }, cors, 201);
+    }
+
     return jsonResp({ error: 'rota nao encontrada' }, cors, 404);
   } catch (e) {
     return jsonResp({ error: String(e && e.message || e) }, cors, 500);

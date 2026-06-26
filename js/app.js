@@ -29,27 +29,29 @@ function _ksv(){if(!kpiSubVals[kpiPeriodo])kpiSubVals[kpiPeriodo]={};return kpiS
 function setKpiPeriodo(mes){kpiPeriodo=mes;renderKPIs();if(typeof saveAll==='function')saveAll();}
 let imoveis=[];
 let imovelAtivo=null;
-let _obImoveisFetched=false;
+let _obData=null; // null=não buscado ainda, []=buscado
+function _renderObList(){
+  const el=document.getElementById('ob-onboarding-list');
+  if(!el||!Array.isArray(_obData))return;
+  const lista=_obData;
+  const calcDias=im=>{const fim=im.dataAtivacao?new Date(im.dataAtivacao):new Date();return Math.max(0,Math.round((fim-new Date(im.dataCriacao))/(1000*60*60*24)));};
+  const ativos=lista.filter(im=>im.status==='ativo'&&im.dataAtivacao&&im.dataCriacao&&calcDias(im)>=0);
+  const emAnd=lista.filter(im=>im.status!=='ativo'&&im.dataCriacao&&calcDias(im)>=0);
+  if(!ativos.length&&!emAnd.length){el.innerHTML='<div style="font-size:12px;color:var(--text3);text-align:center;padding:8px;">Nenhum imóvel no módulo de Onboarding ainda.</div>';return;}
+  const med=ativos.length?(ativos.reduce((s,im)=>s+calcDias(im),0)/ativos.length).toFixed(1):null;
+  el.innerHTML=
+    (ativos.length?'<div style="font-size:10.5px;font-weight:700;color:var(--sage);margin-bottom:4px;">✓ Ativados</div>':'')+
+    ativos.map(im=>{const d=calcDias(im);return'<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);"><span style="font-size:12.5px;">'+esc(im.nome||'')+'</span><span style="font-size:12.5px;font-weight:600;color:'+(d<=10?'var(--sage)':d<=12?'var(--amarela)':'var(--vermelha)')+'">'+d+' dias</span></div>';}).join('')+
+    (emAnd.length?'<div style="font-size:10.5px;font-weight:700;color:var(--peach);margin-top:8px;margin-bottom:4px;">⏳ Em andamento</div>':'')+
+    emAnd.map(im=>{const d=calcDias(im);return'<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);"><span style="font-size:12.5px;color:var(--text2);">'+esc(im.nome||'')+'</span><span style="font-size:12px;color:var(--text3);">'+d+' dias corridos</span></div>';}).join('')+
+    (med?'<div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:4px;border-top:2px solid var(--border);"><span style="font-size:12px;font-weight:700;">Média (ativados)</span><span style="font-size:14px;font-weight:700;color:var(--sage);">'+med+' dias</span></div>':'');
+}
 function _fetchObImoveis(){
-  if(_obImoveisFetched)return;
-  _obImoveisFetched=true;
+  if(_obData!==null){_renderObList();return;}
+  _obData=[];
   fetch('https://wecare-onboarding.nicole-0e7.workers.dev/onboarding-stats')
-    .then(r=>r.json()).then(d=>{
-      const lista=Array.isArray(d.imoveis)?d.imoveis:[];
-      const el=document.getElementById('ob-onboarding-list');
-      if(!el)return;
-      const calcDias=im=>{const fim=im.dataAtivacao?new Date(im.dataAtivacao):new Date();return Math.max(0,Math.round((fim-new Date(im.dataCriacao))/(1000*60*60*24)));};
-      const ativos=lista.filter(im=>im.status==='ativo'&&im.dataAtivacao&&im.dataCriacao&&calcDias(im)>=0);
-      const emAnd=lista.filter(im=>im.status!=='ativo'&&im.dataCriacao&&calcDias(im)>=0);
-      if(!ativos.length&&!emAnd.length){el.innerHTML='<div style="font-size:12px;color:var(--text3);text-align:center;padding:8px;">Nenhum imóvel no módulo de Onboarding ainda.</div>';return;}
-      const med=ativos.length?(ativos.reduce((s,im)=>s+calcDias(im),0)/ativos.length).toFixed(1):null;
-      el.innerHTML=
-        (ativos.length?'<div style="font-size:10.5px;font-weight:700;color:var(--sage);margin-bottom:4px;">✓ Ativados</div>':'')+
-        ativos.map(im=>{const d=calcDias(im);return'<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);"><span style="font-size:12.5px;">'+esc(im.nome||'')+'</span><span style="font-size:12.5px;font-weight:600;color:'+(d<=10?'var(--sage)':d<=12?'var(--amarela)':'var(--vermelha)')+'">'+d+' dias</span></div>';}).join('')+
-        (emAnd.length?'<div style="font-size:10.5px;font-weight:700;color:var(--peach);margin-top:8px;margin-bottom:4px;">⏳ Em andamento</div>':'')+
-        emAnd.map(im=>{const d=calcDias(im);return'<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);"><span style="font-size:12.5px;color:var(--text2);">'+esc(im.nome||'')+'</span><span style="font-size:12px;color:var(--text3);">'+d+' dias corridos</span></div>';}).join('')+
-        (med?'<div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:4px;border-top:2px solid var(--border);"><span style="font-size:12px;font-weight:700;">Média (ativados)</span><span style="font-size:14px;font-weight:700;color:var(--sage);">'+med+' dias</span></div>':'');
-    }).catch(()=>{});
+    .then(r=>r.json()).then(d=>{_obData=Array.isArray(d.imoveis)?d.imoveis:[];_renderObList();})
+    .catch(()=>{_obData=[];_renderObList();});
 }
 let selNivelIdx=0;
 let comprasList=[];

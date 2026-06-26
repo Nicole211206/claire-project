@@ -3672,9 +3672,11 @@ async function _kvFlush(){
     // está VAZIO mas o servidor está CHEIO, mantém a versão do servidor (não
     // apaga). As demais mudanças locais legítimas (ex.: uma manutenção nova)
     // continuam no envio normalmente. Assim nada é apagado e nada deixa de subir.
+    let _leuServidor=false;   // só envia depois de LER o servidor (senão adia)
     try{
       const rg=await fetch(s.url.replace(/\/$/,'')+'/load?token='+encodeURIComponent(s.token||''));
       const jg=await rg.json();
+      _leuServidor=true;
       if(jg && jg.data){
         const local=JSON.parse(body);
         let baseBlob=null; try{ baseBlob = _kvLastPushed ? JSON.parse(_kvLastPushed) : null; }catch(e){ baseBlob=null; }
@@ -3712,7 +3714,11 @@ async function _kvFlush(){
           body=JSON.stringify(local);                             // envia o blob corrigido (listas do servidor + mudanças locais)
         }
       }
-    }catch(e){ /* sem rede pra checar: segue o envio normal abaixo */ }
+    }catch(e){ /* falha ao ler o servidor */ }
+    // ENDURECIMENTO: se NÃO conseguiu ler o servidor agora, NÃO envia às cegas
+    // (evita sobrescrever com dado possivelmente desatualizado). Mantém _kvDirty
+    // e tenta de novo no próximo ciclo (a cada 1 min).
+    if(!_leuServidor){ return; }
     const r=await fetch(s.url.replace(/\/$/,'')+'/save?token='+encodeURIComponent(s.token||''),{
       method:'POST', headers:{'Content-Type':'application/json'}, body:body
     });
@@ -6591,6 +6597,33 @@ setInterval(function(){
 }, 60000);
 window.addEventListener('beforeunload', function(){ saveAll(); _kvFlush(); }); // sempre salva ao fechar
 window.addEventListener('visibilitychange', function(){ if(document.visibilityState==='hidden'){ saveAll(); _kvFlushThrottled(); } }); // troca de aba respeita throttle
+
+// ── AUTO-ATUALIZAÇÃO ──
+// Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
+// antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
+// recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
+const APP_VERSION = 69;
+let _verCheckBusy=false;
+async function _checkAppVersion(){
+  if(_verCheckBusy) return; _verCheckBusy=true;
+  try{
+    const r=await fetch('index.html?_t='+Date.now(), {cache:'no-store'});
+    const html=await r.text();
+    const m=html.match(/app\.js\?v=(\d+)/);
+    if(m){
+      const publicada=parseInt(m[1]);
+      if(publicada>APP_VERSION && sessionStorage.getItem('_verReload')!==String(publicada)){
+        sessionStorage.setItem('_verReload', String(publicada)); // 1x por versão/sessão → sem loop
+        try{ if(typeof saveAll==='function') saveAll(); }catch(e){}
+        try{ await _kvFlush(); }catch(e){}                        // garante que o que está aberto suba antes
+        try{ if(typeof showToast==='function') showToast('Atualizando para a nova versão...','sage'); }catch(e){}
+        setTimeout(function(){ location.reload(); }, 1000);
+      }
+    }
+  }catch(e){ /* offline: tenta depois */ }
+  finally{ _verCheckBusy=false; }
+}
+setInterval(_checkAppVersion, 90000); // checa a nova versão a cada 1,5 min
 // ═══════════════════ ACOMPANHAMENTO — ABAS ═══════════════════
 let _acompTab = 'avaliacoes';
 

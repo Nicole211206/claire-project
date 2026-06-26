@@ -1,0 +1,7 @@
+name = "claire-dados"
+compatibility_date = "2026-06-01"
+main = "claire-dados-worker.js"
+
+[[kv_namespaces]]
+binding = "CLAIRE_KV"
+id = "730daecb06fb4d53b8ccd0668eaebe29"

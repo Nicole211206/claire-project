@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Restaurar Claire</title>
+<style>
+  body { font-family: sans-serif; background: #1a1025; color: #e0d6f0; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+  .box { background: #2a1e3a; border-radius: 16px; padding: 40px; max-width: 500px; width: 90%; text-align: center; }
+  h1 { color: #c084fc; margin-bottom: 8px; }
+  p { color: #a78bca; margin-bottom: 24px; }
+  button { background: #7c3aed; color: white; border: none; border-radius: 10px; padding: 14px 32px; font-size: 16px; font-weight: 700; cursor: pointer; margin: 8px; }
+  button:hover { background: #6d28d9; }
+  .btn-go { background: #059669; }
+  .btn-go:hover { background: #047857; }
+  #status { margin-top: 20px; font-size: 14px; padding: 12px; border-radius: 8px; display: none; }
+  .ok { background: #064e3b; color: #6ee7b7; }
+  .err { background: #4c0519; color: #fda4af; }
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>Restaurar Dados da Claire</h1>
+  <p>Isso vai carregar todos os dados do servidor (tarefas, manutenções, KPIs, etc.) de volta para este navegador.</p>
+  <button onclick="restaurar()">🔄 Restaurar agora</button>
+  <div id="status"></div>
+</div>
+<script>
+const WORKER = 'https://claire-dados.nicole-0e7.workers.dev';
+const TOKEN = 'wecare-claire-2026-k7x9q2';
+
+async function restaurar() {
+  const st = document.getElementById('status');
+  st.style.display = 'block';
+  st.className = '';
+  st.textContent = 'Conectando ao servidor…';
+  try {
+    const r = await fetch(WORKER + '/load?token=' + TOKEN);
+    const json = await r.json();
+    if (!json.data) throw new Error('Servidor retornou vazio');
+    const data = json.data;
+    let count = 0;
+    for (const key of Object.keys(data)) {
+      try {
+        localStorage.setItem(key, typeof data[key] === 'string' ? data[key] : JSON.stringify(data[key]));
+        count++;
+      } catch(e) {}
+    }
+    st.className = 'ok';
+    const tarefas = (data.nx_tasks || []).length;
+    const manut = (data.nx_manutencoes || []).length;
+    st.innerHTML = '✅ Restaurado com sucesso!<br>' + count + ' chaves carregadas<br>' + tarefas + ' tarefas · ' + manut + ' manutenções<br><br><button class="btn-go" onclick="window.location.href=\'/\'">Abrir Claire →</button>';
+  } catch(e) {
+    st.className = 'err';
+    st.textContent = '❌ Erro: ' + e.message;
+  }
+}
+</script>
+</body>
+</html>

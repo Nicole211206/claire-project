@@ -1134,7 +1134,7 @@ function renderTaskGantt(){
 }
 function renderProjetosGantt(){
   const cores={planejamento:'#f0a24b',andamento:'#e05a5a',concluido:'#5bbf8a'};
-  const items=projetos.filter(p=>p.dataInicio||p.dataFim).map(p=>({
+  const items=projetos.filter(p=>p.status!=='concluido'&&(p.dataInicio||p.dataFim)).map(p=>({
     id:p.id, label:p.nome||'(sem nome)', tagHtml:'', inicio:p.dataInicio||p.dataFim, fim:p.dataFim||p.dataInicio, cor:cores[p.status]||'#5bbf8a', onclick:'abrirProjetoModal('+p.id+')'
   }));
   _renderGantt('perf-gantt', items, {});
@@ -6591,7 +6591,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 69;
+const APP_VERSION = 70;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

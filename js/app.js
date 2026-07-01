@@ -148,6 +148,7 @@ let transcricoes=[];
 let transcricaoAtiva=null;
 let plantaoItems=[];
 let plantaoAtivo=null;
+let mostrarPlantaoConcluidas=false;
 let projetoAtivo=null;
 let projetoAbaAtiva='info';
 let headFixo={gabriela:6000,felipe:6000};
@@ -196,6 +197,7 @@ const MODULOS_LISTA=[
 ];
 function getMinhaAtt(){ const u=getCurrentUser(); if(!u||!u.attId) return null; return ATTS.find(a=>a.id===u.attId)||null; }
 function getCurrentUser(){ try{ return JSON.parse(sessionStorage.getItem('nx_currentuser')||'null'); }catch(e){ return null; } }
+function _autorAtual(){ try{ const u=getCurrentUser(); return u?(u.nome||u.email||''):''; }catch(e){ return ''; } }
 function isAdmin(){ const u=getCurrentUser(); return u && u.perfil==='admin'; }
 function podeAcessar(modId){ const u=getCurrentUser(); if(!u) return false; if(u.perfil==='admin') return true; if(modId==='tasks'&&u.attId) return true; return (u.modulos||[]).includes(modId); }
 function attsDoUsuario(){
@@ -1018,7 +1020,7 @@ function renderTasks(f){
       (t._isDemand&&!t.done?'<select onchange="mudarStatusDemanda(\''+t._attId+'\','+t._demIdx+',this.value);this.blur();" onclick="event.stopPropagation();" style="font-size:10px;padding:1px 6px;border-radius:8px;border:1px solid var(--border2);background:var(--bg2);color:var(--text);cursor:pointer;"><option value="todo"'+(t.status==='todo'?' selected':'')+'>A fazer</option><option value="doing"'+(t.status==='doing'?' selected':'')+'>Em andamento</option><option value="done"'+(t.status==='done'?' selected':'')+'>Concluída</option></select>':'')+
       (t._isManutTarefa&&!t.done?'<select onchange="manutSetTarefaField('+t._manutId+','+t._tarefaIdx+',\'status\',this.value);this.blur();" onclick="event.stopPropagation();" style="font-size:10px;padding:1px 6px;border-radius:8px;border:1px solid var(--border2);background:var(--bg2);color:var(--text);cursor:pointer;"><option value="todo"'+(t.status==='todo'?' selected':'')+'>A fazer</option><option value="doing"'+(t.status==='doing'?' selected':'')+'>Em andamento</option><option value="done"'+(t.status==='done'?' selected':'')+'>Concluída</option></select>':'')+
       '</div></div>'+
-      (!t._isDemand&&!t._isManutTarefa?'<button onclick="delTask('+t.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 4px;transition:color 0.15s;" onmouseover="this.style.color=\'var(--vermelha)\'" onmouseout="this.style.color=\'var(--text3)\'"><i class="fa-solid fa-xmark"></i></button>':'')+
+      (!t._isDemand&&!t._isManutTarefa&&(typeof isAdmin==='function'&&isAdmin())?'<button onclick="delTask('+t.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 4px;transition:color 0.15s;" onmouseover="this.style.color=\'var(--vermelha)\'" onmouseout="this.style.color=\'var(--text3)\'"><i class="fa-solid fa-xmark"></i></button>':'')+
       ((!t.done&&t.due&&!t._isDemand&&!t._isManutTarefa)?'<button onclick="criarEventoGCal(\''+escQ(t.text)+'\',\''+t.due+'\',\''+(t.hora||'09:00')+'\',60,\'Tarefa Claire\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:2px 4px;" title="Criar no Google Agenda"><i class="fa-brands fa-google"></i></button>':'')+
       '</div>';
   }).join('');
@@ -1242,7 +1244,7 @@ function renderTaskUpdates(){
     :updates.map((u,i)=>
       '<div style="padding:10px 0;border-bottom:1px solid var(--border);">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'+
-      '<span style="font-size:10.5px;color:var(--text3);">'+new Date(u.data).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</span>'+
+      '<span style="font-size:10.5px;color:var(--text3);">'+new Date(u.data).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+(u.autor?' · '+esc(u.autor):'')+'</span>'+
       '<button onclick="removerUpdate('+i+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;" title="Remover"><i class="fa-solid fa-xmark"></i></button>'+
       '</div>'+
       '<div style="font-size:13px;color:var(--text);white-space:pre-wrap;">'+esc(u.texto)+'</div>'+
@@ -1255,7 +1257,7 @@ function adicionarUpdate(){
   const texto=document.getElementById('td-nova-update').value.trim();
   if(!texto)return;
   if(!t.updates)t.updates=[];
-  t.updates.push({texto,data:new Date().toISOString()});
+  t.updates.push({texto,data:new Date().toISOString(),autor:_autorAtual()});
   document.getElementById('td-nova-update').value='';
   renderTaskUpdates();
   renderTasks();
@@ -1382,9 +1384,18 @@ function renderTaskCalendar(){
 }
 
 let _kanbanDragId=null;
+let _kanbanDragDemand=null; // {attId, idx} — quando uma demanda atribuída está sendo arrastada
 
 function kanbanDragStart(e,id){
   _kanbanDragId=id;
+  _kanbanDragDemand=null;
+  e.dataTransfer.effectAllowed='move';
+  e.currentTarget.style.opacity='0.5';
+}
+
+function kanbanDragStartDemand(e,attId,idx){
+  _kanbanDragDemand={attId,idx};
+  _kanbanDragId=null;
   e.dataTransfer.effectAllowed='move';
   e.currentTarget.style.opacity='0.5';
 }
@@ -1409,6 +1420,20 @@ function kanbanDrop(e,status){
   e.preventDefault();
   e.currentTarget.style.background='var(--bg2)';
   e.currentTarget.style.borderStyle='solid';
+  // Demanda atribuída (as meninas movem no kanban → muda o status da demanda)
+  if(_kanbanDragDemand){
+    const att=ATTS.find(a=>a.id===_kanbanDragDemand.attId);
+    if(att&&att.demands[_kanbanDragDemand.idx]){
+      const map={done:'done',doing:'doing',todo:'pending',backlog:'pending'};
+      att.demands[_kanbanDragDemand.idx].s=map[status]||'pending';
+      if(typeof saveAll==='function')saveAll();
+    }
+    _kanbanDragDemand=null;
+    renderKanban();
+    renderTasks();
+    fillFocusSel();
+    return;
+  }
   if(_kanbanDragId===null)return;
   const t=tasks.find(x=>x.id===_kanbanDragId);
   if(t){
@@ -1449,16 +1474,19 @@ function renderKanban(){
       cards.map(t=>{
         const cat=getCatInfo(t.cat);
         const isSpecial=t._isDemand||t._isManutTarefa;
+        const _adm=typeof isAdmin==='function'&&isAdmin();
         const clickFn=t._isDemand?'abrirDemandaModal(\''+t._attId+'\','+t._demIdx+')':t._isManutTarefa?'abrirManutTarefaDetalhe('+t._manutId+')':'abrirDetalheTask('+t.id+')';
-        const dragAttr=isSpecial?'':'draggable="true" ondragstart="kanbanDragStart(event,'+t.id+')" ondragend="kanbanDragEnd(event)" ';
-        const delBtn=isSpecial?'':'<button onclick="event.stopPropagation();delTask('+t.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;float:right;" title="Apagar"><i class="fa-solid fa-xmark"></i></button>';
+        const dragAttr=t._isManutTarefa?''
+          :t._isDemand?'draggable="true" ondragstart="kanbanDragStartDemand(event,\''+t._attId+'\','+t._demIdx+')" ondragend="kanbanDragEnd(event)" '
+          :'draggable="true" ondragstart="kanbanDragStart(event,'+t.id+')" ondragend="kanbanDragEnd(event)" ';
+        const delBtn=(isSpecial||!_adm)?'':'<button onclick="event.stopPropagation();delTask('+t.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;float:right;" title="Apagar"><i class="fa-solid fa-xmark"></i></button>';
         const tagHtml=t._isManutTarefa
           ?'<span style="font-size:9.5px;padding:1px 6px;border-radius:10px;font-weight:600;background:var(--peach)22;color:var(--peach);"><i class="fa-solid fa-wrench"></i> Manutenção</span>'
           :t._isDemand?'<span style="font-size:9.5px;padding:1px 6px;border-radius:10px;font-weight:600;background:var(--bg3);color:var(--text3);">'+(t.status==='doing'?'Em andamento':t.status==='done'?'Concluída':'A fazer')+'</span>'
           :'<span style="font-size:9.5px;padding:1px 6px;border-radius:10px;font-weight:600;background:'+cat.color+'22;color:'+cat.color+';">'+cat.label+'</span>';
         return '<div '+dragAttr+
           'onclick="'+clickFn+'" '+
-          'style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px;margin-bottom:7px;cursor:'+(isSpecial?'pointer':'grab')+';user-select:none;transition:opacity 0.15s;'+((col.id==='done'||t.done)?'opacity:0.6;':'')+'">'+
+          'style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px;margin-bottom:7px;cursor:'+(t._isManutTarefa?'pointer':'grab')+';user-select:none;transition:opacity 0.15s;'+((col.id==='done'||t.done)?'opacity:0.6;':'')+'">'+
           delBtn+
           '<div style="font-size:13px;font-weight:500;margin-bottom:5px;">'+esc(t.text)+'</div>'+
           '<div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;">'+
@@ -1779,14 +1807,14 @@ function renderDemandaUpdates(){
   const ups=d.updates||[];
   document.getElementById('dd-updates-list').innerHTML=ups.length===0
     ?'<div style="text-align:center;padding:14px;color:var(--text3);font-size:13px;">Nenhuma atualização ainda.</div>'
-    :ups.map((u,i)=>'<div style="padding:9px 0;border-bottom:1px solid var(--border);"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;"><span style="font-size:10.5px;color:var(--text3);">'+new Date(u.data).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</span><button onclick="removerUpdateDemanda('+i+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;"><i class="fa-solid fa-xmark"></i></button></div><div style="font-size:13px;white-space:pre-wrap;">'+esc(u.texto)+'</div></div>').reverse().join('');
+    :ups.map((u,i)=>'<div style="padding:9px 0;border-bottom:1px solid var(--border);"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;"><span style="font-size:10.5px;color:var(--text3);">'+new Date(u.data).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+(u.autor?' · '+esc(u.autor):'')+'</span><button onclick="removerUpdateDemanda('+i+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;"><i class="fa-solid fa-xmark"></i></button></div><div style="font-size:13px;white-space:pre-wrap;">'+esc(u.texto)+'</div></div>').reverse().join('');
 }
 function adicionarUpdateDemanda(){
   const a=ATTS.find(x=>x.id===_demandaAtiva.attId); if(!a) return;
   const d=a.demands[_demandaAtiva.idx]; if(!d) return;
   const txt=document.getElementById('dd-nova-update').value.trim(); if(!txt) return;
   if(!d.updates) d.updates=[];
-  d.updates.push({texto:txt, data:new Date().toISOString()});
+  d.updates.push({texto:txt, data:new Date().toISOString(), autor:_autorAtual()});
   document.getElementById('dd-nova-update').value='';
   renderDemandaUpdates();
   if(typeof saveAll==='function') saveAll();
@@ -4365,7 +4393,7 @@ function obRenderComentarios(im, fase){
       comentarios.map((c,i)=>
         '<div style="padding:7px 10px;background:var(--bg3);border-radius:var(--r-sm);margin-bottom:5px;position:relative;">'+
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">'+
-        '<span style="font-size:10px;color:var(--text3);">'+new Date(c.data).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</span>'+
+        '<span style="font-size:10px;color:var(--text3);">'+new Date(c.data).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+(c.autor?' · '+esc(c.autor):'')+'</span>'+
         '<button onclick="obRemoverComentario('+im.id+',\''+fase+'\','+i+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:10px;" onmouseover="this.style.color=\'var(--vermelha)\'" onmouseout="this.style.color=\'var(--text3)\'"><i class="fa-solid fa-xmark"></i></button>'+
         '</div>'+
         '<div style="font-size:12.5px;color:var(--text);white-space:pre-wrap;">'+esc(c.texto)+'</div>'+
@@ -4386,7 +4414,7 @@ function obAdicionarComentario(id, fase){
   const texto=el.value.trim();if(!texto)return;
   if(!im.comentarios)im.comentarios={};
   if(!im.comentarios[fase])im.comentarios[fase]=[];
-  im.comentarios[fase].push({texto,data:new Date().toISOString()});
+  im.comentarios[fase].push({texto,data:new Date().toISOString(),autor:_autorAtual()});
   el.value='';
   if(typeof saveAll==='function')saveAll();
   obRenderAba(im);
@@ -5640,7 +5668,7 @@ function manutAbaTarefas(m){
           '<input type="text" class="form-input" style="font-size:12px;" value="'+esc((t.etiquetas||[]).join(', '))+'" placeholder="Ex: urgente, elétrica, hidráulica" oninput="manutSetTarefaField('+m.id+','+i+',\'etiquetas\',this.value.split(\',\').map(function(x){return x.trim();}).filter(Boolean))">'+
         '</div>'+
         '<div class="form-group"><label class="form-label" style="font-size:11px;">Atualizações</label>'+
-          (t.updates&&t.updates.length?t.updates.map(function(u){return '<div style="background:var(--bg3);border-radius:var(--r-sm);padding:6px 10px;font-size:12px;margin-bottom:4px;"><span style="color:var(--text3);font-size:10px;">'+fd(u.data.split('T')[0])+'</span> — '+esc(u.texto)+'</div>';}).join(''):'')+
+          (t.updates&&t.updates.length?t.updates.map(function(u){return '<div style="background:var(--bg3);border-radius:var(--r-sm);padding:6px 10px;font-size:12px;margin-bottom:4px;"><span style="color:var(--text3);font-size:10px;">'+fd(u.data.split('T')[0])+(u.autor?' · '+esc(u.autor):'')+'</span> — '+esc(u.texto)+'</div>';}).join(''):'')+
           '<div style="display:flex;gap:6px;margin-top:4px;">'+
             '<input type="text" class="form-input" style="font-size:12px;" placeholder="Nova atualização..." id="manut-upd-'+m.id+'-'+i+'">'+
             '<button class="btn btn-sm" onclick="manutAdicionarUpdateTarefa('+m.id+','+i+')"><i class="fa-solid fa-plus"></i></button>'+
@@ -5698,7 +5726,7 @@ function manutAdicionarUpdateTarefa(id,i){
   const inp=document.getElementById('manut-upd-'+id+'-'+i); if(!inp) return;
   const txt=inp.value.trim(); if(!txt) return;
   if(!m.tarefasManut[i].updates) m.tarefasManut[i].updates=[];
-  m.tarefasManut[i].updates.push({texto:txt,data:new Date().toISOString()});
+  m.tarefasManut[i].updates.push({texto:txt,data:new Date().toISOString(),autor:_autorAtual()});
   if(typeof saveAll==='function') saveAll();
   manutRenderAba(m);
 }
@@ -6179,7 +6207,7 @@ function adicionarUpdatePlantao(){
   const r=plantaoItems.find(x=>x.id===plantaoAtivo);if(!r)return;
   const txt=document.getElementById('pt-nova-update').value.trim();if(!txt)return;
   if(!r.updates)r.updates=[];
-  r.updates.push({texto:txt,data:new Date().toISOString()});
+  r.updates.push({texto:txt,data:new Date().toISOString(),autor:_autorAtual()});
   document.getElementById('pt-nova-update').value='';
   renderPlantaoUpdates();saveAll();
 }
@@ -6190,7 +6218,7 @@ function renderPlantaoUpdates(){
   const ups=r.updates||[];
   document.getElementById('pt-updates-list').innerHTML=ups.length===0
     ?'<div style="font-size:12px;color:var(--text3);text-align:center;padding:8px;">Nenhuma atualização.</div>'
-    :ups.map((u,i)=>'<div style="background:var(--bg3);border-radius:var(--r-sm);padding:8px 10px;margin-bottom:6px;display:flex;gap:8px;align-items:flex-start;"><div style="flex:1;"><div style="font-size:12px;white-space:pre-wrap;">'+esc(u.texto)+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">'+new Date(u.data).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</div></div><button onclick="removerUpdatePlantao('+i+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:2px 4px;" onmouseover="this.style.color=\'var(--vermelha)\'" onmouseout="this.style.color=\'var(--text3)\'"><i class="fa-solid fa-xmark"></i></button></div>').join('');
+    :ups.map((u,i)=>'<div style="background:var(--bg3);border-radius:var(--r-sm);padding:8px 10px;margin-bottom:6px;display:flex;gap:8px;align-items:flex-start;"><div style="flex:1;"><div style="font-size:12px;white-space:pre-wrap;">'+esc(u.texto)+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">'+new Date(u.data).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+(u.autor?' · '+esc(u.autor):'')+'</div></div><button onclick="removerUpdatePlantao('+i+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:2px 4px;" onmouseover="this.style.color=\'var(--vermelha)\'" onmouseout="this.style.color=\'var(--text3)\'"><i class="fa-solid fa-xmark"></i></button></div>').join('');
 }
 
 function removerUpdatePlantao(idx){
@@ -6199,6 +6227,10 @@ function removerUpdatePlantao(idx){
   r.updates.splice(idx,1);renderPlantaoUpdates();saveAll();
 }
 
+function togglePlantaoConcluidas(){
+  mostrarPlantaoConcluidas=!mostrarPlantaoConcluidas;
+  renderPlantao();
+}
 function renderPlantao(){
   const el=document.getElementById('plantao-lista');if(!el)return;
   const sf=document.getElementById('pt-filter-status');
@@ -6207,7 +6239,14 @@ function renderPlantao(){
   const tv=tf?tf.value.trim().toLowerCase():'';
   let list=[...plantaoItems].sort((a,b)=>(b.data||'').localeCompare(a.data||''));
   if(sv!=='todos') list=list.filter(r=>r.status===sv);
+  else if(!mostrarPlantaoConcluidas) list=list.filter(r=>r.status!=='concluido');
   if(tv) list=list.filter(r=>(r.imovel||'').toLowerCase().includes(tv)||(r.situacao||'').toLowerCase().includes(tv)||(r.detalhes||'').toLowerCase().includes(tv));
+  const btnConc=document.getElementById('pt-btn-concluidas');
+  if(btnConc){
+    const nConc=plantaoItems.filter(r=>r.status==='concluido').length;
+    btnConc.innerHTML=(mostrarPlantaoConcluidas?'<i class="fa-solid fa-eye-slash"></i> Ocultar concluídas':'<i class="fa-solid fa-check-double"></i> Ver concluídas ('+nConc+')');
+    btnConc.style.display=(sv==='todos')?'':'none';
+  }
   if(list.length===0){
     el.innerHTML='<div style="text-align:center;color:var(--text3);font-size:13px;padding:40px 20px;">Nenhuma ocorrência encontrada. Clique em "Nova Ocorrência" para registrar.</div>';return;
   }
@@ -6591,7 +6630,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 70;
+const APP_VERSION = 71;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

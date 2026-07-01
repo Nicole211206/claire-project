@@ -750,6 +750,7 @@ function _validarLogin(){
           <option value="concluido">Concluído</option>
         </select>
         <input type="text" class="form-input" id="pt-filter-busca" placeholder="Buscar imóvel ou assunto..." oninput="renderPlantao()" style="width:220px;padding:6px 10px;font-size:13px;">
+        <button class="btn btn-sm" id="pt-btn-concluidas" onclick="togglePlantaoConcluidas()" style="padding:6px 12px;font-size:13px;"><i class="fa-solid fa-check-double"></i> Ver concluídas</button>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px;" id="plantao-lista"></div>
     </div>
@@ -1621,6 +1622,6 @@ function _validarLogin(){
   </div>
 </div>
 
-<script src="js/app.js?v=70"></script>
+<script src="js/app.js?v=71"></script>
 </body>
 </html>

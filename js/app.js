@@ -26,32 +26,44 @@ let kpiSubVals={};
 let kpiPeriodo=new Date().toISOString().substring(0,7);
 function _kv(){if(!kpiVals[kpiPeriodo])kpiVals[kpiPeriodo]={};return kpiVals[kpiPeriodo];}
 function _ksv(){if(!kpiSubVals[kpiPeriodo])kpiSubVals[kpiPeriodo]={};return kpiSubVals[kpiPeriodo];}
-function setKpiPeriodo(mes){kpiPeriodo=mes;renderKPIs();if(typeof saveAll==='function')saveAll();}
+function setKpiPeriodo(mes){kpiPeriodo=mes;_syncObKpiDoOnboarding();renderKPIs();if(typeof saveAll==='function')saveAll();}
 let imoveis=[];
 let imovelAtivo=null;
 let _obData=null; // null=não buscado ainda, []=buscado
+let _obKpiPorMes=null; // {"2026-07":{count,mediaOnboardingDias}, ...} — só imóveis marcados "Colocar na Claire?"
 function _renderObList(){
   const el=document.getElementById('ob-onboarding-list');
   if(!el||!Array.isArray(_obData))return;
   const lista=_obData;
   const calcDias=im=>{const fim=im.dataAtivacao?new Date(im.dataAtivacao):new Date();return Math.max(0,Math.round((fim-new Date(im.dataCriacao))/(1000*60*60*24)));};
-  const ativos=lista.filter(im=>im.status==='ativo'&&im.dataAtivacao&&im.dataCriacao&&calcDias(im)>=0);
-  const emAnd=lista.filter(im=>im.status!=='ativo'&&im.dataCriacao&&calcDias(im)>=0);
-  if(!ativos.length&&!emAnd.length){el.innerHTML='<div style="font-size:12px;color:var(--text3);text-align:center;padding:8px;">Nenhum imóvel no módulo de Onboarding ainda.</div>';return;}
-  const med=ativos.length?(ativos.reduce((s,im)=>s+calcDias(im),0)/ativos.length).toFixed(1):null;
+  const marcadosDoMes=lista.filter(im=>im.incluirKpiClaire&&im.mesReferenciaKpi===kpiPeriodo&&im.dataCriacao&&im.dataAtivacao);
+  const outros=lista.filter(im=>!marcadosDoMes.includes(im)&&im.dataCriacao&&calcDias(im)>=0);
+  if(!marcadosDoMes.length&&!outros.length){el.innerHTML='<div style="font-size:12px;color:var(--text3);text-align:center;padding:8px;">Nenhum imóvel no módulo de Onboarding ainda.</div>';return;}
+  const m=_obKpiPorMes&&_obKpiPorMes[kpiPeriodo];
   el.innerHTML=
-    (ativos.length?'<div style="font-size:10.5px;font-weight:700;color:var(--sage);margin-bottom:4px;">✓ Ativados</div>':'')+
-    ativos.map(im=>{const d=calcDias(im);return'<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);"><span style="font-size:12.5px;">'+esc(im.nome||'')+'</span><span style="font-size:12.5px;font-weight:600;color:'+(d<=10?'var(--sage)':d<=12?'var(--amarela)':'var(--vermelha)')+'">'+d+' dias</span></div>';}).join('')+
-    (emAnd.length?'<div style="font-size:10.5px;font-weight:700;color:var(--peach);margin-top:8px;margin-bottom:4px;">⏳ Em andamento</div>':'')+
-    emAnd.map(im=>{const d=calcDias(im);return'<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);"><span style="font-size:12.5px;color:var(--text2);">'+esc(im.nome||'')+'</span><span style="font-size:12px;color:var(--text3);">'+d+' dias corridos</span></div>';}).join('')+
-    (med?'<div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:4px;border-top:2px solid var(--border);"><span style="font-size:12px;font-weight:700;">Média (ativados)</span><span style="font-size:14px;font-weight:700;color:var(--sage);">'+med+' dias</span></div>':'');
+    (marcadosDoMes.length?'<div style="font-size:10.5px;font-weight:700;color:var(--sage);margin-bottom:4px;">⭐ Marcados pra Claire — '+kpiPeriodo+'</div>':'')+
+    marcadosDoMes.map(im=>{const d=calcDias(im);return'<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);"><span style="font-size:12.5px;">'+esc(im.nome||'')+'</span><span style="font-size:12.5px;font-weight:600;color:'+(d<=10?'var(--sage)':d<=12?'var(--amarela)':'var(--vermelha)')+'">'+d+' dias</span></div>';}).join('')+
+    (m?'<div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:4px;border-top:2px solid var(--border);"><span style="font-size:12px;font-weight:700;">Média do mês ('+kpiPeriodo+')</span><span style="font-size:14px;font-weight:700;color:var(--sage);">'+m.mediaOnboardingDias+' dias</span></div>':'<div style="font-size:11.5px;color:var(--text3);padding:6px 0;">Nenhum imóvel marcado "Colocar na Claire?" pra este mês ainda — marque no onboarding, na aba Captação.</div>')+
+    (outros.length?'<div style="font-size:10.5px;font-weight:700;color:var(--peach);margin-top:10px;margin-bottom:4px;">Outros imóveis do onboarding (não contam pro KPI)</div>':'')+
+    outros.map(im=>{const d=calcDias(im);return'<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);"><span style="font-size:12px;color:var(--text3);">'+esc(im.nome||'')+'</span><span style="font-size:11.5px;color:var(--text3);">'+d+' dias corridos</span></div>';}).join('');
+}
+function _syncObKpiDoOnboarding(){
+  if(!_obKpiPorMes)return; // ainda não buscou do onboarding — mantém o valor já salvo
+  const m=_obKpiPorMes[kpiPeriodo];
+  _kv().ob=(m&&m.mediaOnboardingDias!=null)?String(m.mediaOnboardingDias):null;
 }
 function _fetchObImoveis(){
   if(_obData!==null){_renderObList();return;}
   _obData=[];
   fetch('https://wecare-onboarding.nicole-0e7.workers.dev/onboarding-stats')
-    .then(r=>r.json()).then(d=>{_obData=Array.isArray(d.imoveis)?d.imoveis:[];_renderObList();})
-    .catch(()=>{_obData=[];_renderObList();});
+    .then(r=>r.json()).then(d=>{
+      _obData=Array.isArray(d.imoveis)?d.imoveis:[];
+      _obKpiPorMes=d.kpiPorMes||{};
+      _renderObList();
+      _syncObKpiDoOnboarding();
+      if(typeof renderKPIs==='function')renderKPIs();
+    })
+    .catch(()=>{_obData=[];_obKpiPorMes={};_renderObList();});
 }
 let selNivelIdx=0;
 let comprasList=[];
@@ -594,17 +606,8 @@ function bandHTML(name){
 }
 
 function renderKPIs(){
-  // Recalcular ob a partir dos imóveis
-  // Calcular tempo de ativação automaticamente: dataCriacao → dataAtivacao
-  const _imComTempo=imoveis.filter(im=>im.dataAtivacao&&im.dataCriacao);
-  if(_imComTempo.length>0){
-    _kv().ob=(_imComTempo.reduce((s,im)=>{
-      const dias=(new Date(im.dataAtivacao)-new Date(im.dataCriacao))/(1000*60*60*24);
-      return s+dias;
-    },0)/_imComTempo.length).toFixed(1);
-  } else {
-    _kv().ob=null;
-  }
+  // "ob" (Tempo de Onboarding) vem dos imóveis marcados "Colocar na Claire?" no onboarding, por mês de referência
+  _syncObKpiDoOnboarding();
   const periodoSel=document.getElementById('kpi-periodo-sel'); if(periodoSel&&!periodoSel.value) periodoSel.value=kpiPeriodo;
   const g=calcGlobal(),band=getBand(g),nv=NIVEIS[selNivelIdx];
   const vp=Math.round(nv.variavel*band.mult);

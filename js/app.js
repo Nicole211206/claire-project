@@ -26,7 +26,7 @@ let kpiSubVals={};
 let kpiPeriodo=new Date().toISOString().substring(0,7);
 function _kv(){if(!kpiVals[kpiPeriodo])kpiVals[kpiPeriodo]={};return kpiVals[kpiPeriodo];}
 function _ksv(){if(!kpiSubVals[kpiPeriodo])kpiSubVals[kpiPeriodo]={};return kpiSubVals[kpiPeriodo];}
-function setKpiPeriodo(mes){kpiPeriodo=mes;_syncObKpiDoOnboarding();renderKPIs();if(typeof saveAll==='function')saveAll();}
+function setKpiPeriodo(mes){kpiPeriodo=mes;_syncObKpiDoOnboarding();_syncSetupKpiDoOnboarding();renderKPIs();if(typeof saveAll==='function')saveAll();}
 let imoveis=[];
 let imovelAtivo=null;
 let _obData=null; // null=não buscado ainda, []=buscado
@@ -52,6 +52,21 @@ function _syncObKpiDoOnboarding(){
   const m=_obKpiPorMes[kpiPeriodo];
   _kv().ob=(m&&m.mediaOnboardingDias!=null)?String(m.mediaOnboardingDias):null;
 }
+let _obSetupPorMes=null; // {"2026-07":{previsto,gasto,count}, ...} — só imóveis marcados "Colocar o Setup na Claire?"
+function _syncSetupKpiDoOnboarding(){
+  if(!_obSetupPorMes)return; // ainda não buscou do onboarding
+  const m=_obSetupPorMes[kpiPeriodo];
+  if(!_ksv().rc)_ksv().rc={limpeza:{previsto:'',gasto:''},manutencao:{previsto:'',gasto:''},setup:{previsto:'',gasto:''},margem:{previsto:'',gasto:''},extras:{previsto:'',gasto:''}};
+  _ksv().rc.setup=m?{previsto:String(m.previsto),gasto:String(m.gasto)}:{previsto:'',gasto:''};
+  // Recalcular o KPI rc (mesma lógica de setKPIRcSub)
+  const itens=['limpeza','manutencao','setup','margem','extras'];
+  const economias=itens.map(it=>{
+    const prev=parseFloat(_ksv().rc[it].previsto), gasto=parseFloat(_ksv().rc[it].gasto);
+    if(!prev||isNaN(prev)||isNaN(gasto))return null;
+    return((prev-gasto)/prev)*100;
+  }).filter(x=>x!==null);
+  _kv().rc=economias.length>0?(economias.reduce((s,x)=>s+x,0)/economias.length).toFixed(2):null;
+}
 function _fetchObImoveis(){
   if(_obData!==null){_renderObList();return;}
   _obData=[];
@@ -59,11 +74,13 @@ function _fetchObImoveis(){
     .then(r=>r.json()).then(d=>{
       _obData=Array.isArray(d.imoveis)?d.imoveis:[];
       _obKpiPorMes=d.kpiPorMes||{};
+      _obSetupPorMes=d.setupPorMes||{};
       _renderObList();
       _syncObKpiDoOnboarding();
+      _syncSetupKpiDoOnboarding();
       if(typeof renderKPIs==='function')renderKPIs();
     })
-    .catch(()=>{_obData=[];_obKpiPorMes={};_renderObList();});
+    .catch(()=>{_obData=[];_obKpiPorMes={};_obSetupPorMes={};_renderObList();});
 }
 let selNivelIdx=0;
 let comprasList=[];
@@ -606,8 +623,9 @@ function bandHTML(name){
 }
 
 function renderKPIs(){
-  // "ob" (Tempo de Onboarding) vem dos imóveis marcados "Colocar na Claire?" no onboarding, por mês de referência
+  // "ob" (Tempo de Onboarding) e "rc.setup" (Redução de Custos) vêm dos imóveis marcados no onboarding, por mês de referência
   _syncObKpiDoOnboarding();
+  _syncSetupKpiDoOnboarding();
   const periodoSel=document.getElementById('kpi-periodo-sel'); if(periodoSel&&!periodoSel.value) periodoSel.value=kpiPeriodo;
   const g=calcGlobal(),band=getBand(g),nv=NIVEIS[selNivelIdx];
   const vp=Math.round(nv.variavel*band.mult);
@@ -703,6 +721,8 @@ function renderKPIs(){
               ?'<div style="text-align:center;"><div style="font-size:12px;font-weight:600;">'+(rcSub.extras.previsto?'R$ '+rcSub.extras.previsto:'—')+'</div><div style="font-size:9px;color:var(--text3);">auto (Extras)</div></div>'
               :it.key==='manutencao'
               ?'<div style="text-align:center;"><div style="font-size:12px;font-weight:600;">'+(rcSub.manutencao&&rcSub.manutencao.previsto?'R$ '+rcSub.manutencao.previsto:'—')+'</div><div style="font-size:9px;color:var(--text3);">auto (Manut.)</div></div>'
+              :it.key==='setup'
+              ?'<div style="text-align:center;"><div style="font-size:12px;font-weight:600;">'+(rcSub.setup&&rcSub.setup.previsto?'R$ '+rcSub.setup.previsto:'—')+'</div><div style="font-size:9px;color:var(--text3);">auto (Onboarding)</div></div>'
               :'<input type="number" class="form-input" style="padding:4px 6px;font-size:12px;text-align:center;" placeholder="0" value="'+(rcSub[it.key].previsto||'')+'" onchange="setKPIRcSub(\''+it.key+'\',\'previsto\',this.value)">')+
             (it.key==='margem'
               ?'<div style="text-align:center;"><div style="font-size:12px;font-weight:600;">'+(rcSub.margem.gasto?'R$ '+rcSub.margem.gasto:'—')+'</div><div style="font-size:9px;color:var(--text3);">auto (compras)</div></div>'
@@ -710,6 +730,8 @@ function renderKPIs(){
               ?'<div style="text-align:center;"><div style="font-size:12px;font-weight:600;">'+(rcSub.extras.gasto?'R$ '+rcSub.extras.gasto:'—')+'</div><div style="font-size:9px;color:var(--text3);">auto (Extras)</div></div>'
               :it.key==='manutencao'
               ?'<div style="text-align:center;"><div style="font-size:12px;font-weight:600;">'+(rcSub.manutencao&&rcSub.manutencao.gasto?'R$ '+rcSub.manutencao.gasto:'—')+'</div><div style="font-size:9px;color:var(--text3);">auto (Manut.)</div></div>'
+              :it.key==='setup'
+              ?'<div style="text-align:center;"><div style="font-size:12px;font-weight:600;">'+(rcSub.setup&&rcSub.setup.gasto?'R$ '+rcSub.setup.gasto:'—')+'</div><div style="font-size:9px;color:var(--text3);">auto (Onboarding)</div></div>'
               :'<input type="number" class="form-input" style="padding:4px 6px;font-size:12px;text-align:center;" placeholder="0" value="'+(rcSub[it.key].gasto||'')+'" onchange="setKPIRcSub(\''+it.key+'\',\'gasto\',this.value)">')+
             '<div style="text-align:center;font-size:13px;font-weight:700;color:'+ecoColor+';">'+(eco!==null?eco+'%':'—')+'</div>'+
             '</div>';

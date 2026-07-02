@@ -3696,6 +3696,56 @@ function _mergeById(base, local, server){
   for(const o of local){  if(used.has(o.id))continue; used.add(o.id); const d=decide(o.id); if(d!==undefined) out.push(d); }
   return out;
 }
+// Mescla nx_atts (equipe) COM as demandas aninhadas. As demandas não têm 'id'
+// próprio (são posicionais), então antes elas ficavam de fora do merge e
+// sofriam last-writer-wins: se duas pessoas mexessem em demandas ao mesmo tempo,
+// a última a enviar apagava a mudança da outra ("a tarefa volta"). Aqui:
+//  • une os membros por att.id (nenhum membro some);
+//  • em cada membro, mescla os campos por 3-vias (mudou no local → local; senão → servidor);
+//  • mescla as demandas POR POSIÇÃO em 3-vias (mudou no local → local; senão → servidor)
+//    e o resultado tem o comprimento do MAIOR lado (nunca encolhe → nada é apagado).
+function _mergeAtts(base, local, server){
+  local  = Array.isArray(local)?local:[];
+  server = Array.isArray(server)?server:[];
+  const bMap=new Map((Array.isArray(base)?base:[]).map(a=>[a.id, a]));
+  const sMap=new Map(server.map(a=>[a.id, a]));
+  const lMap=new Map(local.map(a=>[a.id, a]));
+  const ordem=[]; const visto=new Set();
+  for(const a of local){  if(!visto.has(a.id)){ visto.add(a.id); ordem.push(a.id); } }
+  for(const a of server){ if(!visto.has(a.id)){ visto.add(a.id); ordem.push(a.id); } }
+  const mergeDemands=(bD,lD,sD)=>{
+    bD=Array.isArray(bD)?bD:[]; lD=Array.isArray(lD)?lD:[]; sD=Array.isArray(sD)?sD:[];
+    const n=Math.max(lD.length,sD.length); const out=[];
+    for(let i=0;i<n;i++){
+      const b=bD[i], l=lD[i], s=sD[i];
+      if(l===undefined){ out.push(s); continue; }   // só no servidor → mantém
+      if(s===undefined){ out.push(l); continue; }   // só no local → mantém
+      const bv = b===undefined?undefined:JSON.stringify(b);
+      const localMudou = JSON.stringify(l)!==bv;
+      out.push(localMudou ? l : s);                 // local mexeu → local; senão → servidor (mais novo)
+    }
+    return out;
+  };
+  const out=[];
+  for(const id of ordem){
+    const b=bMap.get(id), l=lMap.get(id), s=sMap.get(id);
+    if(l && s){
+      // Parte do LOCAL (preserva a ordem das chaves → idempotente quando nada mudou);
+      // para cada campo onde o local NÃO mexeu, adota o valor do servidor.
+      const merged={...l};
+      Object.keys(s).forEach(k=>{
+        if(k==='demands') return;
+        const bv = b?JSON.stringify(b[k]):undefined;
+        const localMudou = JSON.stringify(l[k])!==bv;
+        if(!localMudou) merged[k]=s[k];
+      });
+      merged.demands = mergeDemands(b&&b.demands, l.demands, s.demands);
+      out.push(merged);
+    } else if(l){ out.push(l); }
+    else if(s){ out.push(s); }
+  }
+  return out;
+}
 // Envia ao KV SOMENTE se houver mudança real (deduplicado). Chamado por um intervalo espaçado.
 async function _kvFlush(){
   const s=window.CLAIRE_SYNC||{};
@@ -3725,7 +3775,15 @@ async function _kvFlush(){
         let ajustou=false;
         for(const k in jg.data){
           const sv=jg.data[k], lv=local[k];
-          if(Array.isArray(sv) && Array.isArray(lv)){
+          // nx_atts: mescla equipe + demandas aninhadas (evita reverter/apagar
+          // demandas quando duas pessoas mexem ao mesmo tempo). Tratado ANTES
+          // das regras genéricas de array.
+          if(k==='nx_atts' && Array.isArray(sv) && Array.isArray(lv)){
+            const merged=_mergeAtts(baseBlob?baseBlob[k]:null, lv, sv);
+            if(JSON.stringify(merged)!==JSON.stringify(lv)){
+              local[k]=merged; try{ localStorage.setItem(k, JSON.stringify(merged)); }catch(e){} ajustou=true;
+            }
+          } else if(Array.isArray(sv) && Array.isArray(lv)){
             // 1) vazio NUNCA apaga cheio (trava anti-perda preservada)
             if(lv.length===0 && sv.length>0){
               local[k]=sv; try{ localStorage.setItem(k, JSON.stringify(sv)); }catch(e){} ajustou=true;
@@ -6655,7 +6713,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 71;
+const APP_VERSION = 74;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

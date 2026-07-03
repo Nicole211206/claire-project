@@ -90,7 +90,7 @@ export default {
           const prevRaw = await env.CLAIRE_KV.get(KEY);
           if (prevRaw) {
             const prev = JSON.parse(prevRaw);
-            const PROT = ['nx_tasks','nx_projetos','nx_turnos','nx_conquistas','nx_manutencoes','nx_plantao','nx_compras','nx_extras','nx_users','nx_catalog','nx_notes','nx_imoveis'];
+            const PROT = ['nx_tasks','nx_projetos','nx_turnos','nx_conquistas','nx_manutencoes','nx_plantao','nx_compras','nx_extras','nx_users','nx_catalog','nx_notes','nx_imoveis','nx_despesas','nx_anotacoes_controle'];
             let merged = null;
             const protege = (k) => { if (!merged) merged = JSON.parse(JSON.stringify(parsed)); merged[k] = prev[k]; };
             for (const k of PROT) {

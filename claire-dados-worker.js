@@ -48,7 +48,7 @@
  */
 
 const KEY = 'claire-state-v1';
-const BACKUP_PREFIX = 'claire-backup-';
+const BACKUP_PREFIX = 'claire-backup-'; // chave agora é por HORA (ex.: claire-backup-2026-07-02T14), não mais por dia
 const BACKUP_TTL = 8 * 24 * 3600; // 8 dias em segundos
 
 export default {
@@ -108,9 +108,14 @@ export default {
           }
         } catch (e) { /* falha-segura: salva o body original */ }
         await env.CLAIRE_KV.put(KEY, bodyToSave);
-        // Snapshot diário: salva uma vez por dia (primeira gravação do dia), expira em 8 dias
-        const today = new Date().toISOString().substring(0, 10);
-        const backupKey = BACKUP_PREFIX + today;
+        // Snapshot de hora em hora: salva uma vez por hora (primeira gravação daquela
+        // hora), expira em 8 dias. Antes era 1x por dia — a janela de risco entre um
+        // problema acontecer e o snapshot mais próximo ainda "limpo" chegava a 24h.
+        // Isso custa no máximo +23 gravações/dia no KV (a gravação principal acima já
+        // é 1 por hora, essa aqui só ativa quando ainda não existe o snapshot da hora),
+        // bem longe do limite gratuito de ~1000 escritas/dia.
+        const horaAtual = new Date().toISOString().substring(0, 13); // "2026-07-02T14"
+        const backupKey = BACKUP_PREFIX + horaAtual;
         const existing = await env.CLAIRE_KV.get(backupKey);
         if (!existing) {
           await env.CLAIRE_KV.put(backupKey, bodyToSave, { expirationTtl: BACKUP_TTL });

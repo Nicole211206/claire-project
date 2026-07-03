@@ -218,9 +218,10 @@ const MODULOS_LISTA=[
   {id:'ai',label:'Assistente IA'},{id:'team',label:'Equipe'},{id:'salary',label:'Salários'},
   {id:'compras',label:'Compras'},
   {id:'manutencao',label:'Manutenção'},
-  {id:'gmail',label:'Gmail'},{id:'projetos',label:'Projetos'},{id:'plantao',label:'Passagem de Turno'},
+  {id:'projetos',label:'Projetos'},{id:'plantao',label:'Passagem de Turno'},
   {id:'turnos',label:'Turnos'},
   {id:'extras',label:'Extras'},
+  {id:'controle',label:'Controle'},
   {id:'manual',label:'Manual'},
   {id:'legado',label:'Meu Legado'}
 ];
@@ -281,9 +282,18 @@ function aplicarPermissoes(){
   // Se o painel atual não é permitido, ir para o primeiro permitido
   const ativo=document.querySelector('.panel.active');
   const ativoId=ativo?ativo.id.replace('panel-',''):null;
-  if(ativoId && ativoId!=='usuarios' && !(u.perfil==='admin'||podeAcessar(ativoId))){
+  const _temAcessoPainel=function(id){
+    if(u.perfil==='admin') return true;
+    if(id==='equipe') return podeAcessar('team')||podeAcessar('salary')||podeAcessar('turnos');
+    return podeAcessar(id);
+  };
+  if(ativoId && ativoId!=='usuarios' && !_temAcessoPainel(ativoId)){
     const primeiro=MODULOS_LISTA.find(m=>u.perfil==='admin'||podeAcessar(m.id));
-    if(primeiro){ const btn=document.querySelector('#sidebar .nav-item[onclick*="showPanel(\''+primeiro.id+'\'"]'); showPanel(primeiro.id, btn||null); }
+    if(primeiro){
+      const alvoId=['team','salary','turnos'].includes(primeiro.id)?'equipe':primeiro.id;
+      const btn=document.querySelector('#sidebar .nav-item[onclick*="showPanel(\''+alvoId+'\'"]');
+      showPanel(alvoId, btn||null);
+    }
   }
   // Botão "Nova Tarefa": visível para todos com acesso ao módulo tarefas
   const btnNovaTarefa=document.getElementById('btn-nova-tarefa');
@@ -449,6 +459,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   // guarda o estado atual como "já enviado" pra não regravar à toa logo no início
   try{ _kvLastPushed=_kvBuildBlob(); }catch(e){}
   ATTS.forEach(a=>{if(!a.respWeekly)a.respWeekly=[null,null,null,null];if(a.respMes===undefined)a.respMes=null;});
+  verificarTarefasDespesas();
   greet();
   renderOvAgenda();
   buildNivelGrid();
@@ -486,9 +497,12 @@ document.addEventListener('DOMContentLoaded', async ()=>{
 });
 
 // ═══════════════════ NAV ═══════════════════
-const PT={overview:'Visão Geral',kpis:'Meus KPIs',performance:'Acompanhamento de Performance',tasks:'Tarefas',calendar:'Calendário',ai:'Assistente IA',team:'Equipe',salary:'Salários',drive:'Google Drive',onboarding:'Onboarding de Imóveis',gmail:'Gmail',notes:'Anotações',focus:'Foco',projetos:'Projetos',compras:'Registro de Compras',manutencao:'Manutenção',reunioes:'Reuniões e Transcrições',avaliacoes:'Acompanhamento',usuarios:'Usuários e Acessos',turnos:'Escala de Turnos',extras:'Serviços Extras',manual:'Manual'};
+const PT={overview:'Visão Geral',kpis:'Meus KPIs',performance:'Acompanhamento de Performance',tasks:'Tarefas',calendar:'Calendário',ai:'Assistente IA',equipe:'Equipe',drive:'Google Drive',onboarding:'Onboarding de Imóveis',notes:'Anotações',focus:'Foco',projetos:'Projetos',compras:'Registro de Compras',manutencao:'Manutenção',reunioes:'Reuniões e Transcrições',avaliacoes:'Acompanhamento',usuarios:'Usuários e Acessos',extras:'Serviços Extras',controle:'Controle',manual:'Manual'};
 function showPanel(id,btn){
-  if(typeof podeAcessar==='function' && id!=='usuarios'){ const u=getCurrentUser(); if(u && u.perfil!=='admin' && !podeAcessar(id)){ return; } }
+  if(id==='equipe'){
+    const u0=getCurrentUser();
+    if(u0 && u0.perfil!=='admin' && !podeAcessar('team') && !podeAcessar('salary') && !podeAcessar('turnos')) return;
+  } else if(typeof podeAcessar==='function' && id!=='usuarios'){ const u=getCurrentUser(); if(u && u.perfil!=='admin' && !podeAcessar(id)){ return; } }
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('panel-'+id).classList.add('active');
@@ -496,7 +510,6 @@ function showPanel(id,btn){
   document.getElementById('panel-title').textContent=PT[id]||id;
   if(id==='overview'){renderOverview();renderOvAgenda();var elDA=document.getElementById('ov-demandas-atrasadas');if(elDA)elDA.textContent=contarDemandasAtrasadas();if(ls('nx_gdrive'))loadCalendarEvents();}
   if(id==='calendar'){loadCalendarEvents();}
-  if(id==='gmail'){checkGmailConfig();if(ls('nx_gmail'))loadEmails();}
   if(id==='tasks'){ const cv=document.getElementById('task-crono-view'); if((!cv||cv.style.display!=='none') && typeof renderTaskGantt==='function') renderTaskGantt(); }
   if(id==='onboarding'){renderOnboardingKanban();}
   if(id==='projetos'){renderProjetosKanban();}
@@ -506,11 +519,10 @@ function showPanel(id,btn){
   if(id==='focus'){renderFocusInsights();}
   if(id==='performance'){renderPerformance();}
   if(id==='avaliacoes'){if(typeof _acompTab!=='undefined'&&_acompTab==='superhost')renderSuperhost();else if(typeof _acompTab!=='undefined'&&_acompTab==='cancelamentos')renderCancelamentos();else renderAvaliacoes();}
-  if(id==='turnos'){renderTurnos();kvPull().then(function(ok){if(ok)renderTurnos();});}
-  if(id==='team'){renderTeam();}
-  if(id==='salary'){renderSalary();}
+  if(id==='equipe'){ setupEquipeTabs(); }
   if(id==='kpis'){renderKPIs();}
   if(id==='extras'){renderExtras();}
+  if(id==='controle'){ verificarTarefasDespesas(); if(typeof _controleTab!=='undefined'&&_controleTab==='anotacoes') renderAnotacoesControle(); else renderDespesasFixas(); }
   if(id==='legado'){ if(typeof renderLegado==='function') renderLegado(); }
   if(id==='manual'){renderManual();}
 }
@@ -1596,7 +1608,7 @@ function getRespBand(v){v=parseFloat(v);if(v<=3)return{l:'Elite',c:'elite'};if(v
 function renderTeam(){
   const cu=(typeof getCurrentUser==='function')?getCurrentUser():null;
   const naoAdmin = !(typeof isAdmin==='function' && isAdmin());
-  const btnNovo=document.querySelector('#panel-team button[onclick*="adicionarMembro"]'); if(btnNovo) btnNovo.style.display=naoAdmin?'none':'';
+  const btnNovo=document.querySelector('#equipe-actions-team button[onclick*="adicionarMembro"]'); if(btnNovo) btnNovo.style.display=naoAdmin?'none':'';
   if(naoAdmin){
     const grid=document.getElementById('team-grid');
     const lista=(typeof attsDoUsuario==='function')?attsDoUsuario():[];
@@ -2017,8 +2029,8 @@ function renderSalary(){
   const isHead = !ehAdmin && cu && headIds.includes((cu.nome||'').toLowerCase());
   const headsCard=document.getElementById('sal-heads-card'); if(headsCard) headsCard.style.display=(ehAdmin||isHead)?'':'none';
   const folhaCard=document.getElementById('sal-folha-card'); if(folhaCard) folhaCard.style.display=ehAdmin?'':'none';
-  const btnNovoMembro=document.querySelector('#panel-salary button[onclick*="abrirNovoOutroMembro"]'); if(btnNovoMembro) btnNovoMembro.style.display=ehAdmin?'':'none';
-  const btnPDF=document.querySelector('#panel-salary button[onclick*="exportarSalariosPDF"]'); if(btnPDF) btnPDF.style.display=ehAdmin?'':'none';
+  const btnNovoMembro=document.querySelector('#equipe-actions-salary button[onclick*="abrirNovoOutroMembro"]'); if(btnNovoMembro) btnNovoMembro.style.display=ehAdmin?'':'none';
+  const btnPDF=document.querySelector('#equipe-actions-salary button[onclick*="exportarSalariosPDF"]'); if(btnPDF) btnPDF.style.display=ehAdmin?'':'none';
   // Atendentes — admin vê todos; head vê apenas os seus; outros veem os permitidos
   const attsParaSal = isHead ? [] : attsVis;
   document.getElementById('sal-att-body').innerHTML=attsParaSal.map(a=>{
@@ -2307,8 +2319,7 @@ async function sendMsg(){
     const tc=tasks.filter(t=>!t.done).slice(0,5).map(t=>'- '+t.text+' ['+t.cat+', '+t.prio+']').join('\n');
     const kc=KPI_DEFS.map(k=>'- '+k.label+': '+(_kv()[k.id]||'não preenchido')+' (peso '+Math.round(k.peso*100)+'%)').join('\n');
     const g=calcGlobal(),band=getBand(g),nv=NIVEIS[selNivelIdx],vp=Math.round(nv.variavel*band.mult);
-    const hasGmail=!!ls('nx_gmail');const gmailReady=hasGmail;
-    const sys='Você é Claire, assistente pessoal da Nicole, gerente de operações da WeCare. Responda sempre em português brasileiro.\n\nCONTEXTO:\n- KPI Global: '+g+'% — Bandeira '+band.name+'\n- Nível: '+nv.n+' (Fixo: '+brl(nv.fixo)+', Variável meta 100%: '+brl(nv.variavel)+')\n- Salário estimado: '+brl(nv.fixo+vp)+'\n- KPIs:\n'+kc+'\n- Tarefas pendentes:\n'+tc+'\n- Equipe: Patrícia (R$17/h), Sara, Lisarb, Laís (R$14/h)\n'+(hasGmail?'- Gmail conectado: pode redigir e-mails para envio':'- Gmail não configurado')+'\n\nPara calcular salário: Fixo + (Variável × multiplicador da bandeira). Vermelha=0%, Amarela=50%, Verde=100%, Azul=150%, Elite=200%.\nSeja concisa, use markdown.';
+    const sys='Você é Claire, assistente pessoal da Nicole, gerente de operações da WeCare. Responda sempre em português brasileiro.\n\nCONTEXTO:\n- KPI Global: '+g+'% — Bandeira '+band.name+'\n- Nível: '+nv.n+' (Fixo: '+brl(nv.fixo)+', Variável meta 100%: '+brl(nv.variavel)+')\n- Salário estimado: '+brl(nv.fixo+vp)+'\n- KPIs:\n'+kc+'\n- Tarefas pendentes:\n'+tc+'\n- Equipe: Patrícia (R$17/h), Sara, Lisarb, Laís (R$14/h)\n\nPara calcular salário: Fixo + (Variável × multiplicador da bandeira). Vermelha=0%, Amarela=50%, Verde=100%, Azul=150%, Elite=200%.\nSeja concisa, use markdown.';
     const r = await callAI(sys, chatHist.slice(-12), 1000);
     removeTyping(typing);
     chatHist.push({role:'assistant',content:r});
@@ -2481,7 +2492,6 @@ function loadSettings(){
 }
 function _applyGoogleStatus(){
   const connected=!!ls('nx_gdrive');
-  if(ls('nx_gmail'))document.getElementById('gmail-ind').innerHTML='<i class="fa-solid fa-envelope-circle-check" style="color:var(--sage);"></i> Gmail ativo';
   const gcalSub=document.getElementById('gcal-sub');
   if(gcalSub)gcalSub.textContent=connected?'Conectado':'Não conectado';
 }
@@ -2501,7 +2511,7 @@ function refreshGoogleStatus(){
   }
 }
 function disconnectGoogle(){
-  ['nx_gdrive','nx_gcal','nx_gmail'].forEach(k=>localStorage.removeItem(k));
+  ['nx_gdrive','nx_gcal'].forEach(k=>localStorage.removeItem(k));
   refreshGoogleStatus();_applyGoogleStatus();
   showToast('Google desconectado.','peach');
 }
@@ -2534,14 +2544,13 @@ async function criarEventoGCal(titulo, data, hora, duracaoMin, descricao) {
 }
 
 // ═══════════════════ GOOGLE OAUTH (GIS) ═══════════════════
-const GOOGLE_SCOPES='https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly https://mail.google.com/';
+const GOOGLE_SCOPES='https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly';
 let _gTokenClient=null; // cliente OAuth reutilizável para renovação silenciosa
 
 function _saveGoogleToken(token, expiresIn){
   const exp=Date.now()+(expiresIn||3600)*1000;
   localStorage.setItem('nx_gdrive',token);
   localStorage.setItem('nx_gcal',token);
-  localStorage.setItem('nx_gmail',token);
   localStorage.setItem('nx_gexpiry',String(exp));
 }
 
@@ -2808,9 +2817,7 @@ function markCalendarDays(events) {
   });
 }
 
-// Auto-load calendar/gmail handled inside showPanel above
-
-// ═══════════════════ GMAIL — MANUAL ONLY (no AI cost) ═══════════════════
+// Auto-load calendar handled inside showPanel above
 // Override aiDraftEmail to do nothing (removed from UI but stub kept for safety)
 function aiDraftEmail() { return; }
 function draftReplyWithAI() { return; }
@@ -2879,230 +2886,6 @@ async function editDocWithAI() {
     btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Aplicar e Salvar no Drive';
     btn.disabled = false;
   }
-}
-
-// ═══════════════════ GMAIL ═══════════════════
-let currentEmail = null;
-let gmailTab = 'inbox';
-
-function checkGmailConfig() {
-  const token = ls('nx_gmail');
-  if (!token) {
-    document.getElementById('gmail-not-configured').style.display = 'block';
-    document.getElementById('gmail-main').style.display = 'none';
-    return false;
-  }
-  document.getElementById('gmail-not-configured').style.display = 'none';
-  document.getElementById('gmail-main').style.display = 'block';
-  return true;
-}
-
-async function loadEmails() {
-  if (!checkGmailConfig()) return;
-  document.getElementById('email-list').innerHTML = '<div style="padding:28px;text-align:center;color:var(--text3);"><i class="fa-solid fa-spinner fa-spin" style="font-size:18px;"></i><div style="margin-top:8px;font-size:13px;">Carregando e-mails...</div></div>';
-
-  const token = ls('nx_gmail');
-  const query = gmailTab === 'sent' ? 'in:sent' : 'in:inbox';
-  try {
-    const listResp = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages?q=' + encodeURIComponent(query) + '&maxResults=20', {
-      headers: { 'Authorization': 'Bearer ' + token }
-    });
-    if (!listResp.ok) { handleGmailError(listResp.status); return; }
-    const listData = await listResp.json();
-    if (!listData.messages || listData.messages.length === 0) {
-      document.getElementById('email-list').innerHTML = '<div style="padding:28px;text-align:center;color:var(--text3);font-size:13px;">Nenhum e-mail encontrado.</div>';
-      return;
-    }
-    // Fetch first 10 message headers in parallel
-    const msgs = await Promise.all(listData.messages.slice(0, 15).map(m =>
-      fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/' + m.id + '?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date', {
-        headers: { 'Authorization': 'Bearer ' + token }
-      }).then(r => r.json())
-    ));
-    renderEmailList(msgs);
-    const unread = msgs.filter(m => m.labelIds && m.labelIds.includes('UNREAD')).length;
-    const badge = document.getElementById('gmail-badge');
-    if (unread > 0) { badge.textContent = unread; badge.style.display = ''; } else { badge.style.display = 'none'; }
-  } catch(e) {
-    document.getElementById('email-list').innerHTML = '<div style="padding:24px;text-align:center;color:var(--vermelha);font-size:13px;"><i class="fa-solid fa-circle-exclamation"></i> Erro ao carregar e-mails. Verifique seu token Gmail nas configuracoes.</div>';
-  }
-}
-
-function handleGmailError(status) {
-  if(status===401){
-    silentRefreshGoogle(()=>{showToast('Token renovado! Recarregando Gmail...','sage');setTimeout(loadEmails,800);},()=>_showGoogleExpiredBanner());
-    return;
-  }
-  const msgs = { 403:'Permissão negada. Verifique os escopos do token.', 429:'Muitas requisições. Aguarde um momento.' };
-  document.getElementById('email-list').innerHTML = '<div style="padding:24px;text-align:center;color:var(--vermelha);font-size:13px;"><i class="fa-solid fa-circle-exclamation"></i> ' + (msgs[status] || 'Erro ' + status) + '</div>';
-}
-
-function renderEmailList(msgs) {
-  document.getElementById('email-list').innerHTML = msgs.map(m => {
-    const headers = {};
-    (m.payload && m.payload.headers || []).forEach(h => headers[h.name] = h.value);
-    const from = headers['From'] || 'Desconhecido';
-    const fromName = from.replace(/<.*>/, '').trim() || from;
-    const subject = headers['Subject'] || '(sem assunto)';
-    const date = headers['Date'] ? new Date(headers['Date']).toLocaleDateString('pt-BR', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
-    const isUnread = m.labelIds && m.labelIds.includes('UNREAD');
-    const bgNormal = isUnread ? 'var(--rose-light)' : 'transparent';
-    return '<div onclick="viewEmail(\'' + m.id + '\')" style="display:flex;gap:10px;padding:11px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.15s;' + (isUnread ? 'background:var(--rose-light);' : '') + '" onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\'' + bgNormal + '\'">'
-      + '<div style="width:6px;border-radius:3px;background:' + (isUnread ? 'var(--rose)' : 'transparent') + ';flex-shrink:0;margin:2px 0;"></div>'
-      + '<div style="flex:1;min-width:0;">'
-      + '<div style="display:flex;justify-content:space-between;gap:8px;"><div style="font-size:13px;font-weight:' + (isUnread ? '700' : '500') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(fromName) + '</div><div style="font-size:11px;color:var(--text3);white-space:nowrap;">' + date + '</div></div>'
-      + '<div style="font-size:12.5px;color:' + (isUnread ? 'var(--text)' : 'var(--text2)') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px;">' + esc(subject) + '</div>'
-      + '</div></div>';
-  }).join('');
-}
-
-async function viewEmail(id) {
-  currentEmail = { id };
-  document.getElementById('email-view-from').textContent = 'Carregando...';
-  document.getElementById('email-view-sub').textContent = '';
-  document.getElementById('email-actions').style.display = 'none';
-  document.getElementById('email-view-body').innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);"><i class="fa-solid fa-spinner fa-spin" style="font-size:18px;"></i></div>';
-
-  const token = ls('nx_gmail');
-  try {
-    const resp = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/' + id + '?format=full', {
-      headers: { 'Authorization': 'Bearer ' + token }
-    });
-    const msg = await resp.json();
-    const headers = {};
-    (msg.payload && msg.payload.headers || []).forEach(h => headers[h.name] = h.value);
-
-    currentEmail = { id, from: headers['From']||'', subject: headers['Subject']||'', date: headers['Date']||'' };
-
-    document.getElementById('email-view-from').textContent = headers['From'] || 'Desconhecido';
-    document.getElementById('email-view-sub').textContent = headers['Subject'] || '(sem assunto)';
-    document.getElementById('email-actions').style.display = 'flex';
-
-    // Extract body
-    const body = extractEmailBody(msg.payload);
-    document.getElementById('email-view-body').innerHTML =
-      '<div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border);">' +
-      '<div style="font-size:12px;color:var(--text3);">De: ' + esc(headers['From']||'') + '</div>' +
-      '<div style="font-size:12px;color:var(--text3);">Assunto: <strong>' + esc(headers['Subject']||'') + '</strong></div>' +
-      '<div style="font-size:12px;color:var(--text3);">Data: ' + (headers['Date'] ? new Date(headers['Date']).toLocaleString('pt-BR') : '') + '</div></div>' +
-      '<div style="font-size:13.5px;line-height:1.8;color:var(--text);white-space:pre-wrap;">' + esc(body) + '</div>';
-
-    // Mark as read
-    fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/' + id + '/modify', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ removeLabelIds: ['UNREAD'] })
-    });
-  } catch(e) {
-    document.getElementById('email-view-body').innerHTML = '<p style="color:var(--vermelha);padding:16px;">Erro ao carregar e-mail.</p>';
-  }
-}
-
-function extractEmailBody(payload) {
-  if (!payload) return '';
-  if (payload.body && payload.body.data) return atob(payload.body.data.replace(/-/g,'+').replace(/_/g,'/'));
-  if (payload.parts) {
-    for (const part of payload.parts) {
-      if (part.mimeType === 'text/plain' && part.body && part.body.data) return atob(part.body.data.replace(/-/g,'+').replace(/_/g,'/'));
-    }
-    for (const part of payload.parts) {
-      const nested = extractEmailBody(part);
-      if (nested) return nested;
-    }
-  }
-  return '(conteudo nao disponivel)';
-}
-
-function switchEmailTab(tab, btn) {
-  gmailTab = tab;
-  document.querySelectorAll('#gmail-tab-inbox,#gmail-tab-sent').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  loadEmails();
-}
-
-async function searchEmails(query) {
-  if (!query.trim()) { loadEmails(); return; }
-  document.getElementById('email-list').innerHTML = '<div style="padding:28px;text-align:center;color:var(--text3);"><i class="fa-solid fa-spinner fa-spin" style="font-size:18px;"></i></div>';
-  const token = ls('nx_gmail');
-  try {
-    const resp = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages?q=' + encodeURIComponent(query) + '&maxResults=15', {
-      headers: { 'Authorization': 'Bearer ' + token }
-    });
-    const data = await resp.json();
-    if (!data.messages || data.messages.length === 0) { document.getElementById('email-list').innerHTML = '<div style="padding:28px;text-align:center;color:var(--text3);font-size:13px;">Nenhum resultado para "' + esc(query) + '"</div>'; return; }
-    const msgs = await Promise.all(data.messages.slice(0,12).map(m =>
-      fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/' + m.id + '?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date', {
-        headers: { 'Authorization': 'Bearer ' + token }
-      }).then(r => r.json())
-    ));
-    renderEmailList(msgs);
-  } catch(e) { document.getElementById('email-list').innerHTML = '<div style="padding:20px;text-align:center;color:var(--vermelha);font-size:13px;">Erro na busca.</div>'; }
-}
-
-function openComposeModal(to, subject, body) {
-  document.getElementById('compose-to').value = to || '';
-  document.getElementById('compose-subject').value = subject || '';
-  document.getElementById('compose-body').value = body || '';
-  document.getElementById('compose-title').textContent = 'Novo E-mail';
-  document.getElementById('modal-compose').classList.add('open');
-  setTimeout(() => document.getElementById(to ? 'compose-body' : 'compose-to').focus(), 100);
-}
-
-function replyEmail() {
-  if (!currentEmail) return;
-  const replyTo = currentEmail.from;
-  const subject = currentEmail.subject.startsWith('Re:') ? currentEmail.subject : 'Re: ' + currentEmail.subject;
-  openComposeModal(replyTo, subject, '');
-  document.getElementById('compose-title').textContent = 'Responder E-mail';
-}
-
-async function draftReplyWithAI() { return; }
-
-async function aiDraftEmail() { return; }
-
-async function sendEmail() {
-  const to = document.getElementById('compose-to').value.trim();
-  const subject = document.getElementById('compose-subject').value.trim();
-  const body = document.getElementById('compose-body').value.trim();
-  if (!to || !subject || !body) { showToast('Preencha destinatario, assunto e mensagem.', 'peach'); return; }
-
-  const token = ls('nx_gmail');
-  if (!token) { showToast('Configure seu token Gmail nas configuracoes.', 'vermelha'); return; }
-
-  const btn = document.getElementById('send-email-btn');
-  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Enviando...';
-  btn.disabled = true;
-
-  try {
-    // Build RFC 2822 email
-    const emailLines = [
-      'To: ' + to,
-      'Subject: =?UTF-8?B?' + btoa(unescape(encodeURIComponent(subject))) + '?=',
-      'Content-Type: text/plain; charset=UTF-8',
-      'Content-Transfer-Encoding: base64',
-      '',
-      btoa(unescape(encodeURIComponent(body)))
-    ];
-    const raw = btoa(unescape(encodeURIComponent(emailLines.join('\r\n')))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-
-    const resp = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ raw })
-    });
-
-    if (resp.ok) {
-      closeModal('modal-compose');
-      showToast('E-mail enviado com sucesso!', 'sage');
-      setTimeout(() => { if (gmailTab === 'sent') loadEmails(); }, 1000);
-    } else {
-      const err = await resp.json();
-      if (resp.status === 401) showToast('Token expirado. Gere um novo token OAuth.', 'vermelha');
-      else showToast('Erro ao enviar: ' + (err.error && err.error.message || resp.status), 'vermelha');
-    }
-  } catch(e) { showToast('Erro de conexao ao enviar e-mail.', 'vermelha'); }
-  btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Enviar';
-  btn.disabled = false;
 }
 
 // showPanel override handled in GCAL section below
@@ -3630,7 +3413,9 @@ const _PERSIST_KEYS = {
   nx_superhost:()=>superhostPeriodos,
   nx_cancelamentos:()=>cancelamentos,
   nx_notasfiscais:()=>notasFiscais,
-  nx_conquistas:()=>conquistas
+  nx_conquistas:()=>conquistas,
+  nx_despesas:()=>despesasFixas,
+  nx_anotacoes_controle:()=>anotacoesControle
 };
 
 function saveAll(){
@@ -3996,6 +3781,8 @@ function loadAll(){
     v=g('nx_cancelamentos'); if(Array.isArray(v)) cancelamentos=v;
     v=g('nx_notasfiscais'); if(v&&typeof v==='object') notasFiscais=v;
     v=g('nx_conquistas'); if(Array.isArray(v)) conquistas=v;
+    v=g('nx_despesas'); if(Array.isArray(v)) despesasFixas=v;
+    v=g('nx_anotacoes_controle'); if(Array.isArray(v)) anotacoesControle=v;
     // Migração: atendentes só veem o próprio attId (sem attsPermitidos).
     _migAtendentesSemPerms();
   }catch(e){ console.warn('loadAll falhou', e); }
@@ -6751,6 +6538,208 @@ function switchAcompTab(tab, btn) {
   if (tab === 'superhost') renderSuperhost();
   if (tab === 'cancelamentos') renderCancelamentos();
   if (tab === 'avaliacoes') renderAvaliacoes();
+}
+
+// ═══════════════════ EQUIPE (Equipe · Salários · Turnos) — ABAS ═══════════════════
+let _equipeTab = 'team';
+
+function switchEquipeTab(tab, btn) {
+  _equipeTab = tab;
+  ['team','salary','turnos'].forEach(t => {
+    const el = document.getElementById('equipe-content-'+t);
+    if (el) el.style.display = t === tab ? '' : 'none';
+    const actEl = document.getElementById('equipe-actions-'+t);
+    if (actEl) actEl.style.display = t === tab ? 'flex' : 'none';
+  });
+  document.querySelectorAll('.equipe-tab-btn').forEach(b => b.classList.remove('active'));
+  if (!btn) btn = document.querySelector('.equipe-tab-btn[data-tab="'+tab+'"]');
+  if (btn) btn.classList.add('active');
+  if (tab === 'salary') renderSalary();
+  else if (tab === 'turnos') { renderTurnos(); kvPull().then(function(ok){ if(ok) renderTurnos(); }); }
+  else renderTeam();
+}
+
+// Esconde as abas que o usuário não tem permissão de ver e escolhe uma aba válida
+function setupEquipeTabs(){
+  const permitido = { team: podeAcessar('team'), salary: podeAcessar('salary'), turnos: podeAcessar('turnos') };
+  document.querySelectorAll('.equipe-tab-btn').forEach(function(b){
+    const t = b.getAttribute('data-tab');
+    b.style.display = permitido[t] ? '' : 'none';
+  });
+  if (!permitido[_equipeTab]) {
+    _equipeTab = ['team','salary','turnos'].find(t=>permitido[t]) || 'team';
+  }
+  switchEquipeTab(_equipeTab, document.querySelector('.equipe-tab-btn[data-tab="'+_equipeTab+'"]'));
+}
+
+// ═══════════════════ CONTROLE (Despesas · Anotações) ═══════════════════
+let despesasFixas = [];
+let anotacoesControle = [];
+let _controleTab = 'despesas';
+let _despesaEditId = null;
+let _anotacaoEditId = null;
+
+function switchControleTab(tab, btn){
+  _controleTab = tab;
+  ['despesas','anotacoes'].forEach(function(t){
+    const el=document.getElementById('controle-content-'+t); if(el) el.style.display=t===tab?'':'none';
+    const act=document.getElementById('controle-actions-'+t); if(act) act.style.display=t===tab?'flex':'none';
+  });
+  document.querySelectorAll('.controle-tab-btn').forEach(function(b){ b.classList.remove('active'); });
+  if(btn) btn.classList.add('active');
+  if(tab==='anotacoes') renderAnotacoesControle();
+  else renderDespesasFixas();
+}
+
+// ── Despesas Fixas ──
+function abrirNovaDespesa(){
+  _despesaEditId=null;
+  document.getElementById('despesa-modal-title').textContent='Nova Despesa Fixa';
+  document.getElementById('dsp-nome').value='';
+  document.getElementById('dsp-valor').value='';
+  document.getElementById('dsp-dia').value='';
+  document.getElementById('dsp-quempaga').value='';
+  document.getElementById('dsp-reembolso').checked=false;
+  document.getElementById('dsp-reembolso-campos').style.display='none';
+  document.getElementById('dsp-reembolso-de').value='';
+  document.getElementById('dsp-reembolso-valor').value='';
+  document.getElementById('dsp-obs').value='';
+  document.getElementById('modal-despesa').classList.add('open');
+}
+function abrirEditarDespesa(id){
+  const d=despesasFixas.find(x=>x.id===id); if(!d) return;
+  _despesaEditId=id;
+  document.getElementById('despesa-modal-title').textContent='Editar Despesa Fixa';
+  document.getElementById('dsp-nome').value=d.nome||'';
+  document.getElementById('dsp-valor').value=d.valor||'';
+  document.getElementById('dsp-dia').value=d.diaPagamento||'';
+  document.getElementById('dsp-quempaga').value=d.quemPaga||'';
+  document.getElementById('dsp-reembolso').checked=!!d.precisaReembolso;
+  document.getElementById('dsp-reembolso-campos').style.display=d.precisaReembolso?'block':'none';
+  document.getElementById('dsp-reembolso-de').value=d.reembolsoDe||'';
+  document.getElementById('dsp-reembolso-valor').value=d.reembolsoValor||'';
+  document.getElementById('dsp-obs').value=d.obs||'';
+  document.getElementById('modal-despesa').classList.add('open');
+}
+function salvarDespesaFixa(){
+  const nome=document.getElementById('dsp-nome').value.trim();
+  if(!nome){ showToast('Informe o nome da despesa.','peach'); return; }
+  const dia=parseInt(document.getElementById('dsp-dia').value,10)||null;
+  if(!dia || dia<1 || dia>31){ showToast('Informe um dia de pagamento válido (1-31).','peach'); return; }
+  const precisaReembolso=document.getElementById('dsp-reembolso').checked;
+  const anterior=_despesaEditId?despesasFixas.find(x=>x.id===_despesaEditId):null;
+  const obj={
+    id:_despesaEditId||Date.now(),
+    nome, valor:parseFloat(document.getElementById('dsp-valor').value)||0,
+    diaPagamento:dia,
+    quemPaga:document.getElementById('dsp-quempaga').value.trim(),
+    precisaReembolso,
+    reembolsoDe:precisaReembolso?document.getElementById('dsp-reembolso-de').value.trim():'',
+    reembolsoValor:precisaReembolso?(parseFloat(document.getElementById('dsp-reembolso-valor').value)||0):0,
+    obs:document.getElementById('dsp-obs').value.trim(),
+    ultimoMesTarefaGerada:anterior?anterior.ultimoMesTarefaGerada||null:null
+  };
+  if(_despesaEditId){ const i=despesasFixas.findIndex(x=>x.id===_despesaEditId); if(i>=0) despesasFixas[i]=obj; } else despesasFixas.unshift(obj);
+  closeModal('modal-despesa'); if(typeof saveAll==='function') saveAll(); renderDespesasFixas(); showToast('Despesa salva!','sage');
+}
+function deletarDespesaFixa(id){
+  if(!confirm('Apagar esta despesa fixa?')) return;
+  despesasFixas=despesasFixas.filter(x=>x.id!==id);
+  if(typeof saveAll==='function') saveAll(); renderDespesasFixas();
+}
+function renderDespesasFixas(){
+  const tb=document.getElementById('despesas-tbody'); if(!tb) return;
+  const totalMensal=despesasFixas.reduce((s,d)=>s+(parseFloat(d.valor)||0),0);
+  const pendReembolso=despesasFixas.filter(d=>d.precisaReembolso).length;
+  const res=document.getElementById('despesas-resumo');
+  if(res) res.innerHTML=[
+    {l:'Total Mensal Fixo',v:brl(totalMensal),c:'rose',i:'fa-file-invoice-dollar'},
+    {l:'Despesas Cadastradas',v:despesasFixas.length,c:'sky',i:'fa-list'},
+    {l:'Com Reembolso Pendente',v:pendReembolso,c:'peach',i:'fa-arrow-right-arrow-left'}
+  ].map(x=>'<div class="metric-card '+x.c+'"><div class="metric-icon '+x.c+'"><i class="fa-solid '+x.i+'"></i></div><div class="metric-value" style="font-size:22px;">'+x.v+'</div><div class="metric-label">'+x.l+'</div></div>').join('');
+  tb.innerHTML=despesasFixas.length===0?'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3);">Nenhuma despesa fixa cadastrada. Clique em "+ Nova Despesa".</td></tr>':despesasFixas.slice().sort((a,b)=>(a.diaPagamento||0)-(b.diaPagamento||0)).map(d=>{
+    const reemb=d.precisaReembolso?('<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--peach)22;color:var(--peach);">Reembolsar '+esc(d.reembolsoDe||'')+(d.reembolsoValor?' · '+brl(d.reembolsoValor):'')+'</span>'):'<span style="font-size:10px;color:var(--text3);">—</span>';
+    return '<tr><td>'+esc(d.nome)+'</td><td>'+brl(d.valor)+'</td><td>Dia '+d.diaPagamento+'</td><td style="font-size:12px;">'+esc(d.quemPaga||'—')+'</td><td>'+reemb+'</td><td style="font-size:11px;color:var(--text3);">'+esc(d.obs||'')+'</td><td style="white-space:nowrap;"><button onclick="abrirEditarDespesa('+d.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-pen"></i></button><button onclick="deletarDespesaFixa('+d.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-trash"></i></button></td></tr>';
+  }).join('');
+}
+
+// Gera automaticamente uma tarefa de validação quando chega o dia de pagamento (1x por mês por despesa)
+function verificarTarefasDespesas(){
+  if(!Array.isArray(despesasFixas) || despesasFixas.length===0) return;
+  const hoje=new Date();
+  const mesAtual=hoje.toISOString().substring(0,7);
+  const diaHoje=hoje.getDate();
+  let mudou=false;
+  despesasFixas.forEach(function(d){
+    if(!d.diaPagamento || d.ultimoMesTarefaGerada===mesAtual) return;
+    const ultimoDiaMes=new Date(hoje.getFullYear(),hoje.getMonth()+1,0).getDate();
+    const diaAlvo=Math.min(d.diaPagamento, ultimoDiaMes);
+    if(diaHoje>=diaAlvo){
+      tasks.unshift({
+        id:Date.now()+Math.floor(Math.random()*1000),
+        text:'💰 Validar pagamento: '+d.nome+' ('+brl(d.valor)+')',
+        cat:'work', prio:'med',
+        dataInicio:'', due:hoje.toISOString().substring(0,10), hora:'',
+        done:false, status:'todo',
+        recorrente:false, tipoRecorrencia:null,
+        updates:[], projetoId:null, projetoNome:null, attId:null,
+        _despesaId:d.id
+      });
+      d.ultimoMesTarefaGerada=mesAtual;
+      mudou=true;
+    }
+  });
+  if(mudou){ if(typeof saveAll==='function') saveAll(); if(typeof renderTasks==='function') renderTasks(); }
+}
+
+// ── Anotações ──
+function abrirNovaAnotacao(){
+  _anotacaoEditId=null;
+  document.getElementById('anotacao-modal-title').textContent='Nova Anotação';
+  document.getElementById('ant-titulo').value='';
+  document.getElementById('ant-texto').value='';
+  document.getElementById('modal-anotacao').classList.add('open');
+}
+function abrirEditarAnotacao(id){
+  const a=anotacoesControle.find(x=>x.id===id); if(!a) return;
+  _anotacaoEditId=id;
+  document.getElementById('anotacao-modal-title').textContent='Editar Anotação';
+  document.getElementById('ant-titulo').value=a.titulo||'';
+  document.getElementById('ant-texto').value=a.texto||'';
+  document.getElementById('modal-anotacao').classList.add('open');
+}
+function salvarAnotacaoControle(){
+  const titulo=document.getElementById('ant-titulo').value.trim();
+  const texto=document.getElementById('ant-texto').value.trim();
+  if(!titulo && !texto){ showToast('Escreva algo na anotação.','peach'); return; }
+  const agora=new Date().toISOString();
+  if(_anotacaoEditId){
+    const i=anotacoesControle.findIndex(x=>x.id===_anotacaoEditId);
+    if(i>=0) anotacoesControle[i]=Object.assign({},anotacoesControle[i],{titulo,texto,atualizadoEm:agora});
+  } else {
+    anotacoesControle.unshift({id:Date.now(),titulo,texto,atualizadoEm:agora});
+  }
+  closeModal('modal-anotacao'); if(typeof saveAll==='function') saveAll(); renderAnotacoesControle(); showToast('Anotação salva!','sage');
+}
+function deletarAnotacaoControle(id){
+  if(!confirm('Apagar esta anotação?')) return;
+  anotacoesControle=anotacoesControle.filter(x=>x.id!==id);
+  if(typeof saveAll==='function') saveAll(); renderAnotacoesControle();
+}
+function renderAnotacoesControle(){
+  const el=document.getElementById('anotacoes-lista'); if(!el) return;
+  if(anotacoesControle.length===0){ el.innerHTML='<div class="card"><div class="card-body" style="text-align:center;padding:30px;color:var(--text3);">Nenhuma anotação ainda. Clique em "+ Nova Anotação".</div></div>'; return; }
+  el.innerHTML=anotacoesControle.map(function(a){
+    const data=a.atualizadoEm?new Date(a.atualizadoEm).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+    return '<div class="card" style="margin-bottom:12px;"><div class="card-body" style="padding:14px 16px;">'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px;">'+
+      '<div style="font-size:14.5px;font-weight:700;">'+esc(a.titulo||'(sem título)')+'</div>'+
+      '<div style="display:flex;gap:4px;flex-shrink:0;"><button onclick="abrirEditarAnotacao('+a.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-pen"></i></button><button onclick="deletarAnotacaoControle('+a.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-trash"></i></button></div>'+
+      '</div>'+
+      '<div style="font-size:13px;color:var(--text2);white-space:pre-wrap;line-height:1.6;">'+esc(a.texto||'')+'</div>'+
+      (data?'<div style="font-size:10.5px;color:var(--text3);margin-top:8px;">Atualizado em '+data+'</div>':'')+
+      '</div></div>';
+  }).join('');
 }
 
 // ── SUPERHOST ──

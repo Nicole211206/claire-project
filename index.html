@@ -166,13 +166,11 @@ function _validarLogin(){
     <button class="nav-item" onclick="showPanel('calendar',this)"><i class="fa-regular fa-calendar-days"></i> Calendário</button>
     <button class="nav-item" onclick="showPanel('ai',this)"><i class="fa-solid fa-wand-magic-sparkles"></i> Assistente IA</button>
     <div class="nav-section">Equipe</div>
-    <button class="nav-item" onclick="showPanel('team',this)"><i class="fa-solid fa-users"></i> Equipe</button>
-    <button class="nav-item" onclick="showPanel('salary',this)"><i class="fa-solid fa-money-bill-wave"></i> Salários</button>
-    <button class="nav-item" onclick="showPanel('turnos',this)"><i class="fa-solid fa-calendar-week"></i> Turnos</button>
+    <button class="nav-item" id="nav-equipe" onclick="showPanel('equipe',this)"><i class="fa-solid fa-users"></i> Equipe</button>
     <button class="nav-item" onclick="showPanel('compras',this)"><i class="fa-solid fa-cart-shopping"></i> Compras</button>
     <button class="nav-item" onclick="showPanel('manutencao',this)"><i class="fa-solid fa-screwdriver-wrench"></i> Manutenção</button>
     <button class="nav-item" onclick="showPanel('extras',this)"><i class="fa-solid fa-sack-dollar"></i> Extras</button>
-    <button class="nav-item" onclick="showPanel('gmail',this)"><i class="fa-regular fa-envelope"></i> Gmail <span class="nav-badge" id="gmail-badge" style="display:none;">0</span></button>
+    <button class="nav-item" onclick="showPanel('controle',this)"><i class="fa-solid fa-sliders"></i> Controle</button>
     <div class="nav-section">Projetos</div>
     <button class="nav-item" onclick="showPanel('projetos',this)"><i class="fa-solid fa-folder-open"></i> Projetos</button>
     <button class="nav-item" onclick="showPanel('plantao',this)"><i class="fa-solid fa-arrow-right-arrow-left"></i> Passagem de Turno</button>
@@ -263,7 +261,7 @@ function _validarLogin(){
         <div class="card-header">
           <div class="metric-icon sage" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-solid fa-users"></i></div>
           <div><div class="card-title">Resumo da Equipe</div></div>
-          <button class="card-action" onclick="showPanel('team',document.querySelectorAll('.nav-item')[5])">Ver equipe →</button>
+          <button class="card-action" onclick="showPanel('equipe',document.getElementById('nav-equipe'))">Ver equipe →</button>
         </div>
         <div class="card-body" style="padding:0;">
           <table class="data-table"><thead><tr><th>Atendente</th><th>Tempo Resp.</th><th>Demandas</th><th>Concluídas</th><th>Status</th></tr></thead>
@@ -481,7 +479,6 @@ function _validarLogin(){
           <div class="ai-orb"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
           <div><div style="font-family:var(--font-display);font-size:14px;font-weight:600;">Claire</div><div class="ai-status"><div class="status-dot"></div> Pronto para ajudar</div></div>
           <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
-            <div style="font-size:11px;color:var(--text3);" id="gmail-ind"></div>
             <button class="btn btn-sm" onclick="clearChat()"><i class="fa-solid fa-rotate"></i> Limpar</button>
           </div>
         </div>
@@ -506,47 +503,66 @@ function _validarLogin(){
       </div>
     </div>
 
-    <!-- ── EQUIPE ── -->
-    <div class="panel" id="panel-team">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+    <!-- ── EQUIPE (Equipe · Salários · Turnos) ── -->
+    <div class="panel" id="panel-equipe">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
         <div>
           <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Equipe</h2>
-          <p style="color:var(--text3);font-size:13px;margin-top:2px;">Gerencie sua equipe de atendimento</p>
+          <p style="color:var(--text3);font-size:13px;margin-top:2px;">Equipe · Salários · Turnos</p>
         </div>
-        <div style="display:flex;gap:8px;">
+        <div id="equipe-actions-team" style="display:flex;gap:8px;">
           <button class="btn" onclick="openAddDemand()"><i class="fa-solid fa-plus"></i> Nova Demanda</button>
           <button class="btn btn-rose" onclick="adicionarMembro()"><i class="fa-solid fa-user-plus"></i> Novo Membro</button>
         </div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;" id="team-grid"></div>
-    </div>
-
-    <!-- ── SALÁRIOS ── -->
-    <div class="panel" id="panel-salary">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
-        <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Calculadora de Salários</h2>
-        <div style="display:flex;gap:8px;">
+        <div id="equipe-actions-salary" style="display:none;gap:8px;">
           <button class="btn" onclick="abrirNovoOutroMembro()"><i class="fa-solid fa-user-plus"></i> Novo Membro</button>
           <button class="btn btn-rose" onclick="exportarSalariosPDF()"><i class="fa-solid fa-file-pdf"></i> Relatório PDF</button>
         </div>
-      </div>
-      <div class="two-col-eq" style="margin-bottom:18px;">
-        <div class="card">
-          <div class="card-header"><div class="metric-icon sage" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-solid fa-users"></i></div><div><div class="card-title">Atendentes — Por Hora</div><div class="card-sub">Escala 12×36 · dias editáveis</div></div></div>
-          <div class="card-body" id="sal-att-body"></div>
-        </div>
-        <div class="card" id="sal-heads-card">
-          <div class="card-header"><div class="metric-icon lav" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-solid fa-crown"></i></div><div><div class="card-title">Heads</div><div class="card-sub">Fixo (50/50) + comissão</div></div></div>
-          <div class="card-body" id="sal-heads-body"></div>
+        <div id="equipe-actions-turnos" style="display:none;gap:8px;align-items:center;flex-wrap:wrap;">
+          <input type="month" class="form-input" id="turnos-mes" style="padding:6px 10px;font-size:13px;" onchange="turnosMesSel=this.value;renderTurnos();">
+          <button class="btn" id="turnos-gerar-btn" onclick="abrirGerarEscala()"><i class="fa-solid fa-wand-magic-sparkles"></i> Gerar Escala</button>
+          <button class="btn btn-rose" id="turnos-add-btn" onclick="abrirAddTurno()"><i class="fa-solid fa-plus"></i> Lançar Turno</button>
+          <button class="btn btn-sm" id="turnos-solicitar-btn" onclick="solicitarConfirmacaoTurnos()"><i class="fa-solid fa-paper-plane"></i> Solicitar confirmação</button>
+          <button class="btn btn-sm" id="turnos-pdf-btn" onclick="exportarTurnosPDF()"><i class="fa-solid fa-file-pdf"></i> PDF</button>
+          <button class="btn btn-sm" id="turnos-zerar-btn" onclick="zerarTurnosMes()" style="color:var(--text3);"><i class="fa-solid fa-rotate-left"></i> Zerar Mês</button>
         </div>
       </div>
-      <div class="card" id="sal-outros-card" style="margin-top:14px;">
-        <div class="card-header"><div class="metric-icon peach" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-solid fa-user-tie"></i></div><div><div class="card-title">Outros Membros</div><div class="card-sub">Cargo livre · fixo + extra</div></div></div>
-        <div class="card-body" id="sal-outros-body"></div>
+      <div class="tab-bar" style="margin-bottom:16px;">
+        <button class="tab-btn equipe-tab-btn active" data-tab="team" onclick="switchEquipeTab('team',this)">Equipe</button>
+        <button class="tab-btn equipe-tab-btn" data-tab="salary" onclick="switchEquipeTab('salary',this)">Salários</button>
+        <button class="tab-btn equipe-tab-btn" data-tab="turnos" onclick="switchEquipeTab('turnos',this)">Turnos</button>
       </div>
-      <div class="card" id="sal-folha-card">
-        <div class="card-header"><i class="fa-solid fa-file-invoice-dollar" style="color:var(--sage);font-size:14px;"></i><div class="card-title">Folha Total Estimada</div></div>
-        <div class="card-body"><div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;" id="folha-grid"></div></div>
+
+      <!-- Equipe -->
+      <div id="equipe-content-team">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;" id="team-grid"></div>
+      </div>
+
+      <!-- Salários -->
+      <div id="equipe-content-salary" style="display:none;">
+        <div class="two-col-eq" style="margin-bottom:18px;">
+          <div class="card">
+            <div class="card-header"><div class="metric-icon sage" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-solid fa-users"></i></div><div><div class="card-title">Atendentes — Por Hora</div><div class="card-sub">Escala 12×36 · dias editáveis</div></div></div>
+            <div class="card-body" id="sal-att-body"></div>
+          </div>
+          <div class="card" id="sal-heads-card">
+            <div class="card-header"><div class="metric-icon lav" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-solid fa-crown"></i></div><div><div class="card-title">Heads</div><div class="card-sub">Fixo (50/50) + comissão</div></div></div>
+            <div class="card-body" id="sal-heads-body"></div>
+          </div>
+        </div>
+        <div class="card" id="sal-outros-card" style="margin-top:14px;">
+          <div class="card-header"><div class="metric-icon peach" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-solid fa-user-tie"></i></div><div><div class="card-title">Outros Membros</div><div class="card-sub">Cargo livre · fixo + extra</div></div></div>
+          <div class="card-body" id="sal-outros-body"></div>
+        </div>
+        <div class="card" id="sal-folha-card">
+          <div class="card-header"><i class="fa-solid fa-file-invoice-dollar" style="color:var(--sage);font-size:14px;"></i><div class="card-title">Folha Total Estimada</div></div>
+          <div class="card-body"><div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;" id="folha-grid"></div></div>
+        </div>
+      </div>
+
+      <!-- Turnos -->
+      <div id="equipe-content-turnos" style="display:none;">
+        <div id="turnos-body"></div>
       </div>
     </div>
 
@@ -657,32 +673,34 @@ function _validarLogin(){
       <div class="card"><div style="overflow-x:auto;"><table class="data-table"><thead><tr><th>Data</th><th>Serviço</th><th>Imóvel</th><th>Cobrado</th><th>Custo</th><th>Margem</th><th>Obs</th><th></th></tr></thead><tbody id="extras-tbody"></tbody></table></div></div>
     </div>
 
-    <!-- ── GMAIL ── -->
-    <div class="panel" id="panel-gmail">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
-        <div><h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Gmail</h2><p style="color:var(--text3);font-size:13px;margin-top:2px;">Leia e envie e-mails diretamente pelo painel</p></div>
-        <div style="display:flex;gap:8px;"><button class="btn" onclick="loadEmails()"><i class="fa-solid fa-rotate"></i> Atualizar</button><button class="btn btn-rose" onclick="openComposeModal()"><i class="fa-solid fa-pen"></i> Novo E-mail</button></div>
+    <!-- ── CONTROLE ── -->
+    <div class="panel" id="panel-controle">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+        <div>
+          <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Controle</h2>
+          <p style="color:var(--text3);font-size:13px;margin-top:2px;">Despesas fixas e anotações gerais</p>
+        </div>
+        <div id="controle-actions-despesas" style="display:flex;gap:8px;">
+          <button class="btn btn-rose" onclick="abrirNovaDespesa()"><i class="fa-solid fa-plus"></i> Nova Despesa</button>
+        </div>
+        <div id="controle-actions-anotacoes" style="display:none;gap:8px;">
+          <button class="btn btn-rose" onclick="abrirNovaAnotacao()"><i class="fa-solid fa-plus"></i> Nova Anotação</button>
+        </div>
       </div>
-      <div id="gmail-not-configured" style="display:none;"><div class="card"><div class="card-body" style="text-align:center;padding:40px 24px;"><i class="fa-regular fa-envelope" style="font-size:40px;color:var(--text3);margin-bottom:14px;"></i><div style="font-family:var(--font-display);font-size:18px;font-weight:600;margin-bottom:8px;">Gmail não configurado</div><p style="color:var(--text3);font-size:13.5px;max-width:380px;margin:0 auto 18px;">Configure seu OAuth Token nas configurações.</p><button class="btn btn-rose" onclick="openSettings()"><i class="fa-solid fa-gear"></i> Configurar agora</button></div></div></div>
-      <div id="gmail-main" style="display:none;">
-        <div style="display:flex;gap:6px;margin-bottom:14px;">
-          <button class="tab-btn active" id="gmail-tab-inbox" onclick="switchEmailTab('inbox',this)">Caixa de Entrada</button>
-          <button class="tab-btn" id="gmail-tab-sent" onclick="switchEmailTab('sent',this)">Enviados</button>
-          <div style="margin-left:auto;"><div class="search-bar" style="width:240px;"><i class="fa-solid fa-magnifying-glass"></i><input type="text" id="gmail-search" placeholder="Buscar e-mails..." onkeydown="if(event.key==='Enter')searchEmails(this.value)"></div></div>
-        </div>
-        <div class="two-col-eq" style="align-items:start;">
-          <div class="card"><div id="email-list" style="max-height:520px;overflow-y:auto;"><div style="padding:32px;text-align:center;color:var(--text3);"><i class="fa-solid fa-spinner fa-spin" style="font-size:20px;"></i></div></div></div>
-          <div class="card">
-            <div class="card-header">
-              <div class="metric-icon rose" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-regular fa-envelope-open"></i></div>
-              <div style="flex:1;"><div class="card-title" id="email-view-from">Visualizador</div><div class="card-sub" id="email-view-sub">Selecione um e-mail</div></div>
-              <div id="email-actions" style="gap:6px;display:none;">
-                <button class="btn btn-sm" onclick="replyEmail()" title="Responder"><i class="fa-solid fa-reply"></i> Responder</button>
-              </div>
-            </div>
-            <div id="email-view-body" style="padding:16px 18px;min-height:360px;max-height:460px;overflow-y:auto;"><div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;color:var(--text3);"><i class="fa-regular fa-envelope-open" style="font-size:32px;margin-bottom:10px;opacity:0.35;"></i><div style="font-size:13px;">Selecione um e-mail para ler</div></div></div>
-          </div>
-        </div>
+      <div class="tab-bar" style="margin-bottom:16px;">
+        <button class="tab-btn controle-tab-btn active" onclick="switchControleTab('despesas',this)">Despesas</button>
+        <button class="tab-btn controle-tab-btn" onclick="switchControleTab('anotacoes',this)">Anotações</button>
+      </div>
+
+      <!-- Despesas -->
+      <div id="controle-content-despesas">
+        <div class="metrics-grid" id="despesas-resumo" style="margin-bottom:16px;"></div>
+        <div class="card"><div style="overflow-x:auto;"><table class="data-table"><thead><tr><th>Nome</th><th>Valor</th><th>Dia Pag.</th><th>Quem Paga</th><th>Reembolso</th><th>Obs.</th><th></th></tr></thead><tbody id="despesas-tbody"></tbody></table></div></div>
+      </div>
+
+      <!-- Anotações -->
+      <div id="controle-content-anotacoes" style="display:none;">
+        <div id="anotacoes-lista"></div>
       </div>
     </div>
 
@@ -801,25 +819,6 @@ function _validarLogin(){
         </div>
       </div>
       <div id="manual-lista"></div>
-    </div>
-
-    <!-- ── TURNOS ── -->
-    <div class="panel" id="panel-turnos">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
-        <div>
-          <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Escala de Turnos</h2>
-          <p style="color:var(--text3);font-size:13px;margin-top:2px;">Escala 12×36 · confirmação quinzenal</p>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <input type="month" class="form-input" id="turnos-mes" style="padding:6px 10px;font-size:13px;" onchange="turnosMesSel=this.value;renderTurnos();">
-          <button class="btn" id="turnos-gerar-btn" onclick="abrirGerarEscala()"><i class="fa-solid fa-wand-magic-sparkles"></i> Gerar Escala</button>
-          <button class="btn btn-rose" id="turnos-add-btn" onclick="abrirAddTurno()"><i class="fa-solid fa-plus"></i> Lançar Turno</button>
-          <button class="btn btn-sm" id="turnos-solicitar-btn" onclick="solicitarConfirmacaoTurnos()"><i class="fa-solid fa-paper-plane"></i> Solicitar confirmação</button>
-          <button class="btn btn-sm" id="turnos-pdf-btn" onclick="exportarTurnosPDF()"><i class="fa-solid fa-file-pdf"></i> PDF</button>
-          <button class="btn btn-sm" id="turnos-zerar-btn" onclick="zerarTurnosMes()" style="color:var(--text3);"><i class="fa-solid fa-rotate-left"></i> Zerar Mês</button>
-        </div>
-      </div>
-      <div id="turnos-body"></div>
     </div>
 
     <!-- ── ANOTAÇÕES ── -->
@@ -975,7 +974,7 @@ function _validarLogin(){
     </div>
 
     <!-- Google -->
-    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin:14px 0 8px;">Google (Drive · Gmail · Agenda)</div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin:14px 0 8px;">Google (Drive · Agenda)</div>
     <div class="form-group">
       <label class="form-label">Google Client ID</label>
       <input type="text" class="form-input" id="s-gclientid" placeholder="000000000000-xxxxxxxx.apps.googleusercontent.com">
@@ -1080,18 +1079,6 @@ function _validarLogin(){
     <div class="form-group"><label class="form-label">O que você quer alterar?</label><textarea class="form-input" id="edit-instruction" rows="4" placeholder="Ex: Adicione no final: reuniao agendada para dia 5 as 14h&#10;Ex: Corrija erros de portugues&#10;Ex: Adicione um resumo executivo no inicio"></textarea></div>
     <div class="form-group"><label class="form-label">Nome do arquivo salvo</label><input type="text" class="form-input" id="edit-save-name" placeholder="Nome do novo arquivo..."></div>
     <div class="modal-footer"><button class="btn" onclick="closeModal('modal-edit-doc')">Cancelar</button><button class="btn btn-rose" id="edit-doc-btn" onclick="editDocWithAI()"><i class="fa-solid fa-wand-magic-sparkles"></i> Aplicar e Salvar no Drive</button></div>
-  </div>
-</div>
-
-<!-- Compor E-mail -->
-<div class="modal-overlay" id="modal-compose">
-  <div class="modal" style="width:580px;">
-    <div class="modal-title" id="compose-title">Novo E-mail</div>
-    <div class="form-group"><label class="form-label">Para</label><input type="email" class="form-input" id="compose-to" placeholder="destinatario@email.com"></div>
-    <div class="form-group"><label class="form-label">Assunto</label><input type="text" class="form-input" id="compose-subject" placeholder="Assunto do e-mail"></div>
-    <div class="form-group"><label class="form-label">Mensagem</label><textarea class="form-input" id="compose-body" rows="10" placeholder="Digite sua mensagem..."></textarea></div>
-    <div style="background:var(--peach-light);border-radius:var(--r-sm);padding:9px 12px;font-size:12px;color:var(--peach);margin-bottom:4px;"><i class="fa-solid fa-triangle-exclamation"></i> Verifique o destinatário e o conteúdo antes de enviar.</div>
-    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-compose')">Cancelar</button><button class="btn btn-rose" id="send-email-btn" onclick="sendEmail()"><i class="fa-solid fa-paper-plane"></i> Enviar</button></div>
   </div>
 </div>
 
@@ -1488,6 +1475,36 @@ function _validarLogin(){
     <div class="form-group"><label class="form-label">Anexo NF/Recibo (PDF ou imagem)</label><input type="file" accept="image/*,application/pdf" id="ex-anexo" onchange="_extraOnAnexo(this)"><div id="ex-anexo-status" style="font-size:12px;color:var(--text3);margin-top:4px;"></div></div>
     <div class="form-group"><label class="form-label">Observações</label><textarea class="form-input" id="ex-obs" rows="2"></textarea></div>
     <div class="modal-footer"><button class="btn" onclick="closeModal('modal-extra')">Cancelar</button><button class="btn btn-rose" onclick="salvarExtra()"><i class="fa-solid fa-check"></i> Salvar</button></div>
+  </div>
+</div>
+<!-- Modal: Nova Despesa Fixa -->
+<div class="modal-overlay" id="modal-despesa">
+  <div class="modal" style="width:520px;">
+    <div class="modal-title" id="despesa-modal-title">Nova Despesa Fixa</div>
+    <div class="form-group"><label class="form-label">Nome da Despesa</label><input type="text" class="form-input" id="dsp-nome" placeholder="Ex: Aluguel do escritório"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Valor (R$)</label><input type="number" class="form-input" id="dsp-valor" placeholder="1200"></div>
+      <div class="form-group"><label class="form-label">Dia do Pagamento</label><input type="number" class="form-input" id="dsp-dia" min="1" max="31" placeholder="Ex: 10"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Quem Paga</label><input type="text" class="form-input" id="dsp-quempaga" placeholder="Ex: Nicole, Empresa..."></div>
+    <div class="form-group"><label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;"><input type="checkbox" id="dsp-reembolso" onchange="document.getElementById('dsp-reembolso-campos').style.display=this.checked?'block':'none';"> Precisa reembolsar alguém?</label></div>
+    <div id="dsp-reembolso-campos" style="display:none;">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Reembolsar de</label><input type="text" class="form-input" id="dsp-reembolso-de" placeholder="Nome de quem será reembolsado"></div>
+        <div class="form-group"><label class="form-label">Valor do Reembolso (R$)</label><input type="number" class="form-input" id="dsp-reembolso-valor" placeholder="Opcional"></div>
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label">Observações</label><textarea class="form-input" id="dsp-obs" rows="2"></textarea></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-despesa')">Cancelar</button><button class="btn btn-rose" onclick="salvarDespesaFixa()"><i class="fa-solid fa-check"></i> Salvar</button></div>
+  </div>
+</div>
+<!-- Modal: Nova Anotação -->
+<div class="modal-overlay" id="modal-anotacao">
+  <div class="modal" style="width:520px;">
+    <div class="modal-title" id="anotacao-modal-title">Nova Anotação</div>
+    <div class="form-group"><label class="form-label">Título</label><input type="text" class="form-input" id="ant-titulo" placeholder="Ex: Seguros dos imóveis"></div>
+    <div class="form-group"><label class="form-label">Anotação</label><textarea class="form-input" id="ant-texto" rows="8" placeholder="Ex: 12 imóveis segurados, faltam: Casa X, Apto Y..."></textarea></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-anotacao')">Cancelar</button><button class="btn btn-rose" onclick="salvarAnotacaoControle()"><i class="fa-solid fa-check"></i> Salvar</button></div>
   </div>
 </div>
 <!-- Modal: Superhost -->

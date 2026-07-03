@@ -79,32 +79,38 @@ export default {
         const body = await request.text();
         // valida que é JSON antes de gravar
         const parsed = JSON.parse(body);
-        // ── TRAVA ANTI-PERDA (lado do servidor), por MESCLAGEM ──
-        // Não RECUSA a gravação inteira (isso bloquearia adições legítimas de quem
-        // está com alguma lista atrasada). Em vez disso, para cada lista que
-        // ENCOLHERIA catastroficamente (zerar, ou ≥8 caindo p/ ≤2), mantém a versão
-        // do servidor NAQUELA chave, e ACEITA o resto (ex.: uma manutenção nova).
-        // Falha-segura: qualquer erro aqui cai no salvamento normal do body.
+        // ── TRAVA ANTI-PERDA (lado do servidor) ──
+        // 1) CHAVE AUSENTE NO ENVIO → preserva o valor anterior daquela chave.
+        //    Um aparelho com o app desatualizado (aba velha aberta, cache) não
+        //    conhece campos novos e nunca os inclui no envio — sem isso, seu
+        //    "put" (que sobrescreve o documento inteiro) apagaria silenciosamente
+        //    qualquer campo novo que outro aparelho/versão tenha acabado de
+        //    gravar. Isso já causou dados "sumindo" sem ninguém apagar nada.
+        // 2) LISTA QUE ENCOLHERIA CATASTROFICAMENTE (zerar, ou ≥8 caindo p/ ≤2)
+        //    → também mantém a versão do servidor NAQUELA chave.
+        // Não RECUSA a gravação inteira (isso bloquearia adições legítimas de
+        // quem está com alguma lista atrasada) — mescla por chave e aceita o
+        // resto. Falha-segura: qualquer erro aqui cai no salvamento normal do body.
         let bodyToSave = body;
         try {
           const prevRaw = await env.CLAIRE_KV.get(KEY);
           if (prevRaw) {
             const prev = JSON.parse(prevRaw);
+            const merged = { ...prev, ...parsed }; // chave ausente em parsed → mantém a de prev
             const PROT = ['nx_tasks','nx_projetos','nx_turnos','nx_conquistas','nx_manutencoes','nx_plantao','nx_compras','nx_extras','nx_users','nx_catalog','nx_notes','nx_imoveis','nx_despesas','nx_anotacoes_controle'];
-            let merged = null;
-            const protege = (k) => { if (!merged) merged = JSON.parse(JSON.stringify(parsed)); merged[k] = prev[k]; };
             for (const k of PROT) {
               const nNew = Array.isArray(parsed[k]) ? parsed[k].length : null;
               const nOld = Array.isArray(prev[k]) ? prev[k].length : null;
               if (nOld != null && nNew != null && ((nNew === 0 && nOld >= 3) || (nOld >= 8 && nNew <= 2))) {
-                protege(k); // mantém a lista do servidor (não deixa encolher)
+                merged[k] = prev[k]; // mantém a lista do servidor (não deixa encolher)
               }
             }
             // não deixa zerar todas as fotos dos atendentes
             const fOld = (Array.isArray(prev.nx_atts) ? prev.nx_atts : []).filter(x => x && x.foto).length;
             const fNew = (Array.isArray(parsed.nx_atts) ? parsed.nx_atts : []).filter(x => x && x.foto).length;
-            if (fOld >= 2 && fNew === 0) { protege('nx_atts'); }
-            if (merged) { merged.nx_lastSaved = String(Date.now()); bodyToSave = JSON.stringify(merged); }
+            if (fOld >= 2 && fNew === 0) { merged.nx_atts = prev.nx_atts; }
+            merged.nx_lastSaved = String(Date.now());
+            bodyToSave = JSON.stringify(merged);
           }
         } catch (e) { /* falha-segura: salva o body original */ }
         await env.CLAIRE_KV.put(KEY, bodyToSave);

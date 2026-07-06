@@ -96,6 +96,12 @@ export default {
           const prevRaw = await env.CLAIRE_KV.get(KEY);
           if (prevRaw) {
             const prev = JSON.parse(prevRaw);
+            // Chaves fora do padrão nx_* (ex.: "data", "error") nunca são legítimas
+            // neste documento — nunca gravar nem herdar. Isso limpa sozinho qualquer
+            // contaminação antiga (ex.: um payload colado errado em algum momento)
+            // em vez de preservá-la para sempre por causa da regra de baixo.
+            for (const k of Object.keys(parsed)) { if (!k.startsWith('nx_')) delete parsed[k]; }
+            for (const k of Object.keys(prev)) { if (!k.startsWith('nx_')) delete prev[k]; }
             const merged = { ...prev, ...parsed }; // chave ausente em parsed → mantém a de prev
             const PROT = ['nx_tasks','nx_projetos','nx_turnos','nx_conquistas','nx_manutencoes','nx_plantao','nx_compras','nx_extras','nx_users','nx_catalog','nx_notes','nx_imoveis','nx_despesas','nx_anotacoes_controle'];
             for (const k of PROT) {

@@ -2401,6 +2401,9 @@ function renderFocusInsights(){
 // ═══════════════════ SETTINGS ═══════════════════
 function exportarBackup(){
   const blob={};
+  // Backup manual (arquivo baixado): inclui TUDO, mesmo nx_avaliacoes (que fica
+  // de fora do SYNC_KEYS automático por ser pesado) — aqui é 1x sob demanda, não
+  // a cada minuto, então não tem problema.
   const SYNC_KEYS_LOCAL=['nx_lastSaved','nx_users','nx_name',...Object.keys(_PERSIST_KEYS)];
   SYNC_KEYS_LOCAL.forEach(k=>{ const v=localStorage.getItem(k); if(v!==null){ try{ blob[k]=JSON.parse(v); }catch(e){ blob[k]=v; } } });
   const data=JSON.stringify(blob, null, 2);
@@ -3443,13 +3446,15 @@ function saveAll(){
 
 // ─── Sincronização com o backend KV (compartilhado entre dispositivos) ───
 // Chaves que sincronizam (dados de equipe/operação). Credenciais e a lista
-// pesada de avaliações ficam SEMPRE locais.
-// Derivada de _PERSIST_KEYS (+ as poucas chaves gravadas fora dele) em vez de
-// uma lista solta duplicada: uma chave nova em _PERSIST_KEYS já sincroniza
-// automaticamente, sem precisar lembrar de atualizar uma segunda lista aqui
-// (foi exatamente esquecer isso que fez despesas/anotações do Controle nunca
-// saírem do aparelho onde foram criadas).
-const SYNC_KEYS=['nx_lastSaved','nx_users','nx_name',...Object.keys(_PERSIST_KEYS)];
+// pesada de avaliações ficam SEMPRE locais (pode ser grande e não precisa
+// sincronizar entre aparelhos).
+// Derivada de _PERSIST_KEYS (+ as poucas chaves gravadas fora dele, - as
+// explicitamente excluídas) em vez de uma lista solta duplicada: uma chave
+// nova em _PERSIST_KEYS já sincroniza automaticamente, sem precisar lembrar
+// de atualizar uma segunda lista aqui (foi exatamente esquecer isso que fez
+// despesas/anotações do Controle nunca saírem do aparelho onde foram criadas).
+const _SYNC_EXCLUDE = new Set(['nx_avaliacoes']);
+const SYNC_KEYS=['nx_lastSaved','nx_users','nx_name',...Object.keys(_PERSIST_KEYS).filter(k=>!_SYNC_EXCLUDE.has(k))];
 let _kvDirty=false;       // há mudança local não enviada?
 let _kvLastPushed=null;   // último blob enviado (string) — evita gravações repetidas
 let _kvPushing=false;

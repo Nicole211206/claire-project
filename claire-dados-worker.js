@@ -103,6 +103,42 @@ export default {
             for (const k of Object.keys(parsed)) { if (!k.startsWith('nx_')) delete parsed[k]; }
             for (const k of Object.keys(prev)) { if (!k.startsWith('nx_')) delete prev[k]; }
             const merged = { ...prev, ...parsed }; // chave ausente em parsed → mantém a de prev
+            // ── MESCLAGEM POR REGISTRO (id + _ts), à prova de aparelho desatualizado ──
+            // Para as listas com id próprio: em vez de o envio substituir a lista
+            // inteira, mescla item a item. Para cada id:
+            //   • presente nos dois lados → fica a versão com _ts MAIOR (a mais
+            //     recente). Um aparelho com app velho manda registros sem _ts (ou
+            //     _ts antigo) e NÃO consegue mais reverter o que outro editou depois.
+            //   • presente só de um lado → é mantido (união) — nada é apagado.
+            // (Deletes só se propagam via nx_tombstones, tratado logo abaixo.)
+            const MERGE_POR_ID = ['nx_manutencoes','nx_tasks','nx_plantao','nx_projetos','nx_compras','nx_extras','nx_conquistas','nx_despesas','nx_anotacoes_controle','nx_superhost','nx_cancelamentos'];
+            const _tsNum = o => Number(o && o._ts || 0);
+            const _temId = a => Array.isArray(a) && a.every(o => o && typeof o === 'object' && o.id !== undefined && o.id !== null);
+            for (const k of MERGE_POR_ID) {
+              const P = prev[k], N = parsed[k];
+              if (!_temId(P) || !_temId(N)) continue; // se qualquer lado não for lista-com-id, deixa a regra normal cuidar
+              const pMap = new Map(P.map(o => [o.id, o]));
+              const nMap = new Map(N.map(o => [o.id, o]));
+              const ordem = []; const visto = new Set();
+              for (const o of N) if (!visto.has(o.id)) { visto.add(o.id); ordem.push(o.id); }
+              for (const o of P) if (!visto.has(o.id)) { visto.add(o.id); ordem.push(o.id); }
+              merged[k] = ordem.map(id => {
+                const p = pMap.get(id), n = nMap.get(id);
+                if (p && n) return _tsNum(p) > _tsNum(n) ? p : n; // mais recente vence
+                return n || p; // só de um lado → mantém
+              });
+            }
+            // Tombstones: exclusões explícitas { id, ts }. Remove das listas o id
+            // marcado como apagado com ts >= _ts do registro (assim delete funciona
+            // mesmo com a união acima, sem "ressuscitar" o que foi apagado de verdade).
+            const tombs = Array.isArray(merged.nx_tombstones) ? merged.nx_tombstones : [];
+            if (tombs.length) {
+              const tMap = new Map(); for (const t of tombs) if (t && t.id != null) tMap.set(t.id, Number(t.ts || 0));
+              for (const k of MERGE_POR_ID) {
+                if (!Array.isArray(merged[k])) continue;
+                merged[k] = merged[k].filter(o => { const tt = tMap.get(o.id); return !(tt !== undefined && tt >= _tsNum(o)); });
+              }
+            }
             // 3) ENCOLHEU DEMAIS DE UMA VEZ (mesmo sem zerar) → também protege.
             //    A regra antiga só pegava quase-zerar (≥8 caindo a ≤2). Isso deixou
             //    passar um aparelho desatualizado derrubando 89 tarefas para 72 (uma
@@ -110,9 +146,12 @@ export default {
             //    perdeu 5+ de uma vez, OU perdeu mais de 20% (lista com 10+), protege.
             //    nx_turnos fica de fora dessa regra mais sensível porque tem uma ação
             //    própria ("Zerar Mês") que apaga um bloco grande de propósito.
-            const PROT = ['nx_tasks','nx_projetos','nx_turnos','nx_conquistas','nx_manutencoes','nx_plantao','nx_compras','nx_extras','nx_users','nx_catalog','nx_notes','nx_imoveis','nx_despesas','nx_anotacoes_controle'];
+            // Trava de encolhimento — só para as chaves que NÃO passam pela mesclagem
+            // por id acima (essas já são união, nunca encolhem sozinhas).
+            const PROT = ['nx_turnos','nx_users','nx_catalog','nx_notes','nx_imoveis'];
             const PROT_SENSIVEL = new Set(PROT.filter(k => k !== 'nx_turnos'));
             for (const k of PROT) {
+              if (MERGE_POR_ID.includes(k)) continue;
               const nNew = Array.isArray(parsed[k]) ? parsed[k].length : null;
               const nOld = Array.isArray(prev[k]) ? prev[k].length : null;
               if (nOld == null || nNew == null || nNew >= nOld) continue;

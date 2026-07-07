@@ -209,6 +209,7 @@ function setAvView(modo,btn){
 
 // ═══════════════════ LOGIN MULTIUSUÁRIO ═══════════════════
 let conquistas=[];
+let tombstones=[]; // exclusões { id, ts } — para o delete propagar sem ressuscitar
 let _legadoFiltro='';
 let _conquistaEditId=null;
 let usuarios=[]; // gerenciados pelo admin (espelha localStorage nx_users)
@@ -3425,11 +3426,43 @@ const _PERSIST_KEYS = {
   nx_notasfiscais:()=>notasFiscais,
   nx_conquistas:()=>conquistas,
   nx_despesas:()=>despesasFixas,
-  nx_anotacoes_controle:()=>anotacoesControle
+  nx_anotacoes_controle:()=>anotacoesControle,
+  nx_tombstones:()=>tombstones
 };
+
+// Listas com id próprio que o servidor mescla registro a registro (id + _ts).
+// DEVE espelhar a MERGE_POR_ID do worker.
+const _MERGE_POR_ID_KEYS=['nx_manutencoes','nx_tasks','nx_plantao','nx_projetos','nx_compras','nx_extras','nx_conquistas','nx_despesas','nx_anotacoes_controle','nx_superhost','nx_cancelamentos'];
+function _semTs(o){ const c=Object.assign({},o); delete c._ts; return JSON.stringify(c); }
+// Antes de salvar: carimba _ts nos registros novos/alterados e cria tombstone
+// para os que foram apagados. Assim o servidor sabe qual versão é a mais recente
+// (um aparelho com app antigo, sem _ts, não reverte mais) e os deletes se
+// propagam de verdade (sem "ressuscitar"). Centralizado — não precisa mexer em
+// cada função de excluir.
+function _carimbarTsEDeletes(){
+  const agora=Date.now();
+  for(const k of _MERGE_POR_ID_KEYS){
+    const live=_PERSIST_KEYS[k]?_PERSIST_KEYS[k]():null;
+    if(!Array.isArray(live)) continue;
+    let prev=[]; try{ const raw=localStorage.getItem(k); if(raw) prev=JSON.parse(raw); }catch(e){}
+    if(!Array.isArray(prev)) prev=[];
+    const prevMap=new Map(prev.filter(o=>o&&o.id!=null).map(o=>[o.id,o]));
+    for(const o of live){ if(!o||o.id==null) continue; const p=prevMap.get(o.id);
+      if(!p){ if(!o._ts) o._ts=agora; }                    // novo
+      else if(_semTs(o)!==_semTs(p)){ o._ts=agora; }        // alterado (ignorando o próprio _ts)
+      else if(!o._ts && p._ts){ o._ts=p._ts; }              // inalterado: preserva o _ts antigo
+    }
+    const liveIds=new Set(live.filter(o=>o&&o.id!=null).map(o=>o.id));
+    for(const p of prev){ if(p&&p.id!=null && !liveIds.has(p.id)){ if(!tombstones.some(t=>t.id===p.id)) tombstones.push({id:p.id,ts:agora}); } }
+  }
+  // poda tombstones muito antigos (>120 dias) para não crescer sem limite
+  const corte=agora-120*864e5;
+  if(tombstones.length>500) tombstones=tombstones.filter(t=>(t.ts||0)>=corte);
+}
 
 function saveAll(){
   try{
+    _carimbarTsEDeletes();
     // Grava só as chaves que realmente mudaram e só atualiza o carimbo de hora
     // (nx_lastSaved) quando houve mudança de fato. Isso é essencial para o sync:
     // o setInterval(saveAll,5000) roda toda hora, e antes ele empurrava o carimbo
@@ -3902,6 +3935,7 @@ function loadAll(){
     v=g('nx_conquistas'); if(Array.isArray(v)) conquistas=v;
     v=g('nx_despesas'); if(Array.isArray(v)) despesasFixas=v;
     v=g('nx_anotacoes_controle'); if(Array.isArray(v)) anotacoesControle=v;
+    v=g('nx_tombstones'); if(Array.isArray(v)) tombstones=v;
     // Migração: atendentes só veem o próprio attId (sem attsPermitidos).
     _migAtendentesSemPerms();
   }catch(e){ console.warn('loadAll falhou', e); }
@@ -6619,7 +6653,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 79;
+const APP_VERSION = 80;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

@@ -2480,11 +2480,18 @@ function saveSettings(){
   localStorage.setItem('nx_gclientid',document.getElementById('s-gclientid').value.trim());
   localStorage.setItem('nx_hostaway_url',document.getElementById('s-hostaway-url').value.trim());
   const saldoVal=document.getElementById('s-saldo-seguro').value.trim();
-  if(saldoVal!=='') localStorage.setItem('nx_saldo_seguro',saldoVal);
+  // Campo vazio DEVE zerar (remove o valor). Antes, esvaziar o campo era ignorado
+  // e o saldo inicial antigo ficava preso — por isso "zerei mas não refletiu".
+  if(saldoVal==='') localStorage.removeItem('nx_saldo_seguro');
+  else localStorage.setItem('nx_saldo_seguro',saldoVal);
   document.getElementById('sidebar-name').textContent=name;
   document.getElementById('sidebar-avatar').textContent=name.charAt(0).toUpperCase();
   _applyGoogleStatus();
   greet();closeModal('modal-settings');
+  // Atualiza a tela de Manutenção na hora (o "Saldo Restante" usa esse valor)
+  if(typeof renderManutencaoKanban==='function') renderManutencaoKanban();
+  if(typeof renderManutSaldoGeral==='function') renderManutSaldoGeral();
+  if(typeof renderPerformance==='function') renderPerformance();
   showToast('Configurações salvas!','sage');
 }
 function loadSettings(){
@@ -6612,7 +6619,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 78;
+const APP_VERSION = 79;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

@@ -3527,6 +3527,22 @@ function _mergeItemUpdates(winner, other){
   if(uni.length===winner.updates.length && JSON.stringify(uni)===JSON.stringify(winner.updates)) return winner;
   return {...winner, updates:uni};
 }
+// Prioridade por carimbo de tempo (_ts) — só decide no caso ASSIMÉTRICO: um
+// lado tem _ts (app já com o fix) e o outro não (app antigo). Nesse caso o
+// lado COM _ts vence por completo, mesmo que o campo "pareça" diferente da
+// base — a base pode estar simplesmente desatualizada naquele aparelho velho,
+// e sem essa regra ele "ganhava" o campo achando que foi edição local
+// legítima, revertendo o que outro atualizou depois (foi o bug de hoje).
+// Quando os DOIS lados têm _ts (dois aparelhos já atualizados editando ao
+// mesmo tempo campos DIFERENTES), não decide aqui — devolve null e deixa o
+// merge campo-a-campo de sempre cuidar, senão a edição de um apagaria a do
+// outro só por ter chegado com _ts levemente maior.
+function _tsVence(a, b){
+  const ta=typeof a?._ts==='number'?a._ts:null, tb=typeof b?._ts==='number'?b._ts:null;
+  if(ta!==null && tb===null) return a;
+  if(ta===null && tb!==null) return b;
+  return null;
+}
 // 3-vias: base = última versão que ESTE aparelho sincronizou; local = agora;
 // server = KV atual. Mantém a versão de quem realmente mudou o item; respeita
 // exclusões só quando o outro lado não mexeu no item. Nunca dropa item criado/editado.
@@ -3539,7 +3555,12 @@ function _mergeById(base, local, server){
   const decide=(id)=>{
     const inS=sMap.has(id), inL=lMap.has(id), inB=bMap.has(id);
     const s=sMap.get(id), l=lMap.get(id), bJson=bMap.get(id);
-    if(inL && inS){ const localChanged = !inB || JSON.stringify(l)!==bJson; return _mergeItemUpdates(localChanged ? l : s, localChanged ? s : l); }
+    if(inL && inS){
+      const porTs=_tsVence(l,s);
+      if(porTs) return _mergeItemUpdates(porTs, porTs===l?s:l);
+      const localChanged = !inB || JSON.stringify(l)!==bJson;
+      return _mergeItemUpdates(localChanged ? l : s, localChanged ? s : l);
+    }
     if(inL && !inS){ if(!inB) return l; return (JSON.stringify(l)!==bJson) ? l : undefined; } // server apagou
     if(!inL && inS){ if(!inB) return s; return (JSON.stringify(s)!==bJson) ? s : undefined; } // local apagou
     return undefined;
@@ -3637,6 +3658,13 @@ function _mergeManutencoes(base, local, server){
   for(const id of ordem){
     const b=bMap.get(id), l=lMap.get(id), s=sMap.get(id);
     if(l && s){
+      // Se um dos dois lados não tem _ts (aparelho sem o fix) ou tem _ts mais
+      // antigo, ele não pode "vencer" campo nenhum por parecer diferente da
+      // base — a base pode estar desatualizada NAQUELE aparelho. Adota o
+      // registro vencedor por _ts por completo (é assim que o worker decide
+      // também, mantém os dois lados consistentes).
+      const porTs=_tsVence(l,s);
+      if(porTs){ out.push(porTs); continue; }
       const merged={...l};
       Object.keys(s).forEach(k=>{
         if(_MANUT_ARRAY_FIELDS.includes(k)) return; // tratados abaixo, posicionalmente
@@ -3748,14 +3776,15 @@ async function kvPull(){
     const j=await r.json();
     window.__claireServerSeen=true; // leitura do servidor confirmada → envio liberado
     if(j&&j.data){
-      const localTs=parseInt(localStorage.getItem('nx_lastSaved')||'0');
-      const serverTs=parseInt((j.data.nx_lastSaved)||0);
-      // Só aplica o servidor se ele for ESTRITAMENTE mais novo que o local.
-      // Se o local é igual ou mais novo, NÃO sobrescreve — isso protege dados
-      // que acabaram de ser criados e ainda não foram enviados (ex.: projetos/
-      // tarefas adicionados e ainda não sincronizados). O carimbo de hora é
-      // confiável (só muda em mudança real), então essa comparação é segura.
-      if(serverTs<=localTs && localTs>0){ _kvLastPushed=_kvBuildBlob(); return false; }
+      // ANTES: só reconciliava quando o servidor era ESTRITAMENTE mais novo que
+      // o local — se um aparelho empurrasse algo (mesmo errado/velho), o
+      // carimbo local ficava "na frente" e ELE PARAVA DE PUXAR CORREÇÕES pra
+      // sempre, preso na própria cópia local. Era exatamente por isso que uma
+      // pessoa via os dados certos e outra continuava vendo tudo errado até
+      // dar refresh forçado. Agora reconcilia sempre, registro por registro —
+      // seguro porque as mesclagens abaixo (_mergeById/_mergeAtts/_mergeManutencoes)
+      // são por id (+ _ts quando existe) e nunca perdem edição local real.
+      if(j.data.nx_lastSaved===localStorage.getItem('nx_lastSaved')){ _kvLastPushed=_kvBuildBlob(); return false; } // nada mudou, nem tenta
       // baseBlob = último estado que ESTE aparelho sabe ter sincronizado — usado
       // pelas mesclagens de 3 vias abaixo (mesma lógica de _kvFlush, agora
       // também no PULL). Sem isso, um pull que chega enquanto há uma edição
@@ -6653,7 +6682,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 80;
+const APP_VERSION = 81;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

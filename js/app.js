@@ -3469,6 +3469,24 @@ function _kvBuildBlob(){
 // fora (tem demandas aninhadas por índice) e segue a proteção por tamanho. ──
 const _NO_MERGE = new Set(['nx_atts']);
 function _ehListaComId(arr){ return Array.isArray(arr) && arr.every(o=>o && typeof o==='object' && o.id!==undefined && o.id!==null); }
+// Une arrays de "updates" (comentários/atualizações), que são só-adição: junta os
+// dois lados e remove duplicados exatos, preservando a ordem. Assim, se duas
+// pessoas comentam na MESMA tarefa/demanda ao mesmo tempo, nenhum comentário some.
+function _unionUpdates(a, b){
+  a=Array.isArray(a)?a:[]; b=Array.isArray(b)?b:[];
+  const out=[], visto=new Set();
+  for(const u of [...a, ...b]){ const k=JSON.stringify(u); if(!visto.has(k)){ visto.add(k); out.push(u); } }
+  return out;
+}
+// Se ambos os lados têm o mesmo item e ambos têm updates, devolve uma cópia do
+// item vencedor com os updates UNIDOS (comentários nunca se perdem).
+function _mergeItemUpdates(winner, other){
+  if(!winner || !other) return winner;
+  if(!Array.isArray(winner.updates) || !Array.isArray(other.updates)) return winner;
+  const uni=_unionUpdates(winner.updates, other.updates);
+  if(uni.length===winner.updates.length && JSON.stringify(uni)===JSON.stringify(winner.updates)) return winner;
+  return {...winner, updates:uni};
+}
 // 3-vias: base = última versão que ESTE aparelho sincronizou; local = agora;
 // server = KV atual. Mantém a versão de quem realmente mudou o item; respeita
 // exclusões só quando o outro lado não mexeu no item. Nunca dropa item criado/editado.
@@ -3481,7 +3499,7 @@ function _mergeById(base, local, server){
   const decide=(id)=>{
     const inS=sMap.has(id), inL=lMap.has(id), inB=bMap.has(id);
     const s=sMap.get(id), l=lMap.get(id), bJson=bMap.get(id);
-    if(inL && inS){ const localChanged = !inB || JSON.stringify(l)!==bJson; return localChanged ? l : s; }
+    if(inL && inS){ const localChanged = !inB || JSON.stringify(l)!==bJson; return _mergeItemUpdates(localChanged ? l : s, localChanged ? s : l); }
     if(inL && !inS){ if(!inB) return l; return (JSON.stringify(l)!==bJson) ? l : undefined; } // server apagou
     if(!inL && inS){ if(!inB) return s; return (JSON.stringify(s)!==bJson) ? s : undefined; } // local apagou
     return undefined;
@@ -3517,7 +3535,7 @@ function _mergeAtts(base, local, server){
       if(s===undefined){ out.push(l); continue; }   // só no local → mantém
       const bv = b===undefined?undefined:JSON.stringify(b);
       const localMudou = JSON.stringify(l)!==bv;
-      out.push(localMudou ? l : s);                 // local mexeu → local; senão → servidor (mais novo)
+      out.push(_mergeItemUpdates(localMudou ? l : s, localMudou ? s : l)); // local mexeu → local; senão → servidor; comentários unidos
     }
     return out;
   };
@@ -6594,7 +6612,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 77;
+const APP_VERSION = 78;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

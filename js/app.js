@@ -3541,6 +3541,58 @@ function _mergeAtts(base, local, server){
   }
   return out;
 }
+// Mescla posicional 3-vias para arrays SEM id próprio (itens de manutenção,
+// subtarefas, fotos, links): por posição, se o local mudou em relação à base
+// mantém o local, senão adota o servidor. Posições que só existem de um lado
+// são preservadas (nunca encolhe).
+function _mergePositional(bArr, lArr, sArr){
+  bArr=Array.isArray(bArr)?bArr:[]; lArr=Array.isArray(lArr)?lArr:[]; sArr=Array.isArray(sArr)?sArr:[];
+  const n=Math.max(lArr.length,sArr.length); const out=[];
+  for(let i=0;i<n;i++){
+    const b=bArr[i], l=lArr[i], s=sArr[i];
+    if(l===undefined){ out.push(s); continue; }
+    if(s===undefined){ out.push(l); continue; }
+    const bv = b===undefined?undefined:JSON.stringify(b);
+    const localMudou = JSON.stringify(l)!==bv;
+    out.push(localMudou ? l : s);
+  }
+  return out;
+}
+// Mesmo problema do nx_atts, mas para Manutenções: duas pessoas editando a
+// mesma manutenção (uma o valor pago, outra o status/itens) faziam quem
+// salvasse por último apagar o campo que a outra tinha mudado, porque a
+// mesclagem genérica (_mergeById) troca o registro INTEIRO, não campo a
+// campo. Aqui, por manutenção: parte do local e, campo a campo, só adota o
+// servidor onde o local NÃO mudou desde a última sincronização. Os arrays
+// sem id (itens, subtarefas, fotos, links) mesclam por posição.
+const _MANUT_ARRAY_FIELDS = ['itens','tarefasManut','fotos','linksItens'];
+function _mergeManutencoes(base, local, server){
+  local  = Array.isArray(local)?local:[];
+  server = Array.isArray(server)?server:[];
+  const bMap=new Map((Array.isArray(base)?base:[]).map(m=>[m.id, m]));
+  const sMap=new Map(server.map(m=>[m.id, m]));
+  const lMap=new Map(local.map(m=>[m.id, m]));
+  const ordem=[]; const visto=new Set();
+  for(const m of local){  if(!visto.has(m.id)){ visto.add(m.id); ordem.push(m.id); } }
+  for(const m of server){ if(!visto.has(m.id)){ visto.add(m.id); ordem.push(m.id); } }
+  const out=[];
+  for(const id of ordem){
+    const b=bMap.get(id), l=lMap.get(id), s=sMap.get(id);
+    if(l && s){
+      const merged={...l};
+      Object.keys(s).forEach(k=>{
+        if(_MANUT_ARRAY_FIELDS.includes(k)) return; // tratados abaixo, posicionalmente
+        const bv = b?JSON.stringify(b[k]):undefined;
+        const localMudou = JSON.stringify(l[k])!==bv;
+        if(!localMudou) merged[k]=s[k];
+      });
+      _MANUT_ARRAY_FIELDS.forEach(k=>{ merged[k]=_mergePositional(b&&b[k], l[k], s[k]); });
+      out.push(merged);
+    } else if(l){ out.push(l); }
+    else if(s){ out.push(s); }
+  }
+  return out;
+}
 // Envia ao KV SOMENTE se houver mudança real (deduplicado). Chamado por um intervalo espaçado.
 async function _kvFlush(){
   const s=window.CLAIRE_SYNC||{};
@@ -3575,6 +3627,13 @@ async function _kvFlush(){
           // das regras genéricas de array.
           if(k==='nx_atts' && Array.isArray(sv) && Array.isArray(lv)){
             const merged=_mergeAtts(baseBlob?baseBlob[k]:null, lv, sv);
+            if(JSON.stringify(merged)!==JSON.stringify(lv)){
+              local[k]=merged; try{ localStorage.setItem(k, JSON.stringify(merged)); }catch(e){} ajustou=true;
+            }
+          } else if(k==='nx_manutencoes' && Array.isArray(sv) && Array.isArray(lv)){
+            // Mescla campo a campo (evita que editar valores apague status/itens
+            // que outra pessoa mudou na mesma manutenção, e vice-versa).
+            const merged=_mergeManutencoes(baseBlob?baseBlob[k]:null, lv, sv);
             if(JSON.stringify(merged)!==JSON.stringify(lv)){
               local[k]=merged; try{ localStorage.setItem(k, JSON.stringify(merged)); }catch(e){} ajustou=true;
             }

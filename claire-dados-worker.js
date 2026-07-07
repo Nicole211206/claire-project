@@ -103,11 +103,22 @@ export default {
             for (const k of Object.keys(parsed)) { if (!k.startsWith('nx_')) delete parsed[k]; }
             for (const k of Object.keys(prev)) { if (!k.startsWith('nx_')) delete prev[k]; }
             const merged = { ...prev, ...parsed }; // chave ausente em parsed → mantém a de prev
+            // 3) ENCOLHEU DEMAIS DE UMA VEZ (mesmo sem zerar) → também protege.
+            //    A regra antiga só pegava quase-zerar (≥8 caindo a ≤2). Isso deixou
+            //    passar um aparelho desatualizado derrubando 89 tarefas para 72 (uma
+            //    perda de 17, real, silenciosa) porque 72 não é "quase zero". Agora:
+            //    perdeu 5+ de uma vez, OU perdeu mais de 20% (lista com 10+), protege.
+            //    nx_turnos fica de fora dessa regra mais sensível porque tem uma ação
+            //    própria ("Zerar Mês") que apaga um bloco grande de propósito.
             const PROT = ['nx_tasks','nx_projetos','nx_turnos','nx_conquistas','nx_manutencoes','nx_plantao','nx_compras','nx_extras','nx_users','nx_catalog','nx_notes','nx_imoveis','nx_despesas','nx_anotacoes_controle'];
+            const PROT_SENSIVEL = new Set(PROT.filter(k => k !== 'nx_turnos'));
             for (const k of PROT) {
               const nNew = Array.isArray(parsed[k]) ? parsed[k].length : null;
               const nOld = Array.isArray(prev[k]) ? prev[k].length : null;
-              if (nOld != null && nNew != null && ((nNew === 0 && nOld >= 3) || (nOld >= 8 && nNew <= 2))) {
+              if (nOld == null || nNew == null || nNew >= nOld) continue;
+              const catastrofico = (nNew === 0 && nOld >= 3) || (nOld >= 8 && nNew <= 2);
+              const encolheuDemais = PROT_SENSIVEL.has(k) && ((nOld - nNew) >= 5 || (nOld >= 10 && nNew < nOld * 0.8));
+              if (catastrofico || encolheuDemais) {
                 merged[k] = prev[k]; // mantém a lista do servidor (não deixa encolher)
               }
             }

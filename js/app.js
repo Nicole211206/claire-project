@@ -3698,21 +3698,46 @@ async function kvPull(){
       // tarefas adicionados e ainda não sincronizados). O carimbo de hora é
       // confiável (só muda em mudança real), então essa comparação é segura.
       if(serverTs<=localTs && localTs>0){ _kvLastPushed=_kvBuildBlob(); return false; }
+      // baseBlob = último estado que ESTE aparelho sabe ter sincronizado — usado
+      // pelas mesclagens de 3 vias abaixo (mesma lógica de _kvFlush, agora
+      // também no PULL). Sem isso, um pull que chega enquanto há uma edição
+      // local ainda não enviada sobrescrevia tudo com o servidor cegamente —
+      // era exatamente esse buraco que fazia uma manutenção recém-lançada
+      // "sumir sozinha" ou voltar de status sem ninguém apagar nada.
+      let baseBlob=null; try{ baseBlob = _kvLastPushed ? JSON.parse(_kvLastPushed) : null; }catch(e){ baseBlob=null; }
       let aplicou=false;
       for(const k in j.data){
         try{
           const sv=j.data[k];
-          // Proteção: servidor com menos dados não apaga lista local mais completa.
           const _lr=localStorage.getItem(k);
-          if(_lr){
-            try{
-              const lv=JSON.parse(_lr);
-              if(Array.isArray(sv)&&Array.isArray(lv)&&sv.length<lv.length) continue;
-              if(sv&&typeof sv==='object'&&!Array.isArray(sv)&&lv&&typeof lv==='object'&&!Array.isArray(lv)){
-                const _cnt=o=>Object.values(o).flatMap(x=>typeof x==='object'&&x?Object.values(x):[x]).filter(v=>v!==null&&v!==undefined&&v!=='').length;
-                if(_cnt(sv)<_cnt(lv)) continue;
-              }
-            }catch(e){}
+          let lv=null;
+          if(_lr){ try{ lv=JSON.parse(_lr); }catch(e){ lv=null; } }
+          if(k==='nx_atts' && Array.isArray(sv) && Array.isArray(lv)){
+            const merged=_mergeAtts(baseBlob?baseBlob[k]:null, lv, sv);
+            const novo=JSON.stringify(merged);
+            if(localStorage.getItem(k)!==novo){ localStorage.setItem(k, novo); aplicou=true; }
+            continue;
+          }
+          if(k==='nx_manutencoes' && Array.isArray(sv) && Array.isArray(lv)){
+            const merged=_mergeManutencoes(baseBlob?baseBlob[k]:null, lv, sv);
+            const novo=JSON.stringify(merged);
+            if(localStorage.getItem(k)!==novo){ localStorage.setItem(k, novo); aplicou=true; }
+            continue;
+          }
+          if(Array.isArray(sv) && Array.isArray(lv) && _ehListaComId(sv) && _ehListaComId(lv) && !_NO_MERGE.has(k)){
+            const merged=_mergeById(baseBlob?baseBlob[k]:null, lv, sv);
+            const novo=JSON.stringify(merged);
+            if(localStorage.getItem(k)!==novo){ localStorage.setItem(k, novo); aplicou=true; }
+            continue;
+          }
+          // Proteção genérica (demais chaves): servidor com menos dados não apaga
+          // lista/objeto local mais completo.
+          if(lv!==null){
+            if(Array.isArray(sv)&&Array.isArray(lv)&&sv.length<lv.length) continue;
+            if(sv&&typeof sv==='object'&&!Array.isArray(sv)&&lv&&typeof lv==='object'&&!Array.isArray(lv)){
+              const _cnt=o=>Object.values(o).flatMap(x=>typeof x==='object'&&x?Object.values(x):[x]).filter(v=>v!==null&&v!==undefined&&v!=='').length;
+              if(_cnt(sv)<_cnt(lv)) continue;
+            }
           }
           const novo=JSON.stringify(sv);
           if(localStorage.getItem(k)!==novo){ localStorage.setItem(k, novo); aplicou=true; }

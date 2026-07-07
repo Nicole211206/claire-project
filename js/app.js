@@ -250,8 +250,34 @@ function carregarUsuarios(){ try{ usuarios=JSON.parse(localStorage.getItem('nx_u
 function salvarUsuarios(){ localStorage.setItem('nx_users', JSON.stringify(usuarios)); _kvDirty=true; }
 
 function aplicarPermissoes(){
-  const u=getCurrentUser();
+  let u=getCurrentUser();
   if(!u) return;
+  // Autocorreção da sessão: a sessão (sessionStorage) é um retrato de quando a
+  // pessoa fez login — se o cadastro dela (nx_users, que sincroniza) mudar
+  // depois (ex.: alguém ajusta os módulos dela), a sessão ficava "congelada"
+  // na versão antiga pra sempre, e só um logout manual corrigia. Isso já
+  // causou gente vendo permissão errada (ex.: menu de admin completo) mesmo
+  // logada com a própria conta. Agora, a cada vez que a tela é redesenhada
+  // (inclui depois de cada sincronização automática), reconfere contra o
+  // cadastro ATUAL direto do localStorage e corrige a sessão sozinha.
+  {
+    // Reconcilia SEMPRE (não só quando a sessão parece "menos" privilegiada) —
+    // a sessão congelada pode estar tanto subestimando quanto SOBRESTIMANDO
+    // a permissão (foi o que aconteceu de verdade: uma sessão antiga guardava
+    // perfil/módulos que não conferem mais com o cadastro atual).
+    try{
+      const todos=JSON.parse(localStorage.getItem('nx_users')||'[]');
+      const atual=todos.find(x=>(x.email||'').toLowerCase()===(u.email||'').toLowerCase());
+      if(atual){
+        const fresco={email:atual.email,nome:atual.nome,perfil:atual.perfil,modulos:atual.modulos||[],attsPermitidos:atual.attsPermitidos||[],attId:atual.attId||''};
+        const antigo={email:u.email,nome:u.nome,perfil:u.perfil,modulos:u.modulos||[],attsPermitidos:u.attsPermitidos||[],attId:u.attId||''};
+        if(JSON.stringify(fresco)!==JSON.stringify(antigo)){
+          sessionStorage.setItem('nx_currentuser', JSON.stringify(fresco));
+          u=fresco;
+        }
+      }
+    }catch(e){}
+  }
   // Atualizar rodapé com nome/perfil do usuário logado
   const nameEl=document.getElementById('sidebar-name'); if(nameEl) nameEl.textContent=u.nome||u.email;
   const roleEl=document.querySelector('.user-role'); if(roleEl) roleEl.textContent=({admin:'Administradora',coordenacao:'Coordenação',atendente:'Atendente'}[u.perfil]||u.perfil);
@@ -262,7 +288,11 @@ function aplicarPermissoes(){
     const m=oc.match(/showPanel\('([^']+)'/);
     if(m){
       const modId=m[1];
-      btn.style.display = (u.perfil==='admin'||podeAcessar(modId)) ? '' : 'none';
+      // "Equipe" é o item único que reúne Equipe/Salários/Turnos (fundidos em
+      // abas) — a permissão de quem já tinha só 'salary' ou só 'turnos' continua
+      // guardada com esses ids antigos, não como 'equipe' literal.
+      const temAcesso = modId==='equipe' ? (podeAcessar('team')||podeAcessar('salary')||podeAcessar('turnos')) : podeAcessar(modId);
+      btn.style.display = (u.perfil==='admin'||temAcesso) ? '' : 'none';
     }
   });
   // Botão de Usuários (admin) — exibir só pra admin
@@ -536,7 +566,8 @@ function contarDemandasAtrasadas(){
 }
 
 function greet(){
-  const h=new Date().getHours(),name=ls('nx_name')||'Nicole';
+  const _cu=typeof getCurrentUser==='function'?getCurrentUser():null;
+  const h=new Date().getHours(),name=(_cu&&_cu.nome)||ls('nx_name')||'Nicole';
   const g=h<12?'Bom dia':h<18?'Boa tarde':'Boa noite';
   const e=h<12?'🌸':h<18?'☀️':'🌙';
   document.getElementById('greeting').textContent=g+', '+name+'! '+e;
@@ -2485,8 +2516,12 @@ function saveSettings(){
   // e o saldo inicial antigo ficava preso — por isso "zerei mas não refletiu".
   if(saldoVal==='') localStorage.removeItem('nx_saldo_seguro');
   else localStorage.setItem('nx_saldo_seguro',saldoVal);
-  document.getElementById('sidebar-name').textContent=name;
-  document.getElementById('sidebar-avatar').textContent=name.charAt(0).toUpperCase();
+  // O rodapé (nome/avatar) mostra QUEM ESTÁ LOGADO, não esse campo — nx_name
+  // sincroniza entre aparelhos, então sobrescrever o rodapé com ele fazia
+  // qualquer pessoa ver o nome de quem editou essa configuração por último
+  // (ex.: "Nicole" aparecendo pra Patrícia). aplicarPermissoes() já cuida
+  // do rodapé a partir do usuário logado.
+  if(typeof aplicarPermissoes==='function') aplicarPermissoes();
   _applyGoogleStatus();
   greet();closeModal('modal-settings');
   // Atualiza a tela de Manutenção na hora (o "Saldo Restante" usa esse valor)
@@ -2496,9 +2531,9 @@ function saveSettings(){
   showToast('Configurações salvas!','sage');
 }
 function loadSettings(){
-  const n=ls('nx_name')||'Nicole';
-  document.getElementById('sidebar-name').textContent=n;
-  document.getElementById('sidebar-avatar').textContent=n.charAt(0).toUpperCase();
+  // O rodapé (nome/avatar) é definido por aplicarPermissoes() a partir do
+  // usuário logado — nx_name é só o valor do campo "Seu nome" nas Configurações
+  // (sincroniza entre aparelhos), não deve sobrescrever quem está logado aqui.
   _applyGoogleStatus();
 }
 function _applyGoogleStatus(){
@@ -6682,7 +6717,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 81;
+const APP_VERSION = 82;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

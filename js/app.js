@@ -44,7 +44,18 @@ let kpiSubVals={};
 let kpiPeriodo=new Date().toISOString().substring(0,7);
 function _kv(){if(!kpiVals[kpiPeriodo])kpiVals[kpiPeriodo]={};return kpiVals[kpiPeriodo];}
 function _ksv(){if(!kpiSubVals[kpiPeriodo])kpiSubVals[kpiPeriodo]={};return kpiSubVals[kpiPeriodo];}
-function setKpiPeriodo(mes){kpiPeriodo=mes;_syncObKpiDoOnboarding();_syncSetupKpiDoOnboarding();renderKPIs();if(typeof saveAll==='function')saveAll();}
+function setKpiPeriodo(mes){
+  kpiPeriodo=mes;
+  _syncObKpiDoOnboarding();_syncSetupKpiDoOnboarding();
+  // KPIs e Performance compartilham o mesmo mês de referência — mudar em
+  // qualquer um dos dois seletores tem que refletir no outro e recalcular as
+  // duas telas (cancelamentos/extras do resumo de Performance dependem disso).
+  const kpiSel=document.getElementById('kpi-periodo-sel'); if(kpiSel) kpiSel.value=mes;
+  const perfSel=document.getElementById('perf-periodo-sel'); if(perfSel) perfSel.value=mes;
+  renderKPIs();
+  if(typeof renderPerformance==='function' && document.getElementById('performance-body')) renderPerformance();
+  if(typeof saveAll==='function')saveAll();
+}
 let imoveis=[];
 let imovelAtivo=null;
 let _obData=null; // null=não buscado ainda, []=buscado
@@ -2032,6 +2043,7 @@ function removerNotaFiscal(id, parcela){
 
 function renderPerformance(){
   const el=document.getElementById('performance-body');if(!el)return;
+  const perfSel=document.getElementById('perf-periodo-sel'); if(perfSel&&!perfSel.value) perfSel.value=kpiPeriodo;
   const g=calcGlobal(), band=getBand(g);
   const flagStyle=
     g>=150?{txt:'🏆 ELITE', c:'#7C3AED'}:
@@ -2091,6 +2103,10 @@ function renderPerformance(){
         <div id="perf-canc-inner"></div>
       </div>
       <div style="margin-top:28px;">
+        <p style="font-size:11px;font-weight:600;color:#374151;letter-spacing:.4px;text-transform:uppercase;margin-bottom:14px;">Manutenção</p>
+        <div id="perf-manut-inner"></div>
+      </div>
+      <div style="margin-top:28px;">
         <p style="font-size:11px;font-weight:600;color:#374151;letter-spacing:.4px;text-transform:uppercase;margin-bottom:14px;">Preferido dos Hóspedes</p>
         <div id="perf-preferidos-inner"></div>
       </div>
@@ -2128,6 +2144,28 @@ function renderPerformance(){
   const _pC=_cancMes.reduce((s,c)=>s+(c.valorProprietario||0),0);
   document.getElementById('perf-canc-inner').innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;">
     ${[{l:'Total recebido',v:brl(_tC),c:'#0D9488'},{l:'WeCare',v:brl(_wC),c:'#DC2626'},{l:'Proprietários',v:brl(_pC),c:'#1D4ED8'},{l:'Nº cancelamentos',v:_cancMes.length,c:'#D97706'}]
+    .map(x=>`<div style="background:#F4F6F9;border-radius:10px;padding:12px;text-align:center;">
+      <div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;margin-bottom:4px;">${x.l}</div>
+      <div style="font-size:18px;font-weight:700;color:${x.c};font-family:'SF Mono','Fira Code',monospace;">${x.v}</div>
+    </div>`).join('')}
+  </div>`;
+
+  // Manutenção — visão geral (atrasadas/pendentes/concluídas são status atuais,
+  // não são "do mês", por isso não filtram pelo período; mesmo cálculo de saldo
+  // do módulo Manutenção: economia acumulada de todas as manutenções pagas,
+  // de qualquer pagador — diferente do "Saldo Manutenção" abaixo, que é só a
+  // verba do Seguro EasyCover).
+  const _mHoje=new Date().toISOString().split('T')[0];
+  const _mLista=(typeof manutencoes!=='undefined'?manutencoes:[]);
+  const _mAtrasadas=_mLista.filter(m=>m.dataPrazo&&m.dataPrazo<_mHoje&&m.status!=='pago').length;
+  const _mPendentes=_mLista.filter(m=>m.status!=='pago').length;
+  const _mConcluidas=_mLista.filter(m=>m.status==='pago').length;
+  const _mSaldoIni=parseFloat(localStorage.getItem('nx_saldo_seguro'))||0;
+  const _mEconomia=_mLista.filter(m=>m.status==='pago'&&(m.valorPago||m.valorGasto)).reduce((s,m)=>s+(parseFloat(m.valorPago)||0)-(parseFloat(m.valorGasto)||0),0);
+  const _mSaldoAtual=_mSaldoIni+_mEconomia;
+  const _elManut=document.getElementById('perf-manut-inner');
+  if(_elManut) _elManut.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;">
+    ${[{l:'Atrasadas',v:_mAtrasadas,c:'#DC2626'},{l:'Pendentes',v:_mPendentes,c:'#D97706'},{l:'Concluídas',v:_mConcluidas,c:'#0D9488'},{l:'Saldo restante',v:brl(_mSaldoAtual),c:_mSaldoAtual>=0?'#0D9488':'#DC2626'}]
     .map(x=>`<div style="background:#F4F6F9;border-radius:10px;padding:12px;text-align:center;">
       <div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;margin-bottom:4px;">${x.l}</div>
       <div style="font-size:18px;font-weight:700;color:${x.c};font-family:'SF Mono','Fira Code',monospace;">${x.v}</div>
@@ -6875,7 +6913,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 85;
+const APP_VERSION = 86;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

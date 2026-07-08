@@ -334,9 +334,12 @@ function _validarLogin(){
 
     <!-- ── PERFORMANCE ── -->
     <div class="panel" id="panel-performance">
-      <div style="margin-bottom:18px;">
-        <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Acompanhamento de Performance</h2>
-        <p style="color:var(--text3);font-size:13px;margin-top:2px;">Visão geral de KPIs e projetos</p>
+      <div style="margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+        <div>
+          <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Acompanhamento de Performance</h2>
+          <p style="color:var(--text3);font-size:13px;margin-top:2px;">Visão geral de KPIs e projetos</p>
+        </div>
+        <div><label style="font-size:10.5px;color:var(--text3);text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px;">Mês de Referência</label><input type="month" id="perf-periodo-sel" class="form-input" style="padding:5px 9px;font-size:12.5px;" onchange="setKpiPeriodo(this.value)"></div>
       </div>
       <div id="performance-body"></div>
       <div id="perf-saldo-seguro"></div>
@@ -1665,6 +1668,6 @@ function _validarLogin(){
   </div>
 </div>
 
-<script src="js/app.js?v=85"></script>
+<script src="js/app.js?v=86"></script>
 </body>
 </html>

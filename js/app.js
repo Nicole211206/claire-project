@@ -2103,10 +2103,6 @@ function renderPerformance(){
         <div id="perf-canc-inner"></div>
       </div>
       <div style="margin-top:28px;">
-        <p style="font-size:11px;font-weight:600;color:#374151;letter-spacing:.4px;text-transform:uppercase;margin-bottom:14px;">Manutenção</p>
-        <div id="perf-manut-inner"></div>
-      </div>
-      <div style="margin-top:28px;">
         <p style="font-size:11px;font-weight:600;color:#374151;letter-spacing:.4px;text-transform:uppercase;margin-bottom:14px;">Preferido dos Hóspedes</p>
         <div id="perf-preferidos-inner"></div>
       </div>
@@ -2150,28 +2146,6 @@ function renderPerformance(){
     </div>`).join('')}
   </div>`;
 
-  // Manutenção — visão geral (atrasadas/pendentes/concluídas são status atuais,
-  // não são "do mês", por isso não filtram pelo período; mesmo cálculo de saldo
-  // do módulo Manutenção: economia acumulada de todas as manutenções pagas,
-  // de qualquer pagador — diferente do "Saldo Manutenção" abaixo, que é só a
-  // verba do Seguro EasyCover).
-  const _mHoje=new Date().toISOString().split('T')[0];
-  const _mLista=(typeof manutencoes!=='undefined'?manutencoes:[]);
-  const _mAtrasadas=_mLista.filter(m=>m.dataPrazo&&m.dataPrazo<_mHoje&&m.status!=='pago').length;
-  const _mPendentes=_mLista.filter(m=>m.status!=='pago').length;
-  const _mConcluidas=_mLista.filter(m=>m.status==='pago').length;
-  const _mSaldoIni=parseFloat(localStorage.getItem('nx_saldo_seguro'))||0;
-  const _mEconomia=_mLista.filter(m=>m.status==='pago'&&(m.valorPago||m.valorGasto)).reduce((s,m)=>s+(parseFloat(m.valorPago)||0)-(parseFloat(m.valorGasto)||0),0);
-  const _mSaldoAtual=_mSaldoIni+_mEconomia;
-  const _elManut=document.getElementById('perf-manut-inner');
-  if(_elManut) _elManut.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;">
-    ${[{l:'Atrasadas',v:_mAtrasadas,c:'#DC2626'},{l:'Pendentes',v:_mPendentes,c:'#D97706'},{l:'Concluídas',v:_mConcluidas,c:'#0D9488'},{l:'Saldo restante',v:brl(_mSaldoAtual),c:_mSaldoAtual>=0?'#0D9488':'#DC2626'}]
-    .map(x=>`<div style="background:#F4F6F9;border-radius:10px;padding:12px;text-align:center;">
-      <div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;margin-bottom:4px;">${x.l}</div>
-      <div style="font-size:18px;font-weight:700;color:${x.c};font-family:'SF Mono','Fira Code',monospace;">${x.v}</div>
-    </div>`).join('')}
-  </div>`;
-
   // Preferido dos Hóspedes
   const _totalImv=imovelsCatalog.length;
   const _prefImv=imovelsCatalog.filter(im=>im.preferidoHospedes).length;
@@ -2185,10 +2159,13 @@ function renderPerformance(){
     </div>`).join('')}
   </div>`;
 
-  // Saldo seguro
+  // Saldo Manutenção — mesmo cálculo do módulo Manutenção (renderManutSaldoGeral):
+  // saldo inicial + economia (pago - gasto) de toda manutenção concluída, de
+  // qualquer pagador. Antes só considerava manutenção paga pelo Seguro
+  // EasyCover, que nunca é usado aqui — por isso sempre aparecia R$ 0,00.
   const _saldoIni=parseFloat(localStorage.getItem('nx_saldo_seguro'))||0;
-  const _gastoSeg=(typeof manutencoes!=='undefined'?manutencoes:[]).filter(function(m){return m.quemPaga==='seguro'&&m.status==='pago';}).reduce(function(s,m){return s+(typeof manutTotalComMargem==='function'?manutTotalComMargem(m):0);},0);
-  const _saldoAtual=_saldoIni-_gastoSeg;
+  const _economiaManut=(typeof manutencoes!=='undefined'?manutencoes:[]).filter(function(m){return m.status==='pago'&&(m.valorPago||m.valorGasto);}).reduce(function(s,m){return s+(parseFloat(m.valorPago)||0)-(parseFloat(m.valorGasto)||0);},0);
+  const _saldoAtual=_saldoIni+_economiaManut;
   const _saldoC=_saldoAtual>=0?'#0D9488':'#DC2626';
   const _saldoEl=document.getElementById('perf-saldo-seguro');
   if(_saldoEl){
@@ -2196,7 +2173,7 @@ function renderPerformance(){
       <div>
         <div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px;">Saldo Manutenção</div>
         <div style="font-size:22px;font-weight:700;font-family:'SF Mono','Fira Code',monospace;color:${_saldoC};">R$ ${_saldoAtual.toFixed(2).replace('.',',')}</div>
-        ${_saldoIni>0?`<div style="font-size:10px;color:#9CA3AF;">de R$ ${_saldoIni.toFixed(2).replace('.',',')} iniciais · R$ ${_gastoSeg.toFixed(2).replace('.',',')} usado</div>`:'<div style="font-size:10px;color:#9CA3AF;">Configure o saldo inicial em Configurações</div>'}
+        <div style="font-size:10px;color:#9CA3AF;">${_saldoIni>0?`base R$ ${_saldoIni.toFixed(2).replace('.',',')} · `:''}R$ ${_economiaManut.toFixed(2).replace('.',',')} de economia acumulada</div>
       </div>
     </div>`;
   }
@@ -6913,7 +6890,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 86;
+const APP_VERSION = 87;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

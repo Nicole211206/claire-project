@@ -6,20 +6,38 @@ const NIVEIS=[
   {n:'N7',fixo:9744,variavel:3543},{n:'N8',fixo:10718,variavel:3897},
 ];
 
-const KPI_DEFS=[
-  {id:'av',   label:'Avaliação dos Hóspedes', peso:0.25, unit:'estrelas', meta:4.8, color:'rose',  icon:'fa-star',        hint:'Média Airbnb + Booking',
-   calc:v=>{if(v==null||v==='')return null;v=+v;if(isNaN(v))return null;if(v<4.7)return 79;if(v<4.8)return 80+(v-4.7)/0.01*2;if(v===4.8)return 100;if(v<4.9)return 100+(v-4.8)/0.01*2.222;if(v<5.0)return 121+(v-4.9)/0.01*2.9;return 150;}},
-  {id:'tr',   label:'Tempo de Resposta',      peso:0.15, unit:'min',      meta:5,   color:'lav',   icon:'fa-clock',       hint:'Média da equipe (Conduit)',
-   calc:v=>{if(v==null||v==='')return null;v=+v;if(isNaN(v))return null;if(v>6)return 79;if(v>5)return 80+(6-v)*20;if(v===5)return 100;if(v>4)return 100+(5-v)/0.1*2.222;if(v>=3)return 121+(4-v)/0.1*2.9;return 150;}},
-  {id:'ob',   label:'Tempo de Onboarding',    peso:0.20, unit:'dias',     meta:10,  color:'sage',  icon:'fa-house-flag',  hint:'Assinatura → Anúncio ativo',
-   calc:v=>{if(v==null||v==='')return null;v=+v;if(isNaN(v))return null;if(v>=12)return 79;if(v>10)return 80+(12-v)/2*20;if(v===10)return 100;if(v>9)return 100+(10-v)/0.1*2.222;if(v>=8)return 121+(9-v)/0.1*2.9;return 150;}},
-  {id:'cv',   label:'Conversão de Avaliações',peso:0.15, unit:'%',        meta:60,  color:'peach', icon:'fa-comments',    hint:'% reviews/checkouts (Hostaway)',
-   calc:v=>{if(v==null||v==='')return null;v=+v;if(isNaN(v))return null;if(v<50)return 79;if(v<60)return 80+(v-50)*2;if(v===60)return 100;if(v<=70)return 100+(v-60)*2.1;if(v<=80)return 121+(v-70)*2.9;return 150;}},
-  {id:'rc',   label:'Redução de Custos',      peso:0.15, unit:'%',        meta:10,  color:'sky',   icon:'fa-piggy-bank',  hint:'% economia gerada',
-   calc:v=>{if(v==null||v==='')return null;v=+v;if(isNaN(v))return null;if(v<0)return 79;if(v<10)return 80+v*2;if(v===10)return 100;if(v<=20)return 100+(v-10)*2.1;if(v<=30)return 121+(v-20)*2.9;return 150;}},
-  {id:'av360',label:'Avaliação 360',          peso:0.10, unit:'estrelas', meta:4.8, color:'gold',  icon:'fa-user-check',  hint:'Formulário de desempenho',
-   calc:v=>{if(v==null||v==='')return null;v=+v;if(isNaN(v))return null;if(v<4.7)return 79;if(v<4.8)return 80+(v-4.7)/0.01*2;if(v===4.8)return 100;if(v<4.9)return 100+(v-4.8)/0.01*2.222;return 150;}},
+// Cada KPI é avaliado numa escala de bandeiras a partir de 4 valores de referência
+// (limVermelha/meta/limAzul/limElite) — "menorMelhor" inverte a direção pra KPIs
+// onde um valor menor é melhor (tempo de resposta, onboarding). kpiScoreGeneric()
+// interpola linearmente entre esses pontos pra chegar no % de atingimento.
+// Configurável pela tela "Configurar KPIs" — por isso é `let`, não `const`.
+let KPI_DEFS=[
+  {id:'av',   label:'Avaliação dos Hóspedes', peso:0.25, unit:'estrelas', meta:4.8, limVermelha:4.7, limAzul:4.9, limElite:5.0, menorMelhor:false, color:'rose',  icon:'fa-star',        hint:'Média Airbnb + Booking'},
+  {id:'tr',   label:'Tempo de Resposta',      peso:0.15, unit:'min',      meta:5,   limVermelha:6,   limAzul:4,   limElite:3,   menorMelhor:true,  color:'lav',   icon:'fa-clock',       hint:'Média da equipe (Conduit)'},
+  {id:'ob',   label:'Tempo de Onboarding',    peso:0.20, unit:'dias',     meta:10,  limVermelha:12,  limAzul:9,   limElite:8,   menorMelhor:true,  color:'sage',  icon:'fa-house-flag',  hint:'Assinatura → Anúncio ativo'},
+  {id:'cv',   label:'Conversão de Avaliações',peso:0.15, unit:'%',        meta:60,  limVermelha:50,  limAzul:70,  limElite:80,  menorMelhor:false, color:'peach', icon:'fa-comments',    hint:'% reviews/checkouts (Hostaway)'},
+  {id:'rc',   label:'Redução de Custos',      peso:0.15, unit:'%',        meta:10,  limVermelha:0,   limAzul:20,  limElite:30,  menorMelhor:false, color:'sky',   icon:'fa-piggy-bank',  hint:'% economia gerada'},
+  {id:'av360',label:'Avaliação 360',          peso:0.10, unit:'estrelas', meta:4.8, limVermelha:4.7, limAzul:4.9, limElite:4.9, menorMelhor:false, color:'gold',  icon:'fa-user-check',  hint:'Formulário de desempenho'},
 ];
+function kpiScoreGeneric(v,k){
+  if(v==null||v==='')return null;
+  v=+v; if(isNaN(v))return null;
+  const meta=+k.meta, pior=+k.limVermelha, bom=+k.limAzul, otimo=+k.limElite;
+  if([meta,pior,bom,otimo].some(isNaN))return null;
+  const dir=k.menorMelhor?-1:1;
+  const d=x=>dir*(x-meta);
+  const dv=d(v);
+  const dPior=Math.min(d(pior),-1e-6);
+  const dBom=Math.max(d(bom),1e-6);
+  const dOtimo=Math.max(d(otimo),dBom+1e-6);
+  if(dv<=dPior)return 79;
+  if(dv<0)return 80+(dv-dPior)/(0-dPior)*20;
+  if(dv<dBom)return 100+(dv/dBom)*21;
+  if(dv<dOtimo)return 121+((dv-dBom)/(dOtimo-dBom))*29;
+  return 150;
+}
+function _wireKpiCalc(arr){ arr.forEach(k=>{ k.calc=function(v){return kpiScoreGeneric(v,k);}; }); return arr; }
+_wireKpiCalc(KPI_DEFS);
 
 let kpiVals={};
 let kpiSubVals={};
@@ -549,7 +567,7 @@ function showPanel(id,btn){
   if(id==='manutencao'){renderManutencaoKanban();}
   if(id==='focus'){renderFocusInsights();}
   if(id==='performance'){renderPerformance();}
-  if(id==='avaliacoes'){if(typeof _acompTab!=='undefined'&&_acompTab==='superhost')renderSuperhost();else if(typeof _acompTab!=='undefined'&&_acompTab==='cancelamentos')renderCancelamentos();else renderAvaliacoes();}
+  if(id==='avaliacoes'){if(typeof _acompTab!=='undefined'&&_acompTab==='superhost')renderSuperhost();else if(typeof _acompTab!=='undefined'&&_acompTab==='cancelamentos')renderCancelamentos();else if(typeof _acompTab!=='undefined'&&_acompTab==='preferidos')renderPreferidosHospedes();else renderAvaliacoes();}
   if(id==='equipe'){ setupEquipeTabs(); }
   if(id==='kpis'){renderKPIs();}
   if(id==='extras'){renderExtras();}
@@ -646,9 +664,15 @@ function buildNivelGrid(){
 function selNivel(i){selNivelIdx=i;buildNivelGrid();renderKPIs();renderSalary();}
 
 function calcGlobal(){
-  // Média ponderada de TODOS os KPIs — não preenchidos contam como 0%
+  // Média ponderada só dos KPIs que têm dado lançado no mês. KPIs sem registro
+  // (ex: não teve onboarding, não teve avaliação 360 naquele mês) não entram
+  // nem no numerador nem no peso total — não tem o que medir, não deve punir.
   let tot=0, totalPeso=0;
-  KPI_DEFS.forEach(k=>{const p=k.calc(_kv()[k.id]); tot+=((p!==null?p:0)/100)*k.peso; totalPeso+=k.peso;});
+  KPI_DEFS.forEach(k=>{
+    const p=k.calc(_kv()[k.id]);
+    if(p===null) return;
+    tot+=(p/100)*k.peso; totalPeso+=k.peso;
+  });
   return totalPeso>0?Math.round((tot/totalPeso)*100):0;
 }
 
@@ -801,6 +825,71 @@ function renderKPIs(){
       '<div class="kpi-track" style="margin-bottom:12px;"><div class="kpi-fill '+k.color+'" style="width:'+pct+'"></div></div>'+
       inputHTML+'</div></div>';
   }).join('');
+}
+
+// ═══════════════════ CONFIGURAÇÃO DOS KPIs ═══════════════════
+function abrirConfigKPIs(){
+  renderKpiConfig();
+  document.getElementById('modal-kpi-config').classList.add('open');
+}
+function renderKpiConfig(){
+  const el=document.getElementById('kpi-config-list'); if(!el) return;
+  const totalPeso=KPI_DEFS.reduce((s,k)=>s+(+k.peso||0),0);
+  const pesoEl=document.getElementById('kpi-config-peso-total');
+  if(pesoEl){
+    const pct=Math.round(totalPeso*100);
+    pesoEl.textContent=pct+'%';
+    pesoEl.style.color=pct===100?'var(--sage)':'var(--vermelha)';
+  }
+  el.innerHTML=KPI_DEFS.map((k,i)=>
+    '<div class="card" style="margin-bottom:10px;"><div class="card-body" style="padding:14px;">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;">'+
+      '<input type="text" class="form-input" style="font-weight:700;font-size:13.5px;" value="'+esc(k.label)+'" onchange="setKpiConfigField('+i+',\'label\',this.value)">'+
+      '<button onclick="removerKpiConfig('+i+')" style="background:none;border:none;color:var(--text3);cursor:pointer;flex-shrink:0;" title="Remover KPI"><i class="fa-solid fa-trash"></i></button>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:8px;margin-bottom:8px;">'+
+      '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:3px;">Unidade</label><input type="text" class="form-input" style="padding:5px 8px;font-size:12.5px;" value="'+esc(k.unit)+'" onchange="setKpiConfigField('+i+',\'unit\',this.value)"></div>'+
+      '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:3px;">Peso (%)</label><input type="number" step="1" min="0" max="100" class="form-input" style="padding:5px 8px;font-size:12.5px;" value="'+Math.round((+k.peso||0)*100)+'" onchange="setKpiConfigField('+i+',\'peso\',(+this.value||0)/100)"></div>'+
+      '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:3px;">Direção</label><select class="form-select" style="padding:5px 8px;font-size:12.5px;" onchange="setKpiConfigField('+i+',\'menorMelhor\',this.value===\'1\')">'+
+        '<option value="0"'+(!k.menorMelhor?' selected':'')+'>Maior é melhor</option>'+
+        '<option value="1"'+(k.menorMelhor?' selected':'')+'>Menor é melhor</option>'+
+      '</select></div>'+
+    '</div>'+
+    '<div style="font-size:9.5px;color:var(--text3);text-transform:uppercase;font-weight:700;margin-bottom:4px;">Valor de cada bandeira</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">'+
+      '<div><label style="font-size:10px;color:var(--vermelha);display:block;margin-bottom:3px;">🚩 Vermelha (limite)</label><input type="number" step="0.01" class="form-input" style="padding:5px 8px;font-size:12.5px;" value="'+k.limVermelha+'" onchange="setKpiConfigField('+i+',\'limVermelha\',+this.value)"></div>'+
+      '<div><label style="font-size:10px;color:var(--sage);display:block;margin-bottom:3px;">✅ Verde (meta)</label><input type="number" step="0.01" class="form-input" style="padding:5px 8px;font-size:12.5px;" value="'+k.meta+'" onchange="setKpiConfigField('+i+',\'meta\',+this.value)"></div>'+
+      '<div><label style="font-size:10px;color:#1D4ED8;display:block;margin-bottom:3px;">💎 Azul (a partir de)</label><input type="number" step="0.01" class="form-input" style="padding:5px 8px;font-size:12.5px;" value="'+k.limAzul+'" onchange="setKpiConfigField('+i+',\'limAzul\',+this.value)"></div>'+
+      '<div><label style="font-size:10px;color:#7C3AED;display:block;margin-bottom:3px;">🏆 Elite (a partir de)</label><input type="number" step="0.01" class="form-input" style="padding:5px 8px;font-size:12.5px;" value="'+k.limElite+'" onchange="setKpiConfigField('+i+',\'limElite\',+this.value)"></div>'+
+    '</div>'+
+    '</div></div>'
+  ).join('')+
+  '<button class="btn" onclick="adicionarKpiConfig()" style="margin-top:4px;"><i class="fa-solid fa-plus"></i> Adicionar novo KPI</button>';
+}
+function setKpiConfigField(i,field,value){
+  const k=KPI_DEFS[i]; if(!k) return;
+  k[field]=value;
+  renderKpiConfig();
+  renderKPIs();
+  if(typeof saveAll==='function') saveAll();
+}
+function adicionarKpiConfig(){
+  const novo={id:'kpi'+Date.now(), label:'Novo KPI', peso:0, unit:'', meta:0, limVermelha:0, limAzul:0, limElite:0, menorMelhor:false, color:'rose', icon:'fa-bullseye', hint:''};
+  KPI_DEFS.push(novo);
+  _wireKpiCalc(KPI_DEFS);
+  renderKpiConfig();
+  renderKPIs();
+  if(typeof saveAll==='function') saveAll();
+  showToast('KPI adicionado! Configure meta, peso e bandeiras.','sage');
+}
+function removerKpiConfig(i){
+  const k=KPI_DEFS[i]; if(!k) return;
+  if(!confirm('Remover o KPI "'+k.label+'"? Essa ação não pode ser desfeita.')) return;
+  KPI_DEFS.splice(i,1);
+  renderKpiConfig();
+  renderKPIs();
+  if(typeof saveAll==='function') saveAll();
+  showToast('KPI removido.','peach');
 }
 
 function setKPI(id,v){_kv()[id]=v;renderKPIs();if(typeof saveAll==='function')saveAll();}
@@ -1995,6 +2084,10 @@ function renderPerformance(){
         <p style="font-size:11px;font-weight:600;color:#374151;letter-spacing:.4px;text-transform:uppercase;margin-bottom:14px;">Cancelamentos</p>
         <div id="perf-canc-inner"></div>
       </div>
+      <div style="margin-top:28px;">
+        <p style="font-size:11px;font-weight:600;color:#374151;letter-spacing:.4px;text-transform:uppercase;margin-bottom:14px;">Preferido dos Hóspedes</p>
+        <div id="perf-preferidos-inner"></div>
+      </div>
     </div>
   </div>`;
 
@@ -2026,6 +2119,19 @@ function renderPerformance(){
   const _pC=cancelamentos.reduce((s,c)=>s+(c.valorProprietario||0),0);
   document.getElementById('perf-canc-inner').innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;">
     ${[{l:'Total recebido',v:brl(_tC),c:'#0D9488'},{l:'WeCare',v:brl(_wC),c:'#DC2626'},{l:'Proprietários',v:brl(_pC),c:'#1D4ED8'},{l:'Nº cancelamentos',v:cancelamentos.length,c:'#D97706'}]
+    .map(x=>`<div style="background:#F4F6F9;border-radius:10px;padding:12px;text-align:center;">
+      <div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;margin-bottom:4px;">${x.l}</div>
+      <div style="font-size:18px;font-weight:700;color:${x.c};font-family:'SF Mono','Fira Code',monospace;">${x.v}</div>
+    </div>`).join('')}
+  </div>`;
+
+  // Preferido dos Hóspedes
+  const _totalImv=imovelsCatalog.length;
+  const _prefImv=imovelsCatalog.filter(im=>im.preferidoHospedes).length;
+  const _pctPrefImv=_totalImv>0?Math.round((_prefImv/_totalImv)*100):0;
+  const _elPref=document.getElementById('perf-preferidos-inner');
+  if(_elPref) _elPref.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;">
+    ${[{l:'Total de imóveis',v:_totalImv,c:'#1D4ED8'},{l:'Preferido dos hóspedes',v:_prefImv,c:'#0D9488'},{l:'% preferidos',v:_pctPrefImv+'%',c:'#D97706'}]
     .map(x=>`<div style="background:#F4F6F9;border-radius:10px;padding:12px;text-align:center;">
       <div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;margin-bottom:4px;">${x.l}</div>
       <div style="font-size:18px;font-weight:700;color:${x.c};font-family:'SF Mono','Fira Code',monospace;">${x.v}</div>
@@ -3444,7 +3550,7 @@ const _PERSIST_KEYS = {
   nx_compras:()=>comprasList, nx_projetos:()=>projetos, nx_atts:()=>ATTS,
   nx_workP1:()=>workDaysP1, nx_workP2:()=>workDaysP2,
   nx_headfixo:()=>headFixo, nx_headcom:()=>headComissao, nx_headfotos:()=>headFotos,
-  nx_kpivals:()=>kpiVals, nx_kpisub:()=>kpiSubVals,
+  nx_kpivals:()=>kpiVals, nx_kpisub:()=>kpiSubVals, nx_kpidefs:()=>KPI_DEFS,
   nx_taskcats:()=>taskCats, nx_catalog:()=>imovelsCatalog,
   nx_precos:()=>PRECOS_ITENS, nx_niveldx:()=>selNivelIdx,
   nx_nicolecom:()=>nicoleComissaoOverride, nx_nextatt:()=>nextAttId,
@@ -3976,6 +4082,7 @@ function loadAll(){
       if('av' in v||'tr' in v||'cv' in v||'rc' in v){kpiSubVals={};kpiSubVals[kpiPeriodo]=v;}
       else kpiSubVals=v;
     }
+    v=g('nx_kpidefs');    if(Array.isArray(v)&&v.length) KPI_DEFS=_wireKpiCalc(v);
     v=g('nx_taskcats');   if(Array.isArray(v)&&v.length) taskCats=v;
     v=g('nx_catalog');    if(Array.isArray(v)&&v.length) imovelsCatalog=v;
     v=g('nx_precos');     if(v&&typeof v==='object') PRECOS_ITENS=v;
@@ -6744,7 +6851,7 @@ let _acompTab = 'avaliacoes';
 
 function switchAcompTab(tab, btn) {
   _acompTab = tab;
-  ['avaliacoes','superhost','cancelamentos'].forEach(t => {
+  ['avaliacoes','superhost','cancelamentos','preferidos'].forEach(t => {
     const el = document.getElementById('acomp-content-'+t);
     if (el) el.style.display = t === tab ? '' : 'none';
     const actEl = document.getElementById('acomp-actions-'+t);
@@ -6755,6 +6862,38 @@ function switchAcompTab(tab, btn) {
   if (tab === 'superhost') renderSuperhost();
   if (tab === 'cancelamentos') renderCancelamentos();
   if (tab === 'avaliacoes') renderAvaliacoes();
+  if (tab === 'preferidos') renderPreferidosHospedes();
+}
+
+// ═══════════════════ PREFERIDO DOS HÓSPEDES ═══════════════════
+function renderPreferidosHospedes(){
+  const el=document.getElementById('preferidos-lista'); if(!el) return;
+  const total=imovelsCatalog.length;
+  const marcados=imovelsCatalog.filter(im=>im.preferidoHospedes).length;
+  const pct=total>0?Math.round((marcados/total)*100):0;
+  const resumoEl=document.getElementById('preferidos-resumo');
+  if(resumoEl){
+    resumoEl.innerHTML=[
+      {l:'Total de imóveis',v:total,c:'sky'},
+      {l:'Preferido dos hóspedes',v:marcados,c:'sage'},
+      {l:'% preferidos',v:pct+'%',c:'gold'}
+    ].map(x=>'<div class="metric-card '+x.c+'"><div class="metric-value" style="font-size:22px;">'+x.v+'</div><div class="metric-label">'+x.l+'</div></div>').join('');
+  }
+  if(!total){ el.innerHTML='<div style="font-size:12.5px;color:var(--text3);padding:14px 0;">Nenhum imóvel cadastrado nas Configurações ainda.</div>'; return; }
+  el.innerHTML=imovelsCatalog.map(im=>
+    '<label style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);cursor:pointer;">'+
+    '<input type="checkbox" '+(im.preferidoHospedes?'checked':'')+' onchange="togglePreferidoHospede(\''+im.id+'\')">'+
+    '<span style="flex:1;font-size:13.5px;">'+esc(im.nome)+'</span>'+
+    (im.preferidoHospedes?'<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:var(--sage)22;color:var(--sage);font-weight:600;">⭐ Preferido</span>':'')+
+    '</label>'
+  ).join('');
+}
+function togglePreferidoHospede(id){
+  const im=imovelsCatalog.find(x=>x.id===id); if(!im) return;
+  im.preferidoHospedes=!im.preferidoHospedes;
+  if(typeof saveAll==='function') saveAll();
+  renderPreferidosHospedes();
+  if(typeof renderPerformance==='function') renderPerformance();
 }
 
 // ═══════════════════ EQUIPE (Equipe · Salários · Turnos) — ABAS ═══════════════════

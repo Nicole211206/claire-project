@@ -279,6 +279,7 @@ function _validarLogin(){
         <div style="display:flex;align-items:center;gap:12px;">
           <div><label style="font-size:10.5px;color:var(--text3);text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px;">Período</label><input type="month" id="kpi-periodo-sel" class="form-input" style="padding:5px 9px;font-size:12.5px;" onchange="setKpiPeriodo(this.value)"></div>
           <div id="kpi-band-pill" style="margin-top:16px;"></div>
+          <button class="btn" style="margin-top:16px;" onclick="abrirConfigKPIs()"><i class="fa-solid fa-sliders"></i> Configurar KPIs</button>
         </div>
       </div>
       <div class="card" style="margin-bottom:16px;">
@@ -363,6 +364,7 @@ function _validarLogin(){
         <button class="tab-btn acomp-tab-btn active" onclick="switchAcompTab('avaliacoes',this)">Avaliações</button>
         <button class="tab-btn acomp-tab-btn" onclick="switchAcompTab('superhost',this)">Superhost</button>
         <button class="tab-btn acomp-tab-btn" onclick="switchAcompTab('cancelamentos',this)">Cancelamentos</button>
+        <button class="tab-btn acomp-tab-btn" onclick="switchAcompTab('preferidos',this)">Preferido dos Hóspedes</button>
       </div>
 
       <!-- Avaliações -->
@@ -402,6 +404,13 @@ function _validarLogin(){
         </div>
         <div id="cancelamentos-resumo" class="metrics-grid" style="margin-bottom:16px;"></div>
         <div id="cancelamentos-lista"></div>
+      </div>
+
+      <!-- Preferido dos Hóspedes -->
+      <div id="acomp-content-preferidos" style="display:none;">
+        <p style="color:var(--text3);font-size:12.5px;margin-bottom:14px;">Marque os imóveis (cadastrados em Configurações) que são preferidos dos hóspedes.</p>
+        <div id="preferidos-resumo" class="metrics-grid" style="margin-bottom:16px;"></div>
+        <div id="preferidos-lista" class="card" style="padding:6px 16px;"></div>
       </div>
     </div>
 
@@ -1026,6 +1035,21 @@ function _validarLogin(){
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-settings')">Cancelar</button>
       <button class="btn btn-rose" onclick="saveSettings()"><i class="fa-solid fa-check"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-kpi-config">
+  <div class="modal" style="width:640px;max-height:88vh;overflow-y:auto;">
+    <div class="modal-title">Configurar KPIs</div>
+    <div style="font-size:12.5px;color:var(--text3);margin-bottom:6px;">Ajuste meta, peso e os valores de cada bandeira de cada KPI. As mudanças são salvas automaticamente.</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:12.5px;">
+      <span style="color:var(--text3);">Soma dos pesos:</span> <strong id="kpi-config-peso-total">0%</strong>
+      <span style="color:var(--text3);">(deve somar 100%)</span>
+    </div>
+    <div id="kpi-config-list"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-kpi-config')">Fechar</button>
     </div>
   </div>
 </div>

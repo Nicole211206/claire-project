@@ -526,7 +526,8 @@ function _validarLogin(){
           <button class="btn" onclick="openAddDemand()"><i class="fa-solid fa-plus"></i> Nova Demanda</button>
           <button class="btn btn-rose" onclick="adicionarMembro()"><i class="fa-solid fa-user-plus"></i> Novo Membro</button>
         </div>
-        <div id="equipe-actions-salary" style="display:none;gap:8px;">
+        <div id="equipe-actions-salary" style="display:none;gap:8px;align-items:center;">
+          <input type="month" class="form-input" id="salario-mes" style="padding:6px 10px;font-size:13px;" onchange="salarioMesSel=this.value;renderSalary();">
           <button class="btn" onclick="abrirNovoOutroMembro()"><i class="fa-solid fa-user-plus"></i> Novo Membro</button>
           <button class="btn btn-rose" onclick="exportarSalariosPDF()"><i class="fa-solid fa-file-pdf"></i> Relatório PDF</button>
         </div>
@@ -1669,6 +1670,6 @@ function _validarLogin(){
   </div>
 </div>
 
-<script src="js/app.js?v=88"></script>
+<script src="js/app.js?v=89"></script>
 </body>
 </html>

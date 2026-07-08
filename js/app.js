@@ -194,10 +194,15 @@ let ATTS=[
 ];
 let nextAttId = 5;
 
-let workDaysP1={patricia:8,sara:8,lisarb:8,lais:8};  // turnos dias 01-15
-let workDaysP2={patricia:7,sara:7,lisarb:7,lais:7};  // turnos dias 16-31
+// {mes:{attId:dias}} — plantões por mês (ver _wd1/_wd2). Sem entrada pro mês
+// ainda = usa o padrão 8/7 (ver renderSalary). Não é mais um valor único
+// "atual" — cada mês guarda sua própria foto, senão não dava pra ver como
+// foi o mês passado (mesmo motivo do seletor de mês no Salário).
+let workDaysP1={};  // turnos dias 01-15
+let workDaysP2={};  // turnos dias 16-31
 let turnos=[]; // {id, data:'YYYY-MM-DD', turno:'dia'|'noite', attId, confirmado:false}
 let turnosMesSel=''; // mês selecionado no admin (YYYY-MM)
+let salarioMesSel=''; // mês selecionado na aba Salário (YYYY-MM) — vazio = mês atual
 let salPagos={}; // { 'attId_2026-06': true }
 let outrosMembros=[]; // {id, nome, cargo, fixo, comissao}
 let extras=[]; // {id, data, descricao, imovelNome, cobrado, gasto, obs}
@@ -1999,7 +2004,11 @@ function removerUpdateDemanda(i){
   const d=a.demands[_demandaAtiva.idx]; if(!d||!d.updates) return;
   d.updates.splice(i,1); renderDemandaUpdates(); if(typeof saveAll==='function') saveAll();
 }
-function _mesAtualSal(){ return new Date().toISOString().substring(0,7); }
+function _mesAtualSal(){ return salarioMesSel || new Date().toISOString().substring(0,7); }
+// Plantões (dias trabalhados) do mês selecionado na aba Salário — cria o
+// mês na hora se ainda não existir, pra sempre poder gravar/ler direto.
+function _wd1(){ const m=_mesAtualSal(); if(!workDaysP1[m]) workDaysP1[m]={}; return workDaysP1[m]; }
+function _wd2(){ const m=_mesAtualSal(); if(!workDaysP2[m]) workDaysP2[m]={}; return workDaysP2[m]; }
 function marcarPago(id, parte){
   const k=id+'_'+_mesAtualSal()+'_'+parte;
   salPagos[k]=!salPagos[k];
@@ -2183,6 +2192,7 @@ function renderPerformance(){
 
 // ═══════════════════ SALARY ═══════════════════
 function renderSalary(){
+  const mesSel=document.getElementById('salario-mes'); if(mesSel&&!mesSel.value) mesSel.value=_mesAtualSal();
   const ehAdmin = (typeof isAdmin==='function') && isAdmin();
   const attsVis = ehAdmin ? ATTS : (typeof attsDoUsuario==='function'?attsDoUsuario():[]);
   // Para coordenação não-admin: verificar se é um head e mostrar apenas o bloco deles
@@ -2196,8 +2206,8 @@ function renderSalary(){
   // Atendentes — admin vê todos; head vê apenas os seus; outros veem os permitidos
   const attsParaSal = isHead ? [] : attsVis;
   document.getElementById('sal-att-body').innerHTML=attsParaSal.map(a=>{
-    const d1=workDaysP1[a.id]!==undefined?workDaysP1[a.id]:8;
-    const d2=workDaysP2[a.id]!==undefined?workDaysP2[a.id]:7;
+    const d1=_wd1()[a.id]!==undefined?_wd1()[a.id]:8;
+    const d2=_wd2()[a.id]!==undefined?_wd2()[a.id]:7;
     const v1=d1*12*a.rate, v2=d2*12*a.rate, total=v1+v2;
     return '<div class="salary-block">'+
       '<div class="salary-name">'+(a.foto?'<img src="'+esc(a.foto)+'" style="width:26px;height:26px;border-radius:50%;object-fit:cover;">':'<div class="avatar '+a.av+'" style="width:26px;height:26px;font-size:10px;">'+a.ini+'</div>')+esc(a.name)+'<span style="font-size:11px;color:var(--text3);margin-left:auto;">R$ '+a.rate+'/h</span></div>'+
@@ -2254,8 +2264,8 @@ function renderSalary(){
   }
 
   const tAtt=ATTS.reduce((acc,a)=>{
-    const d1=workDaysP1[a.id]!==undefined?workDaysP1[a.id]:8;
-    const d2=workDaysP2[a.id]!==undefined?workDaysP2[a.id]:7;
+    const d1=_wd1()[a.id]!==undefined?_wd1()[a.id]:8;
+    const d2=_wd2()[a.id]!==undefined?_wd2()[a.id]:7;
     return acc+(d1+d2)*12*a.rate;
   },0);
   const tNic=nv.fixo+(nicoleComissaoOverride!==null?nicoleComissaoOverride:vp);
@@ -2266,8 +2276,8 @@ function renderSalary(){
   ].map(x=>`<div style="background:var(--bg3);border-radius:var(--r-sm);padding:14px;text-align:center;"><div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px;">${x.l}</div><div style="font-family:var(--font-display);font-size:22px;font-weight:700;color:var(--${x.c});">${brl(x.v)}</div></div>`).join('');
 }
 
-function setWD1(id,v){workDaysP1[id]=parseInt(v)||0;renderSalary();}
-function setWD2(id,v){workDaysP2[id]=parseInt(v)||0;renderSalary();}
+function setWD1(id,v){_wd1()[id]=parseInt(v)||0;renderSalary();}
+function setWD2(id,v){_wd2()[id]=parseInt(v)||0;renderSalary();}
 function setHF(id,v){headFixo[id]=parseFloat(v)||0;renderSalary();}
 function setHeadFoto(id,v){headFotos[id]=v;renderSalary();}
 function setHC(id,v){headComissao[id]=parseFloat(v)||0;renderSalary();}
@@ -2318,13 +2328,14 @@ function removerOutroMembro(id){
 function exportarSalariosPDF(){
   const g=calcGlobal(),band=getBand(g),nv=NIVEIS[selNivelIdx],vp=Math.round(nv.variavel*band.mult);
   const nicComissao=nicoleComissaoOverride!==null?nicoleComissaoOverride:vp;
-  const mes=new Date().toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  const [_msAno,_msMes]=_mesAtualSal().split('-').map(Number);
+  const mes=new Date(_msAno,_msMes-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
   // Atendentes
   let attRows='';
   let totAtt=0;
   ATTS.forEach(a=>{
-    const d1=workDaysP1[a.id]!==undefined?workDaysP1[a.id]:8;
-    const d2=workDaysP2[a.id]!==undefined?workDaysP2[a.id]:7;
+    const d1=_wd1()[a.id]!==undefined?_wd1()[a.id]:8;
+    const d2=_wd2()[a.id]!==undefined?_wd2()[a.id]:7;
     const v1=d1*12*a.rate,v2=d2*12*a.rate,t=v1+v2;
     totAtt+=t;
     attRows+='<tr><td style="padding:8px;border-bottom:1px solid #eee;">'+a.name+'</td>'+
@@ -4120,6 +4131,13 @@ function _renderTudo(){
   }catch(e){ console.warn('render falhou', e); }
 }
 
+// Migração pro formato por mês {mes:{attId:dias}} — formato antigo tinha as
+// chaves direto como id de atendente (ex. "patricia"), sem quebra por mês.
+// Se já tiver alguma chave "AAAA-MM", já está no formato novo.
+function _migrarWorkDaysPorMes(v){
+  if(Object.keys(v).some(k=>/^\d{4}-\d{2}$/.test(k))) return v;
+  return {[new Date().toISOString().substring(0,7)]:v};
+}
 function loadAll(){
   try{
     const g=(k)=>{ const v=localStorage.getItem(k); return v===null?undefined:JSON.parse(v); };
@@ -4130,8 +4148,8 @@ function loadAll(){
     v=g('nx_compras');    if(Array.isArray(v)) comprasList=v;
     v=g('nx_projetos');   if(Array.isArray(v)) projetos=v;
     v=g('nx_atts');       if(Array.isArray(v)&&v.length) ATTS=v;
-    v=g('nx_workP1');     if(v&&typeof v==='object') workDaysP1=v;
-    v=g('nx_workP2');     if(v&&typeof v==='object') workDaysP2=v;
+    v=g('nx_workP1');     if(v&&typeof v==='object') workDaysP1=_migrarWorkDaysPorMes(v);
+    v=g('nx_workP2');     if(v&&typeof v==='object') workDaysP2=_migrarWorkDaysPorMes(v);
     v=g('nx_headfixo');   if(v&&typeof v==='object') headFixo=v;
     v=g('nx_headcom');    if(v&&typeof v==='object') headComissao=v;
     v=g('nx_headfotos');  if(v&&typeof v==='object') headFotos=v;
@@ -4194,11 +4212,13 @@ function _migAtendentesSemPerms(){
 function parcelaDoDia(dataStr){ const d=parseInt((dataStr||'').substring(8,10))||1; return d<=15?'P1':'P2'; }
 function recalcularDiasDosTurnos(){
   const mes = turnosMesSel || new Date().toISOString().substring(0,7);
+  if(!workDaysP1[mes]) workDaysP1[mes]={};
+  if(!workDaysP2[mes]) workDaysP2[mes]={};
   ATTS.forEach(a=>{
     const p1=turnos.filter(t=>t.attId===a.id && t.confirmado && t.data.startsWith(mes) && parcelaDoDia(t.data)==='P1').length;
     const p2=turnos.filter(t=>t.attId===a.id && t.confirmado && t.data.startsWith(mes) && parcelaDoDia(t.data)==='P2').length;
-    if(p1>0) workDaysP1[a.id]=p1;
-    if(p2>0) workDaysP2[a.id]=p2;
+    if(p1>0) workDaysP1[mes][a.id]=p1;
+    if(p2>0) workDaysP2[mes][a.id]=p2;
   });
   if(typeof renderSalary==='function') renderSalary();
 }
@@ -6942,7 +6962,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 88;
+const APP_VERSION = 89;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

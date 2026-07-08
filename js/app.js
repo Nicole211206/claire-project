@@ -3879,7 +3879,21 @@ async function _kvFlush(){
             } else if(sv.length > lv.length){
               local[k]=sv; try{ localStorage.setItem(k, JSON.stringify(sv)); }catch(e){} ajustou=true;
             }
-          // objeto (ex.: kpiVals): conta valores não-nulos — servidor tem mais → local está incompleto
+          // nx_kpivals/nx_kpisub são organizados por mês (período). Se o mês já
+          // existe localmente, o valor local manda — é o que a pessoa está
+          // editando agora, inclusive apagar um KPI lançado errado. A contagem
+          // de campos preenchidos (usada abaixo pros demais objetos) fazia um
+          // valor apagado voltar sozinho, porque o servidor ainda tinha mais
+          // campos preenchidos que o local depois do apagão. Só recupera do
+          // servidor um mês que este aparelho nunca viu.
+          } else if((k==='nx_kpivals'||k==='nx_kpisub') && sv && typeof sv==='object' && !Array.isArray(sv) && lv && typeof lv==='object' && !Array.isArray(lv)){
+            const merged=Object.assign({},lv);
+            let mudouPeriodo=false;
+            for(const periodo in sv){ if(!(periodo in merged)){ merged[periodo]=sv[periodo]; mudouPeriodo=true; } }
+            if(mudouPeriodo){
+              local[k]=merged; try{ localStorage.setItem(k, JSON.stringify(merged)); }catch(e){} ajustou=true;
+            }
+          // objeto (demais chaves, ex.: headFixo): conta valores não-nulos — servidor tem mais → local está incompleto
           } else if(sv && typeof sv==='object' && !Array.isArray(sv) && lv && typeof lv==='object' && !Array.isArray(lv)){
             const _cnt=o=>Object.values(o).flatMap(x=>typeof x==='object'&&x?Object.values(x):[x]).filter(v=>v!==null&&v!==undefined&&v!=='').length;
             if(_cnt(sv) > _cnt(lv)){
@@ -3956,6 +3970,20 @@ async function kvPull(){
             const merged=_mergeById(baseBlob?baseBlob[k]:null, lv, sv);
             const novo=JSON.stringify(merged);
             if(localStorage.getItem(k)!==novo){ localStorage.setItem(k, novo); aplicou=true; }
+            continue;
+          }
+          // nx_kpivals/nx_kpisub: mesmo motivo do _kvFlush acima — o mês que já
+          // existe localmente não deve ser trocado pela versão do servidor (senão
+          // um KPI apagado de propósito volta sozinho a cada sincronização). Só
+          // traz do servidor um mês que este aparelho ainda não tem.
+          if((k==='nx_kpivals'||k==='nx_kpisub') && sv && typeof sv==='object' && !Array.isArray(sv) && lv && typeof lv==='object' && !Array.isArray(lv)){
+            const merged=Object.assign({},lv);
+            let mudouPeriodo=false;
+            for(const periodo in sv){ if(!(periodo in merged)){ merged[periodo]=sv[periodo]; mudouPeriodo=true; } }
+            if(mudouPeriodo){
+              const novo=JSON.stringify(merged);
+              if(localStorage.getItem(k)!==novo){ localStorage.setItem(k, novo); aplicou=true; }
+            }
             continue;
           }
           // Proteção genérica (demais chaves): servidor com menos dados não apaga
@@ -6824,7 +6852,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 83;
+const APP_VERSION = 84;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

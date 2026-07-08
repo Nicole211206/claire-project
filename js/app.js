@@ -6307,7 +6307,7 @@ function abrirNovoProjeto(){
     id:Date.now(),nome:'',status:'planejamento',
     tempoEstimado:'',colaboradores:'',objetivos:'',
     dataInicio:'',dataFim:'',
-    notas:'',tarefas:[],dataCriacao:new Date().toISOString()
+    notas:'',tarefas:[],anexos:[],dataCriacao:new Date().toISOString()
   };
   projetos.push(p);
   projetoAtivo=p.id;
@@ -6364,7 +6364,58 @@ function projMudarAba(aba,btn){
         '<div onclick="toggleTask('+t.id+')" style="width:18px;height:18px;border-radius:50%;border:1.5px solid '+(t.done?'var(--sage)':'var(--border2)')+';background:'+(t.done?'var(--sage)':'transparent')+';cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;color:white;">'+(t.done?'<i class="fa-solid fa-check"></i>':'')+
         '</div><div style="flex:1;font-size:13px;'+(t.done?'text-decoration:line-through;color:var(--text3);':'')+'">'+esc(t.text)+'</div>'+
         '<button onclick="delTask('+t.id+');projMudarAba(\'tarefas\',document.getElementById(\'ptab-tarefas\'))" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;"><i class="fa-solid fa-xmark"></i></button></div>').join(''));
+  } else if(aba==='anexos'){
+    const anexosProj=p.anexos||[];
+    el.innerHTML='<div class="form-group"><label class="form-label">Adicionar arquivo</label><input type="file" multiple onchange="projUploadAnexos(event)"></div>'+
+      (anexosProj.length===0?'<p style="color:var(--text3);font-size:13px;text-align:center;padding:20px;">Nenhum anexo ainda.</p>':
+      '<div style="margin-top:6px;">'+anexosProj.map((a,i)=>
+        '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);">'+
+        '<span style="font-size:18px;">'+getFileIcon(a.tipo||a.nome||'')+'</span>'+
+        '<span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(a.nome||'arquivo')+'</span>'+
+        '<button onclick="projAbrirAnexo('+i+')" style="background:none;border:none;color:var(--rose);cursor:pointer;font-size:12px;padding:2px 6px;" title="Abrir"><i class="fa-solid fa-eye"></i></button>'+
+        '<button onclick="projBaixarAnexo('+i+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 6px;" title="Baixar"><i class="fa-solid fa-download"></i></button>'+
+        '<button onclick="projRemoverAnexo('+i+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 6px;" title="Remover"><i class="fa-solid fa-trash"></i></button>'+
+        '</div>'
+      ).join('')+'</div>');
   }
+}
+
+function projUploadAnexos(event){
+  const files=event.target.files; if(!files||!files.length) return;
+  const p=projetos.find(x=>x.id===projetoAtivo); if(!p) return;
+  if(!p.anexos) p.anexos=[];
+  let pend=files.length;
+  Array.prototype.forEach.call(files,function(file){
+    _lerArquivoBase64(file,function(dataUrl,nome){
+      p.anexos.push({nome:nome, tipo:file.type||'', dataUrl:dataUrl});
+      pend--;
+      if(pend<=0){
+        if(typeof saveAll==='function') saveAll();
+        renderProjetosKanban();
+        projMudarAba('anexos',document.getElementById('ptab-anexos'));
+      }
+    });
+  });
+  event.target.value='';
+}
+function projAbrirAnexo(i){
+  const p=projetos.find(x=>x.id===projetoAtivo); if(!p||!p.anexos||!p.anexos[i]) return;
+  abrirAnexo(p.anexos[i].dataUrl);
+}
+function projBaixarAnexo(i){
+  const p=projetos.find(x=>x.id===projetoAtivo); if(!p||!p.anexos||!p.anexos[i]) return;
+  const a=p.anexos[i];
+  const link=document.createElement('a');
+  link.href=a.dataUrl; link.download=a.nome||'arquivo';
+  document.body.appendChild(link); link.click(); link.remove();
+}
+function projRemoverAnexo(i){
+  const p=projetos.find(x=>x.id===projetoAtivo); if(!p||!p.anexos) return;
+  if(!confirm('Remover este anexo?')) return;
+  p.anexos.splice(i,1);
+  if(typeof saveAll==='function') saveAll();
+  renderProjetosKanban();
+  projMudarAba('anexos',document.getElementById('ptab-anexos'));
 }
 
 function adicionarTarefaProjeto(){
@@ -6540,6 +6591,7 @@ function renderProjetosKanban(){
           (p.tempoEstimado?'<div style="font-size:11px;color:var(--text3);margin-bottom:3px;"><i class="fa-regular fa-clock"></i> '+esc(p.tempoEstimado)+'</div>':'')+
           (p.colaboradores?'<div style="font-size:11px;color:var(--text3);margin-bottom:3px;"><i class="fa-solid fa-users" style="font-size:10px;"></i> '+esc(p.colaboradores)+'</div>':'')+
           (tarefasTotal>0?'<div style="font-size:11px;color:var(--sage);">✅ '+tarefasDone+'/'+tarefasTotal+' tarefas</div>':'')+
+          (p.anexos&&p.anexos.length>0?'<div style="font-size:11px;color:var(--text3);">📎 '+p.anexos.length+' anexo'+(p.anexos.length>1?'s':'')+'</div>':'')+
           '</div>';
       }).join('')+
       '</div>';
@@ -6890,7 +6942,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 87;
+const APP_VERSION = 88;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

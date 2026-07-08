@@ -679,7 +679,7 @@ function _validarLogin(){
         <button class="btn btn-rose" onclick="abrirNovoExtra()"><i class="fa-solid fa-plus"></i> Novo Extra</button>
       </div>
       <div class="metrics-grid" id="extras-resumo" style="margin-bottom:16px;"></div>
-      <div class="card"><div style="overflow-x:auto;"><table class="data-table"><thead><tr><th>Data</th><th>Serviço</th><th>Imóvel</th><th>Cobrado</th><th>Custo</th><th>Margem</th><th>Obs</th><th></th></tr></thead><tbody id="extras-tbody"></tbody></table></div></div>
+      <div class="card"><div style="overflow-x:auto;"><table class="data-table"><thead><tr><th>Mês</th><th>Data</th><th>Serviço</th><th>Imóvel</th><th>Cobrado</th><th>Custo</th><th>Margem</th><th>Obs</th><th></th></tr></thead><tbody id="extras-tbody"></tbody></table></div></div>
     </div>
 
     <!-- ── CONTROLE ── -->
@@ -1483,9 +1483,10 @@ function _validarLogin(){
   <div class="modal" style="width:520px;">
     <div class="modal-title" id="extra-modal-title">Novo Serviço Extra</div>
     <div class="form-row">
+      <div class="form-group"><label class="form-label">Mês Vigente</label><input type="month" class="form-input" id="ex-mes"></div>
       <div class="form-group"><label class="form-label">Data da Solicitação</label><input type="date" class="form-input" id="ex-data"></div>
-      <div class="form-group"><label class="form-label">Imóvel</label><select class="form-select" id="ex-imovel"></select></div>
     </div>
+    <div class="form-group"><label class="form-label">Imóvel</label><select class="form-select" id="ex-imovel"></select></div>
     <div class="form-group"><label class="form-label">Serviço</label><input type="text" class="form-input" id="ex-desc" placeholder="Ex: Renovação de fotos"></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Data da Execução</label><input type="date" class="form-input" id="ex-dataexec"></div>
@@ -1596,6 +1597,7 @@ function _validarLogin(){
   <div class="modal" style="max-width:520px;">
     <div class="modal-header"><h3 class="modal-title">Cancelamento</h3></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group"><label class="form-label">Mês Vigente</label><input type="month" class="form-input" id="canc-mes"></div>
       <div class="form-group"><label class="form-label">Hóspede</label><input type="text" class="form-input" id="canc-hospede" placeholder="Nome do hóspede"></div>
       <div class="form-group"><label class="form-label">Imóvel</label><select class="form-select" id="canc-imovel"><option value="">Selecione...</option></select></div>
       <div class="form-group"><label class="form-label">Período (check-in/out)</label><input type="text" class="form-input" id="canc-periodo" placeholder="01/06 – 05/06/2026"></div>
@@ -1663,6 +1665,6 @@ function _validarLogin(){
   </div>
 </div>
 
-<script src="js/app.js?v=84"></script>
+<script src="js/app.js?v=85"></script>
 </body>
 </html>

@@ -948,8 +948,12 @@ function sincronizarMargemKPI(){
   if(typeof renderKPIs==='function') renderKPIs();
 }
 
+// Mês vigente explícito (novo campo) manda; extras antigos sem o campo caem
+// pra data da solicitação, como funcionava antes — pra não sumir do KPI de
+// quem já tinha extra lançado antes dessa mudança.
+function _mesExtra(e){ return e.mesVigente || (e.dataSolicitacao||e.data||'').substring(0,7); }
 function sincronizarExtrasKPI(){
-  const extrasPeriodo=extras.filter(e=>(e.data||'').substring(0,7)===kpiPeriodo);
+  const extrasPeriodo=extras.filter(e=>_mesExtra(e)===kpiPeriodo);
   const totalCobrado=extrasPeriodo.reduce((s,e)=>s+(parseFloat(e.cobrado)||0),0);
   const totalGasto=extrasPeriodo.reduce((s,e)=>s+(parseFloat(e.gasto)||0),0);
   if(!_ksv().rc) _ksv().rc={limpeza:{previsto:'',gasto:''},manutencao:{previsto:'',gasto:''},setup:{previsto:'',gasto:''},margem:{previsto:'',gasto:''},extras:{previsto:'',gasto:''}};
@@ -981,6 +985,7 @@ function _extraSetAnexoStatus(dataUrl){
 function abrirNovoExtra(){
   _extraEditId=null; _extraAnexoTmp=null;
   document.getElementById('extra-modal-title').textContent='Novo Serviço Extra';
+  document.getElementById('ex-mes').value=new Date().toISOString().substring(0,7);
   document.getElementById('ex-data').value=new Date().toISOString().split('T')[0];
   document.getElementById('ex-desc').value=''; document.getElementById('ex-cobrado').value=''; document.getElementById('ex-gasto').value=''; document.getElementById('ex-obs').value='';
   document.getElementById('ex-dataexec').value=''; document.getElementById('ex-datapag').value=''; document.getElementById('ex-pago').checked=false;
@@ -992,6 +997,7 @@ function abrirNovoExtra(){
 function abrirEditarExtra(id){
   const e=extras.find(x=>x.id===id); if(!e) return; _extraEditId=id; _extraAnexoTmp=e.anexo||null;
   document.getElementById('extra-modal-title').textContent='Editar Serviço Extra';
+  document.getElementById('ex-mes').value=_mesExtra(e);
   document.getElementById('ex-data').value=e.dataSolicitacao||e.data||''; document.getElementById('ex-desc').value=e.descricao||''; document.getElementById('ex-cobrado').value=e.cobrado||''; document.getElementById('ex-gasto').value=e.gasto||''; document.getElementById('ex-obs').value=e.obs||'';
   document.getElementById('ex-dataexec').value=e.dataExecucao||''; document.getElementById('ex-datapag').value=e.dataPagamento||''; document.getElementById('ex-pago').checked=!!e.pago;
   var fi=document.getElementById('ex-anexo'); if(fi) fi.value='';
@@ -1002,7 +1008,7 @@ function abrirEditarExtra(id){
 function salvarExtra(){
   const desc=document.getElementById('ex-desc').value.trim(); if(!desc){ showToast('Informe o serviço.','peach'); return; }
   const ds=document.getElementById('ex-data').value;
-  const obj={id:_extraEditId||Date.now(), data:ds, dataSolicitacao:ds, dataExecucao:document.getElementById('ex-dataexec').value, dataPagamento:document.getElementById('ex-datapag').value, pago:document.getElementById('ex-pago').checked, anexo:_extraAnexoTmp||'', descricao:desc, imovelNome:document.getElementById('ex-imovel').value, cobrado:parseFloat(document.getElementById('ex-cobrado').value)||0, gasto:parseFloat(document.getElementById('ex-gasto').value)||0, obs:document.getElementById('ex-obs').value.trim()};
+  const obj={id:_extraEditId||Date.now(), mesVigente:document.getElementById('ex-mes').value, data:ds, dataSolicitacao:ds, dataExecucao:document.getElementById('ex-dataexec').value, dataPagamento:document.getElementById('ex-datapag').value, pago:document.getElementById('ex-pago').checked, anexo:_extraAnexoTmp||'', descricao:desc, imovelNome:document.getElementById('ex-imovel').value, cobrado:parseFloat(document.getElementById('ex-cobrado').value)||0, gasto:parseFloat(document.getElementById('ex-gasto').value)||0, obs:document.getElementById('ex-obs').value.trim()};
   if(_extraEditId){ const i=extras.findIndex(x=>x.id===_extraEditId); if(i>=0) extras[i]=obj; } else extras.unshift(obj);
   closeModal('modal-extra'); if(typeof saveAll==='function') saveAll(); sincronizarExtrasKPI(); renderExtras(); showToast('Extra salvo!','sage');
 }
@@ -1013,12 +1019,12 @@ function renderExtras(){
   const res=document.getElementById('extras-resumo');
   if(res) res.innerHTML=[{l:'Total Cobrado',v:brl(tc),c:'sage',i:'fa-arrow-down'},{l:'Total Custo',v:brl(tg),c:'rose',i:'fa-arrow-up'},{l:'Margem',v:brl(tc-tg),c:'gold',i:'fa-coins'}].map(x=>'<div class="metric-card '+x.c+'"><div class="metric-icon '+x.c+'"><i class="fa-solid '+x.i+'"></i></div><div class="metric-value" style="font-size:22px;">'+x.v+'</div><div class="metric-label">'+x.l+'</div></div>').join('');
   const _df=function(d){return d?d.split('-').reverse().join('/'):'—';};
-  tb.innerHTML=extras.length===0?'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3);">Nenhum serviço extra. Clique em "Novo Extra".</td></tr>':extras.map(e=>{
+  tb.innerHTML=extras.length===0?'<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text3);">Nenhum serviço extra. Clique em "Novo Extra".</td></tr>':extras.map(e=>{
     const margem=(parseFloat(e.cobrado)||0)-(parseFloat(e.gasto)||0);
     const datas='<div style="font-size:10px;color:var(--text3);line-height:1.5;">Sol: '+_df(e.dataSolicitacao||e.data)+'<br>Exec: '+_df(e.dataExecucao)+'<br>Pag: '+_df(e.dataPagamento)+'</div>';
     const status=e.pago?'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--sage)22;color:var(--sage);">Pago</span>':'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--peach)22;color:var(--peach);">Pendente</span>';
     const anexoIco=e.anexo?' <button onclick="abrirAnexo(extras.find(function(x){return x.id==='+e.id+';}).anexo)" title="Abrir NF/Recibo" style="background:none;border:none;color:var(--rose);cursor:pointer;font-size:12px;"><i class="fa-solid fa-paperclip"></i></button>':'';
-    return '<tr><td style="white-space:nowrap;">'+datas+'</td><td>'+esc(e.descricao)+'<div style="margin-top:3px;">'+status+anexoIco+'</div></td><td style="font-size:12px;">'+esc(e.imovelNome||'—')+'</td><td>'+brl(e.cobrado)+'</td><td>'+brl(e.gasto)+'</td><td style="color:var(--sage);font-weight:600;">'+brl(margem)+'</td><td style="font-size:11px;color:var(--text3);">'+esc(e.obs||'')+'</td><td style="white-space:nowrap;"><button onclick="abrirEditarExtra('+e.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-pen"></i></button><button onclick="deletarExtra('+e.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-trash"></i></button></td></tr>';
+    return '<tr><td style="font-size:12px;white-space:nowrap;">'+(_mesExtra(e)||'—')+'</td><td style="white-space:nowrap;">'+datas+'</td><td>'+esc(e.descricao)+'<div style="margin-top:3px;">'+status+anexoIco+'</div></td><td style="font-size:12px;">'+esc(e.imovelNome||'—')+'</td><td>'+brl(e.cobrado)+'</td><td>'+brl(e.gasto)+'</td><td style="color:var(--sage);font-weight:600;">'+brl(margem)+'</td><td style="font-size:11px;color:var(--text3);">'+esc(e.obs||'')+'</td><td style="white-space:nowrap;"><button onclick="abrirEditarExtra('+e.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-pen"></i></button><button onclick="deletarExtra('+e.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-trash"></i></button></td></tr>';
   }).join('');
 }
 
@@ -2113,12 +2119,15 @@ function renderPerformance(){
     shEl.innerHTML=`<div style="background:#F4F6F9;border-radius:10px;padding:14px;color:#9CA3AF;font-size:13px;">Nenhum período Superhost registrado.</div>`;
   }
 
-  // Cancelamentos
-  const _tC=cancelamentos.reduce((s,c)=>s+(c.valorAtualizado||0),0);
-  const _wC=cancelamentos.reduce((s,c)=>s+(c.valorWecare||0),0);
-  const _pC=cancelamentos.reduce((s,c)=>s+(c.valorProprietario||0),0);
+  // Cancelamentos do mês vigente (kpiPeriodo) — antes somava TODOS os
+  // cancelamentos de todos os tempos, então o resumo nunca batia com o mês
+  // sendo olhado.
+  const _cancMes=cancelamentos.filter(c=>_mesCancelamento(c)===kpiPeriodo);
+  const _tC=_cancMes.reduce((s,c)=>s+(c.valorAtualizado||0),0);
+  const _wC=_cancMes.reduce((s,c)=>s+(c.valorWecare||0),0);
+  const _pC=_cancMes.reduce((s,c)=>s+(c.valorProprietario||0),0);
   document.getElementById('perf-canc-inner').innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;">
-    ${[{l:'Total recebido',v:brl(_tC),c:'#0D9488'},{l:'WeCare',v:brl(_wC),c:'#DC2626'},{l:'Proprietários',v:brl(_pC),c:'#1D4ED8'},{l:'Nº cancelamentos',v:cancelamentos.length,c:'#D97706'}]
+    ${[{l:'Total recebido',v:brl(_tC),c:'#0D9488'},{l:'WeCare',v:brl(_wC),c:'#DC2626'},{l:'Proprietários',v:brl(_pC),c:'#1D4ED8'},{l:'Nº cancelamentos',v:_cancMes.length,c:'#D97706'}]
     .map(x=>`<div style="background:#F4F6F9;border-radius:10px;padding:12px;text-align:center;">
       <div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;margin-bottom:4px;">${x.l}</div>
       <div style="font-size:18px;font-weight:700;color:${x.c};font-family:'SF Mono','Fira Code',monospace;">${x.v}</div>
@@ -2593,6 +2602,14 @@ function renderSettingsImoveis(){
     '</div>'
   ).join('');
 }
+// Chamado sempre que imovelsCatalog muda (adicionar/remover em Configurações
+// OU no modal "Gerenciar Catálogo") — sem isso, a aba Preferido dos Hóspedes
+// (e o resumo dela em Performance) ficava com a lista velha até a pessoa sair
+// e voltar na aba.
+function _refreshImovelDependents(){
+  if(typeof renderPreferidosHospedes==='function') renderPreferidosHospedes();
+  if(typeof renderPerformance==='function' && document.getElementById('performance-body')) renderPerformance();
+}
 function settingsAdicionarImovel(){
   const inp=document.getElementById('settings-novo-imovel'); if(!inp) return;
   const nome=inp.value.trim(); if(!nome){showToast('Informe o nome do imóvel.','peach');return;}
@@ -2600,6 +2617,7 @@ function settingsAdicionarImovel(){
   inp.value='';
   saveAll();
   renderSettingsImoveis();
+  _refreshImovelDependents();
   showToast('Imóvel adicionado!','sage');
 }
 function settingsRemoverImovel(id){
@@ -2607,6 +2625,7 @@ function settingsRemoverImovel(id){
   imovelsCatalog=imovelsCatalog.filter(x=>x.id!==id);
   saveAll();
   renderSettingsImoveis();
+  _refreshImovelDependents();
   showToast('Imóvel removido.','peach');
 }
 function saveSettings(){
@@ -6767,13 +6786,17 @@ function adicionarCatalogImovel(){
   const id='c-'+Date.now();
   imovelsCatalog.push({id,code:'',nome});
   el.value='';
+  if(typeof saveAll==='function') saveAll();
   renderCatalogImoveisList();
+  _refreshImovelDependents();
   showToast('"'+nome+'" adicionado ao catálogo!','sage');
 }
 
 function removerCatalogImovel(id){
   imovelsCatalog=imovelsCatalog.filter(x=>x.id!==id);
+  if(typeof saveAll==='function') saveAll();
   renderCatalogImoveisList();
+  _refreshImovelDependents();
 }
 
 function showToast(msg, color) {
@@ -6852,7 +6875,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 84;
+const APP_VERSION = 85;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;
@@ -7220,6 +7243,10 @@ function excluirSuperhost(id) {
 }
 
 // ── CANCELAMENTOS ──
+// Mês vigente explícito (novo campo) manda; cancelamentos antigos sem o campo
+// caem pro mês de criação do registro — pra não sumir do resumo de Performance
+// de quem já tinha cancelamento lançado antes dessa mudança.
+function _mesCancelamento(c){ return c.mesVigente || (c.criadoEm ? new Date(c.criadoEm).toISOString().substring(0,7) : ''); }
 function renderCancelamentos() {
   const el = document.getElementById('cancelamentos-lista'); if (!el) return;
   const resumoEl = document.getElementById('cancelamentos-resumo');
@@ -7238,8 +7265,9 @@ function renderCancelamentos() {
     el.innerHTML = '<div class="card"><div class="card-body" style="text-align:center;padding:30px;color:var(--text3);"><i class="fa-solid fa-ban" style="font-size:32px;opacity:0.35;margin-bottom:10px;display:block;"></i><div>Nenhum cancelamento registrado.</div></div></div>';
     return;
   }
-  el.innerHTML = '<div class="card"><div style="overflow-x:auto;"><table class="data-table" style="font-size:12.5px;"><thead><tr><th>Hóspede</th><th>Imóvel</th><th>Período</th><th>Política</th><th>Valor original</th><th>Valor atualizado</th><th>WeCare</th><th>Proprietário</th><th></th></tr></thead><tbody>'+
+  el.innerHTML = '<div class="card"><div style="overflow-x:auto;"><table class="data-table" style="font-size:12.5px;"><thead><tr><th>Mês</th><th>Hóspede</th><th>Imóvel</th><th>Período</th><th>Política</th><th>Valor original</th><th>Valor atualizado</th><th>WeCare</th><th>Proprietário</th><th></th></tr></thead><tbody>'+
     cancelamentos.slice().reverse().map(c=>'<tr>'+
+      '<td style="white-space:nowrap;">'+(_mesCancelamento(c)||'—')+'</td>'+
       '<td>'+esc(c.hospede||'—')+'</td>'+
       '<td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(c.imovel||'—')+'</td>'+
       '<td style="white-space:nowrap;">'+esc(c.periodo||'—')+'</td>'+
@@ -7263,6 +7291,7 @@ function abrirModalCancelamento(id) {
       imovelsCatalog.map(im => '<option value="'+esc(im.nome)+'">'+esc(im.nome)+'</option>').join('');
     selIm.value = c ? (c.imovel||'') : '';
   }
+  document.getElementById('canc-mes').value = c ? _mesCancelamento(c) : new Date().toISOString().substring(0,7);
   document.getElementById('canc-hospede').value = c ? (c.hospede||'') : '';
   document.getElementById('canc-periodo').value = c ? (c.periodo||'') : '';
   document.getElementById('canc-politica').value = c ? (c.politica||'100%') : '100%';
@@ -7324,6 +7353,7 @@ function salvarCancelamento() {
   else { wecare = valor * 0.2; prop = valor * 0.8; }
   const obj = {
     id: _cancelamentoEditId || ('canc'+Date.now()),
+    mesVigente: document.getElementById('canc-mes').value,
     hospede,
     imovel: document.getElementById('canc-imovel').value,
     periodo: document.getElementById('canc-periodo').value.trim(),

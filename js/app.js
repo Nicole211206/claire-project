@@ -698,7 +698,38 @@ function bandHTML(name){
   return '<span class="bandeira '+(m[name]||'vermelha')+'">'+(ic[name]||'')+' '+name+'</span>';
 }
 
+// Recalcula a Avaliação dos Hóspedes de um mês específico (usado só pela
+// migração abaixo, que precisa recalcular meses passados sem mexer no
+// kpiPeriodo selecionado no momento).
+function _recalcularAVParaMes(mes){
+  const s=(kpiSubVals[mes]&&kpiSubVals[mes].av)||{};
+  const hasA=s.airbnb!==undefined&&s.airbnb!=='';
+  const hasB=s.booking!==undefined&&s.booking!=='';
+  let soma=0,pesoTotal=0;
+  if(hasA){const w=(+s.qtdAirbnb||0)>0?(+s.qtdAirbnb):1;soma+=(+s.airbnb||0)*w;pesoTotal+=w;}
+  if(hasB){const w=(+s.qtdBooking||0)>0?(+s.qtdBooking):1;soma+=(+s.booking||0)*w;pesoTotal+=w;}
+  if(!kpiVals[mes])kpiVals[mes]={};
+  kpiVals[mes].av=pesoTotal>0?(soma/pesoTotal).toFixed(2):null;
+}
+// O Booking deixou de ser normalizado automaticamente (0-10 → 0-5) — agora a
+// pessoa já digita a nota convertida. Valores antigos lançados na escala
+// 0-10 ficariam errados sob a regra nova (nunca passa de 5 nessa escala),
+// então qualquer booking >5 encontrado só pode ser do formato antigo —
+// converte uma vez (idempotente: depois de convertido já fica ≤5 e para).
+function _migrarBookingEscala10Para5(){
+  let mudou=false;
+  Object.keys(kpiSubVals).forEach(mes=>{
+    const av=kpiSubVals[mes]&&kpiSubVals[mes].av;
+    if(av && av.booking!==undefined && av.booking!=='' && (+av.booking)>5){
+      av.booking=(+av.booking/2).toFixed(2);
+      _recalcularAVParaMes(mes);
+      mudou=true;
+    }
+  });
+  if(mudou && typeof saveAll==='function') saveAll();
+}
 function renderKPIs(){
+  _migrarBookingEscala10Para5();
   // "ob" (Tempo de Onboarding) e "rc.setup" (Redução de Custos) vêm dos imóveis marcados no onboarding, por mês de referência
   _syncObKpiDoOnboarding();
   _syncSetupKpiDoOnboarding();
@@ -741,12 +772,12 @@ function renderKPIs(){
       const hasB=sub.booking!==undefined&&sub.booking!=='';
       let somaW=0, pesoW=0;
       if(hasA){ const w=(+sub.qtdAirbnb||0)>0?(+sub.qtdAirbnb):1; somaW+=(+sub.airbnb||0)*w; pesoW+=w; }
-      if(hasB){ const w=(+sub.qtdBooking||0)>0?(+sub.qtdBooking):1; somaW+=((+sub.booking||0)/2)*w; pesoW+=w; }
+      if(hasB){ const w=(+sub.qtdBooking||0)>0?(+sub.qtdBooking):1; somaW+=(+sub.booking||0)*w; pesoW+=w; }
       const avg=pesoW>0?(somaW/pesoW).toFixed(2):null;
       inputHTML='<div style="display:grid;gap:6px;">'+
         '<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:90px;">Airbnb (0-5):</label><input type="number" step="0.01" min="0" max="5" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub.airbnb||'')+'" placeholder="—" onchange="setKPISub(\'av\',\'airbnb\',this.value)"><label style="font-size:11px;color:var(--text3);margin-left:6px;">Qtd. avaliações:</label><input type="number" step="1" min="0" class="form-input" style="width:70px;padding:5px 8px;" value="'+(sub.qtdAirbnb||'')+'" placeholder="—" onchange="setKPISub(\'av\',\'qtdAirbnb\',this.value)"></div>'+
-        '<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:90px;">Booking (0-10):</label><input type="number" step="0.01" min="0" max="10" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub.booking||'')+'" placeholder="—" onchange="setKPISub(\'av\',\'booking\',this.value)"><label style="font-size:11px;color:var(--text3);margin-left:6px;">Qtd. avaliações:</label><input type="number" step="1" min="0" class="form-input" style="width:70px;padding:5px 8px;" value="'+(sub.qtdBooking||'')+'" placeholder="—" onchange="setKPISub(\'av\',\'qtdBooking\',this.value)"></div>'+
-        (avg!==null?'<div style="font-size:12px;font-weight:700;color:var(--sage);margin-top:2px;">Média Ponderada: '+avg+' estrelas <span style="font-weight:400;color:var(--text3);">(Booking normalizado p/ 0-5, ponderado pela qtd. de avaliações de cada canal)</span></div>':'')+'</div>';
+        '<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:90px;">Booking (0-5):</label><input type="number" step="0.01" min="0" max="5" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub.booking||'')+'" placeholder="—" onchange="setKPISub(\'av\',\'booking\',this.value)"><label style="font-size:11px;color:var(--text3);margin-left:6px;">Qtd. avaliações:</label><input type="number" step="1" min="0" class="form-input" style="width:70px;padding:5px 8px;" value="'+(sub.qtdBooking||'')+'" placeholder="—" onchange="setKPISub(\'av\',\'qtdBooking\',this.value)"></div>'+
+        (avg!==null?'<div style="font-size:12px;font-weight:700;color:var(--sage);margin-top:2px;">Média Ponderada: '+avg+' estrelas <span style="font-weight:400;color:var(--text3);">(ponderado pela qtd. de avaliações de cada canal — informe o Booking já convertido p/ 0-5)</span></div>':'')+'</div>';
     } else if(k.id==='cv'){
       const sub=_ksv().cv||{};
       const pct2=(sub.reviews!==undefined&&sub.checkouts!==undefined&&+sub.checkouts>0?(((+sub.reviews||0)/(+sub.checkouts||1))*100).toFixed(1):null);
@@ -775,7 +806,7 @@ function renderKPIs(){
         {key:'limpeza',    label:'Limpeza',             hint:'Pago pelo hóspede — valor cobrado vs. custo real'},
         {key:'manutencao', label:'Manutenção',          hint:'Pago pelo proprietário/hóspede — cobrado vs. custo'},
         {key:'setup',      label:'On-boarding (Setup)', hint:'Taxa de setup — valor cobrado vs. custo de implementação'},
-        {key:'margem',     label:'Margem Operacional',  hint:'1% da Receita Líquida — previsto vs. despesas reais'},
+        {key:'margem',     label:'Despesas Operacionais', hint:'1% da Receita Líquida — previsto vs. despesas reais'},
         {key:'extras',     label:'Serviços Extras',     hint:'Valor cobrado vs. custo dos serviços extras (automático)'},
       ];
       const calcEco=(key)=>{const p=parseFloat(rcSub[key].previsto),g2=parseFloat(rcSub[key].gasto);return(p>0&&!isNaN(g2))?((p-g2)/p*100).toFixed(1):null;};
@@ -919,7 +950,7 @@ function _recalcularAV(){
   const hasB=s.booking!==undefined&&s.booking!=='';
   let soma=0, pesoTotal=0;
   if(hasA){ const w=(+s.qtdAirbnb||0)>0?(+s.qtdAirbnb):1; soma+=(+s.airbnb||0)*w; pesoTotal+=w; }
-  if(hasB){ const w=(+s.qtdBooking||0)>0?(+s.qtdBooking):1; soma+=((+s.booking||0)/2)*w; pesoTotal+=w; }
+  if(hasB){ const w=(+s.qtdBooking||0)>0?(+s.qtdBooking):1; soma+=(+s.booking||0)*w; pesoTotal+=w; }
   _kv().av=pesoTotal>0?(soma/pesoTotal).toFixed(2):null;
 }
 // Redução de Custos: soma TODO o previsto e TODO o gasto dos itens
@@ -3440,7 +3471,7 @@ function exportarKPIPDF(){
     {key:'limpeza',label:'Limpeza'},
     {key:'manutencao',label:'Manutenção'},
     {key:'setup',label:'On-boarding (Setup)'},
-    {key:'margem',label:'Margem Operacional'},
+    {key:'margem',label:'Despesas Operacionais'},
     {key:'extras',label:'Serviços Extras'},
   ];
   const cardsKPI=KPI_DEFS.map(k=>{
@@ -7128,7 +7159,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 96;
+const APP_VERSION = 97;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

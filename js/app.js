@@ -3376,6 +3376,16 @@ function _mesAnteriorStr(mes){
   const d=new Date(y,m-2,1);
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
 }
+// Cores exatas da tela "Meus KPIs" (css/styles.css), pra o relatório sair
+// visualmente idêntico ao que aparece no app — mesmos ícones, cores e barra
+// de progresso, só sem os campos editáveis (é um retrato, não uma edição).
+const _KPI_ICON_COLORS={rose:{bg:'#fdf0f3',fg:'#e8a4b0'},sage:{bg:'#edf5f1',fg:'#82b09a'},peach:{bg:'#fdf3ec',fg:'#e0a882'},lav:{bg:'#f2f0fb',fg:'#a89ece'},sky:{bg:'#edf4fb',fg:'#89b4d4'},gold:{bg:'#fdf8ec',fg:'#c9a84c'}};
+const _KPI_BAR_COLORS={rose:'#e8a4b0',sage:'#82b09a',peach:'#e0a882',lav:'#a89ece',sky:'#89b4d4',gold:'#c9a84c'};
+function _pillBandeiraReport(name){
+  const m={ELITE:{bg:'#f5eeff',fg:'#b084e0',ic:'🏆'},AZUL:{bg:'#edf6fc',fg:'#5fa8d4',ic:'💎'},VERDE:{bg:'#edf8f2',fg:'#5aab82',ic:'✅'},AMARELA:{bg:'#fdf7e6',fg:'#d4a843',ic:'⚠️'},VERMELHA:{bg:'#fdf0ee',fg:'#d4726a',ic:'🚩'}};
+  const c=m[name]||m.VERMELHA;
+  return '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:0.3px;text-transform:uppercase;background:'+c.bg+';color:'+c.fg+';white-space:nowrap;">'+c.ic+' '+name+'</span>';
+}
 function exportarKPIPDF(){
   const g=calcGlobal(),band=getBand(g),nv=NIVEIS[selNivelIdx],vp=Math.round(nv.variavel*band.mult);
   const [_anoM,_mesM]=kpiPeriodo.split('-').map(Number);
@@ -3383,73 +3393,74 @@ function exportarKPIPDF(){
   const nomeColaborador=(typeof ls==='function'?ls('nx_name'):'')||'Nicole';
   const gAnterior=calcGlobalParaMes(_mesAnteriorStr(kpiPeriodo));
   const delta=gAnterior!==null?g-gAnterior:null;
-  const deltaHtml=delta===null?''
-    :'<div><div style="font-size:12px;color:#666;">vs. mês anterior</div><div style="font-weight:700;font-size:15px;color:'+(delta>0?'#2e7d32':delta<0?'#c62828':'#666')+';">'+(delta>0?'▲ +':delta<0?'▼ ':'')+delta+' p.p.</div></div>';
+  const deltaTexto=delta===null?''
+    :' · Mês anterior: <strong>'+gAnterior+'%</strong> (<span style="color:'+(delta>0?'#5aab82':delta<0?'#d4726a':'#b0a89e')+';font-weight:600;">'+(delta>0?'▲ +':delta<0?'▼ ':'')+delta+' p.p.</span>)';
 
-  const linhasKPI=KPI_DEFS.map(k=>{
+  const cardsKPI=KPI_DEFS.map(k=>{
     const p=k.calc(_kv()[k.id]),ps=p!==null?Math.round(p):null;
+    const kBand=ps!==null?getBand(ps):null;
     const sub=_ksv()[k.id]||{};
     let detalhe='';
-    if(k.id==='av'&&(sub.airbnb||sub.booking))detalhe=' (Airbnb: '+(sub.airbnb||'—')+' | Booking: '+(sub.booking||'—')+' | Média: '+(_kv().av||'—')+')';
-    if(k.id==='cv'&&(sub.reviews||sub.checkouts))detalhe=' ('+(sub.reviews||0)+' reviews / '+(sub.checkouts||0)+' checkouts)';
-    if(k.id==='tr'){const atts=['patricia','sara','lisarb','lais'];const vals=atts.filter(a=>sub[a]).map(a=>sub[a]+'min');if(vals.length)detalhe=' ('+vals.join(' | ')+')'}
-    const kBand=ps!==null?getBand(ps):null;
-    const barPct=ps!==null?Math.min(ps,150)/150*100:0;
-    const barCor=kBand?(kBand.cls==='vermelha'?'#c62828':kBand.cls==='amarela'?'#f57c00':kBand.cls==='verde'?'#2e7d32':kBand.cls==='azul'?'#1565c0':'#6a1b9a'):'#ddd';
-    return '<tr>'+
-      '<td style="padding:9px 8px;border-bottom:1px solid #eee;"><div style="font-weight:600;">'+k.label+'</div><div style="font-size:10.5px;color:#999;">'+k.hint+'</div></td>'+
-      '<td style="padding:9px 8px;border-bottom:1px solid #eee;text-align:center;">'+Math.round(k.peso*100)+'%</td>'+
-      '<td style="padding:9px 8px;border-bottom:1px solid #eee;">'+(_kv()[k.id]||'—')+' '+k.unit+'<div style="font-size:10.5px;color:#999;">'+detalhe.trim()+'</div></td>'+
-      '<td style="padding:9px 8px;border-bottom:1px solid #eee;text-align:center;color:#666;">'+k.meta+' '+k.unit+'</td>'+
-      '<td style="padding:9px 8px;border-bottom:1px solid #eee;width:120px;"><div style="background:#eee;border-radius:6px;height:8px;overflow:hidden;"><div style="width:'+barPct+'%;height:100%;background:'+barCor+';"></div></div></td>'+
-      '<td style="padding:9px 8px;border-bottom:1px solid #eee;text-align:center;">'+(kBand?'<span class="band '+kBand.cls+'" style="font-size:11px;padding:2px 9px;">'+ps+'%</span>':'<span style="color:#bbb;">—</span>')+'</td>'+
-      '</tr>';
+    if(k.id==='av'&&(sub.airbnb||sub.booking))detalhe='Airbnb: '+(sub.airbnb||'—')+' | Booking: '+(sub.booking||'—')+' | Média: '+(_kv().av||'—');
+    if(k.id==='cv'&&(sub.reviews||sub.checkouts))detalhe=(sub.reviews||0)+' reviews / '+(sub.checkouts||0)+' checkouts';
+    if(k.id==='tr'){const atts=['patricia','sara','lisarb','lais'];const vals=atts.filter(a=>sub[a]).map(a=>sub[a]+'min');if(vals.length)detalhe=vals.join(' | ');}
+    const scoreColor=ps===null?'#b0a89e':ps>=100?'#82b09a':ps>=80?'#d4a843':'#d4726a';
+    const barPct=ps!==null?Math.min(ps,150):0;
+    const iconCor=_KPI_ICON_COLORS[k.color]||_KPI_ICON_COLORS.rose;
+    const barCor=_KPI_BAR_COLORS[k.color]||_KPI_BAR_COLORS.rose;
+    return '<div style="background:#fdfcfb;border:1px solid rgba(0,0,0,0.07);border-radius:14px;overflow:hidden;">'+
+      '<div style="padding:13px 16px;border-bottom:1px solid rgba(0,0,0,0.07);display:flex;align-items:center;gap:10px;">'+
+      '<div style="width:28px;height:28px;border-radius:8px;background:'+iconCor.bg+';color:'+iconCor.fg+';display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;"><i class="fa-solid '+k.icon+'"></i></div>'+
+      '<div style="flex:1;"><div style="font-size:13.5px;font-weight:600;">'+k.label+'</div><div style="font-size:11px;color:#b0a89e;">Peso: '+Math.round(k.peso*100)+'% · Meta: '+k.meta+' '+k.unit+'</div></div>'+
+      (kBand?_pillBandeiraReport(kBand.name):'')+
+      '</div>'+
+      '<div style="padding:13px 16px;">'+
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12px;margin-bottom:5px;">'+
+      '<span style="color:#b0a89e;">'+k.hint+'</span>'+
+      '<span style="font-weight:700;color:'+scoreColor+';">'+(ps!==null?ps+'%':'—')+'</span>'+
+      '</div>'+
+      '<div style="height:6px;background:#e8e4de;border-radius:3px;overflow:hidden;margin-bottom:10px;"><div style="height:100%;width:'+barPct+'%;background:'+barCor+';"></div></div>'+
+      '<div style="font-size:12.5px;"><strong>'+(_kv()[k.id]||'—')+' '+k.unit+'</strong>'+(detalhe?' <span style="color:#b0a89e;">'+detalhe+'</span>':'')+'</div>'+
+      '</div></div>';
   }).join('');
 
-  const linhasNivel=NIVEIS.map((n,i)=>{
-    const atual=i===selNivelIdx;
-    return '<tr'+(atual?' style="background:#fdf1f2;"':'')+'>'+
-      '<td style="padding:6px 8px;border-bottom:1px solid #eee;font-weight:'+(atual?'700':'400')+';">'+n.n+(atual?' ← atual':'')+'</td>'+
-      '<td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center;">'+brl(n.fixo)+'</td>'+
-      '<td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center;">'+brl(n.variavel)+'</td>'+
-      '<td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center;font-weight:600;">'+brl(n.fixo+n.variavel)+'</td>'+
-      '</tr>';
-  }).join('');
-
-  const html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Relatório KPI — '+mes+'</title><style>'+
-    'body{font-family:Arial,sans-serif;padding:40px;color:#222;max-width:820px;margin:0 auto;}'+
-    'h1{color:#c0616a;font-size:22px;margin-bottom:4px;}'+
-    'h2{font-size:15px;color:#444;margin-top:28px;border-bottom:2px solid #f0f0f0;padding-bottom:6px;}'+
-    'table{width:100%;border-collapse:collapse;}'+
-    'th{background:#f9f5f5;padding:8px;text-align:left;border-bottom:2px solid #eee;font-size:11px;text-transform:uppercase;color:#888;letter-spacing:0.3px;}'+
-    'td{font-size:13px;vertical-align:middle;}'+
-    '.band{display:inline-block;padding:4px 12px;border-radius:20px;font-weight:700;font-size:14px;}'+
-    '.verde{background:#e8f5e9;color:#2e7d32}.amarela{background:#fff8e1;color:#f57c00}.vermelha{background:#ffebee;color:#c62828}.azul{background:#e3f2fd;color:#1565c0}.elite{background:#f3e5f5;color:#6a1b9a}'+
-    '.legenda{display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:#888;margin-top:10px;}'+
-    '.footer{margin-top:32px;font-size:11px;color:#999;border-top:1px solid #eee;padding-top:12px;}'+
+  const html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Relatório KPI — '+mes+'</title>'+
+    '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">'+
+    '<style>'+
+    'body{font-family:Arial,sans-serif;padding:32px 40px;color:#2d2926;max-width:900px;margin:0 auto;background:#fff;}'+
+    'h1{color:#c0616a;font-size:21px;margin-bottom:6px;}'+
+    'h2{font-size:14px;color:#2d2926;margin:24px 0 12px;}'+
+    '.footer{margin-top:28px;font-size:11px;color:#b0a89e;border-top:1px solid rgba(0,0,0,0.07);padding-top:12px;}'+
     '@media print{button{display:none}}'+
     '</style></head><body>'+
     '<h1>📊 Relatório de KPIs — WeCare</h1>'+
-    '<p style="color:#666;font-size:13px;">Colaborador: <strong>'+esc(nomeColaborador)+'</strong> · Período: <strong>'+mes+'</strong> · Gerado em: '+new Date().toLocaleString('pt-BR')+'</p>'+
-    '<div style="background:#f9f9f9;border-radius:8px;padding:16px;margin:16px 0;display:flex;gap:28px;align-items:center;flex-wrap:wrap;">'+
-    '<div><div style="font-size:12px;color:#666;text-transform:uppercase;">Atingimento Global</div><div style="font-size:36px;font-weight:700;color:#c0616a;">'+g+'%</div></div>'+
-    '<div><div style="font-size:12px;color:#666;margin-bottom:4px;">Bandeira</div><span class="band '+band.cls+'">'+band.name+'</span></div>'+
-    deltaHtml+
-    '<div><div style="font-size:12px;color:#666;">Nível</div><div style="font-weight:600;">'+nv.n+' — Fixo '+brl(nv.fixo)+'</div></div>'+
-    '<div><div style="font-size:12px;color:#666;">Variável</div><div style="font-weight:600;color:#2e7d32;">'+brl(vp)+' <span style="font-weight:400;color:#999;">de '+brl(nv.variavel*2)+' máx</span></div></div>'+
-    '<div><div style="font-size:12px;color:#666;">Total Estimado</div><div style="font-weight:700;font-size:18px;">'+brl(nv.fixo+vp)+'</div></div>'+
+    '<p style="color:#666;font-size:13px;">Colaborador: <strong>'+esc(nomeColaborador)+'</strong> · Período: <strong>'+mes+'</strong> · Gerado em: '+new Date().toLocaleString('pt-BR')+deltaTexto+'</p>'+
+    '<div style="background:#fdfcfb;border:1px solid rgba(0,0,0,0.07);border-radius:14px;padding:20px 24px;margin:16px 0;display:grid;grid-template-columns:1fr auto;gap:20px;align-items:center;">'+
+    '<div>'+
+    '<div style="font-size:11px;color:#b0a89e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Atingimento Global Ponderado</div>'+
+    '<div style="display:flex;align-items:baseline;gap:12px;">'+
+    '<div style="font-size:44px;font-weight:700;">'+g+'%</div>'+
+    _pillBandeiraReport(band.name)+
+    '</div>'+
+    '<div style="margin-top:10px;height:8px;background:#e8e4de;border-radius:4px;overflow:hidden;"><div style="height:100%;width:'+Math.min(g,150)+'%;background:#e8a4b0;border-radius:4px;"></div></div>'+
+    '<div style="display:flex;gap:14px;margin-top:8px;flex-wrap:wrap;font-size:11.5px;color:#b0a89e;">'+
+    '<span>0-79% <strong style="color:#d4726a;">Vermelha 0%</strong></span>'+
+    '<span>80-99% <strong style="color:#d4a843;">Amarela 50%</strong></span>'+
+    '<span>100-120% <strong style="color:#5aab82;">Verde 100%</strong></span>'+
+    '<span>121-150% <strong style="color:#5fa8d4;">Azul 150%</strong></span>'+
+    '<span>&gt;150% <strong style="color:#b084e0;">Elite 200%</strong></span>'+
+    '</div>'+
+    '</div>'+
+    '<div style="text-align:center;padding:0 20px;border-left:1px solid rgba(0,0,0,0.07);">'+
+    '<div style="font-size:11px;color:#b0a89e;text-transform:uppercase;margin-bottom:5px;">Variável Pago</div>'+
+    '<div style="font-size:26px;font-weight:700;color:#d4726a;">'+brl(vp)+'</div>'+
+    '<div style="font-size:12px;color:#b0a89e;margin-top:3px;">de <strong>'+brl(nv.variavel*2)+'</strong> máx</div>'+
+    '<div style="font-size:12px;color:#b0a89e;margin-top:8px;">Fixo: <strong style="color:#2d2926;">'+brl(nv.fixo)+'</strong></div>'+
+    '<div style="font-size:14px;font-weight:700;color:#82b09a;margin-top:5px;">Total: '+brl(nv.fixo+vp)+'</div>'+
+    '</div>'+
     '</div>'+
     '<h2>Detalhamento por KPI</h2>'+
-    '<table><thead><tr><th>KPI</th><th style="text-align:center;">Peso</th><th>Valor Lançado</th><th style="text-align:center;">Meta</th><th>Atingimento</th><th style="text-align:center;">Bandeira</th></tr></thead><tbody>'+linhasKPI+'</tbody></table>'+
-    '<div class="legenda">'+
-    '<span>0–79% <strong style="color:#c62828;">Vermelha</strong> (0% do variável)</span>'+
-    '<span>80–99% <strong style="color:#f57c00;">Amarela</strong> (50%)</span>'+
-    '<span>100–120% <strong style="color:#2e7d32;">Verde</strong> (100%)</span>'+
-    '<span>121–149% <strong style="color:#1565c0;">Azul</strong> (150%)</span>'+
-    '<span>≥150% <strong style="color:#6a1b9a;">Elite</strong> (200%)</span>'+
-    '</div>'+
-    '<h2>Estrutura de Níveis Salariais</h2>'+
-    '<table><thead><tr><th>Nível</th><th style="text-align:center;">Fixo</th><th style="text-align:center;">Variável (meta 100%)</th><th style="text-align:center;">OTE Total</th></tr></thead><tbody>'+linhasNivel+'</tbody></table>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">'+cardsKPI+'</div>'+
     '<div class="footer">Claire · Painel de Gestão WeCare · '+new Date().getFullYear()+'</div>'+
     '<script>window.onload=function(){window.print();}<\/script></body></html>';
   const win=window.open('','_blank');
@@ -7031,7 +7042,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 90;
+const APP_VERSION = 91;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

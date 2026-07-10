@@ -75,6 +75,41 @@ export default {
         const v = await env.CLAIRE_KV.get(KEY);
         return jsonResp({ data: v ? JSON.parse(v) : null }, cors);
       }
+      // ── ANEXOS (fotos, PDFs, NF) ──
+      // Guardados como chave própria no MESMO namespace CLAIRE_KV (sem R2 —
+      // R2 exige cartão cadastrado na conta, que não temos por enquanto).
+      // Cada anexo vira uma chave separada (fora do documento grande), então
+      // não infla mais o localStorage/documento sincronizado de ninguém.
+      if (url.pathname.endsWith('/upload') && request.method === 'POST') {
+        const body = await request.json();
+        const dataUrl = body.dataUrl || '';
+        const m = /^data:([^;]+);base64,(.+)$/.exec(dataUrl);
+        if (!m) return jsonResp({ error: 'dataUrl invalido' }, cors, 400);
+        const mime = body.mime || m[1] || 'application/octet-stream';
+        let bytes;
+        try {
+          const bin = atob(m[2]);
+          bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        } catch (e) {
+          return jsonResp({ error: 'base64 invalido' }, cors, 400);
+        }
+        const key = 'anexo_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+        await env.CLAIRE_KV.put(key, bytes, { metadata: { mime, filename: body.filename || '' } });
+        const fileUrl = url.origin + '/files/' + key + '?token=' + encodeURIComponent(token);
+        return jsonResp({ ok: true, url: fileUrl, key }, cors, 201);
+      }
+      if (url.pathname.includes('/files/') && request.method === 'GET') {
+        const key = url.pathname.split('/files/')[1];
+        if (!key) return jsonResp({ error: 'chave obrigatoria' }, cors, 400);
+        const obj = await env.CLAIRE_KV.getWithMetadata(key, 'arrayBuffer');
+        if (!obj || obj.value === null) return jsonResp({ error: 'arquivo nao encontrado' }, cors, 404);
+        const meta = obj.metadata || {};
+        return new Response(obj.value, {
+          status: 200,
+          headers: { 'Content-Type': meta.mime || 'application/octet-stream', 'Cache-Control': 'private, max-age=31536000', ...cors },
+        });
+      }
       if (url.pathname.endsWith('/save') && request.method === 'POST') {
         const body = await request.text();
         // valida que é JSON antes de gravar

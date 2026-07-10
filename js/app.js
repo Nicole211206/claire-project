@@ -992,11 +992,34 @@ function sincronizarExtrasKPI(){
 // ═══════════════════ HELPER ARQUIVO → BASE64 ═══════════════════
 function _lerArquivoBase64(file, cb){ const r=new FileReader(); r.onload=function(e){ cb(e.target.result, file.name); }; r.readAsDataURL(file); }
 function abrirAnexo(dataUrl){ if(!dataUrl) return; const w=window.open(); if(w){ w.document.write('<iframe src="'+dataUrl+'" style="width:100%;height:100%;border:0;"></iframe>'); } }
+// Envia o anexo (já lido como data-URL) pro worker, que grava numa chave própria
+// do KV (fora do documento sincronizado) e devolve uma URL — assim o anexo para
+// de viajar embutido em base64 dentro do que sincroniza pra todo mundo, e para
+// de lotar o localStorage do aparelho (foi isso que travou a sincronização de
+// uma atendente em 2026-07-10). Sem sync configurado, ou se o envio falhar
+// (offline), cai no comportamento antigo (guarda o data-URL direto) — pior pro
+// tamanho, mas não perde o anexo.
+function _enviarAnexo(dataUrl, filename, cb){
+  const s=window.CLAIRE_SYNC||{};
+  if(!s.url){ cb(dataUrl); return; }
+  fetch(s.url.replace(/\/$/,'')+'/upload?token='+encodeURIComponent(s.token||''), {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({filename: filename||'', dataUrl: dataUrl})
+  }).then(function(r){ return r.json(); })
+    .then(function(j){ cb((j && j.ok && j.url) ? j.url : dataUrl); })
+    .catch(function(){ cb(dataUrl); });
+}
 
 // ═══════════════════ SERVIÇOS EXTRAS ═══════════════════
 let _extraEditId=null;
 let _extraAnexoTmp=null;
-function _extraOnAnexo(input){ if(!input.files||!input.files[0]) return; _lerArquivoBase64(input.files[0],function(dataUrl){ _extraAnexoTmp=dataUrl; var st=document.getElementById('ex-anexo-status'); if(st) st.innerHTML='anexo carregado ✓ <button type="button" onclick="abrirAnexo(_extraAnexoTmp)" style="background:none;border:none;color:var(--rose);cursor:pointer;font-size:12px;">abrir</button>'; }); }
+function _extraOnAnexo(input){
+  if(!input.files||!input.files[0]) return;
+  var st=document.getElementById('ex-anexo-status'); if(st) st.innerHTML='enviando anexo...';
+  _lerArquivoBase64(input.files[0],function(dataUrl,nome){
+    _enviarAnexo(dataUrl,nome,function(url){ _extraAnexoTmp=url; _extraSetAnexoStatus(url); });
+  });
+}
 function _preencherSelectImoveisExtra(){
   const sel=document.getElementById('ex-imovel'); if(!sel) return;
   sel.innerHTML='<option value="">— Geral —</option>'+imovelsCatalog.map(im=>'<option value="'+esc(im.nome)+'">'+esc(im.nome)+'</option>').join('');
@@ -1848,7 +1871,7 @@ function _lerImagemReduzida(file, cb){
       if(w>h){ if(w>max){h=h*max/w;w=max;} } else { if(h>max){w=w*max/h;h=max;} }
       const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
       canvas.getContext('2d').drawImage(img,0,0,w,h);
-      cb(canvas.toDataURL('image/jpeg',0.8));
+      cb(canvas.toDataURL('image/jpeg',0.8), file.name);
     };
     img.src=e.target.result;
   };
@@ -1856,14 +1879,18 @@ function _lerImagemReduzida(file, cb){
 }
 function uploadAttFoto(id,event){
   const file=event.target.files[0];if(!file)return;
-  _lerImagemReduzida(file,function(dataUrl){
-    const a=ATTS.find(x=>x.id===id);
-    if(a){a.foto=dataUrl;renderTeam();renderTeamOv();if(typeof renderSalary==='function')renderSalary();if(typeof saveAll==='function')saveAll();}
+  _lerImagemReduzida(file,function(dataUrl,nome){
+    _enviarAnexo(dataUrl,nome,function(url){
+      const a=ATTS.find(x=>x.id===id);
+      if(a){a.foto=url;renderTeam();renderTeamOv();if(typeof renderSalary==='function')renderSalary();if(typeof saveAll==='function')saveAll();}
+    });
   });
 }
 function uploadHeadFoto(id,event){
   const file=event.target.files[0];if(!file)return;
-  _lerImagemReduzida(file,function(dataUrl){headFotos[id]=dataUrl;renderSalary();if(typeof saveAll==='function')saveAll();});
+  _lerImagemReduzida(file,function(dataUrl,nome){
+    _enviarAnexo(dataUrl,nome,function(url){ headFotos[id]=url;renderSalary();if(typeof saveAll==='function')saveAll(); });
+  });
 }
 function setResp(id,v){const a=ATTS.find(x=>x.id===id);if(a){a.resp=v;renderTeam();renderTeamOv();}}
 function setNote(id,v){const a=ATTS.find(x=>x.id===id);if(a)a.note=v;}
@@ -2043,11 +2070,14 @@ function _pagoBadges(id){
 function getNotaFiscalKey(id, parcela){ return id+'_'+_mesAtualSal()+'_nf_'+(parcela||'p15'); }
 function uploadNotaFiscal(id, parcela, event){
   const file=event.target.files[0]; if(!file) return;
-  _lerArquivoBase64(file, function(dataUrl){
-    notasFiscais[getNotaFiscalKey(id, parcela)]=dataUrl;
-    if(typeof saveAll==='function') saveAll();
-    renderSalary();
-    showToast('NF '+parcela+' anexada!','sage');
+  showToast('Enviando NF...','sky');
+  _lerArquivoBase64(file, function(dataUrl,nome){
+    _enviarAnexo(dataUrl,nome,function(url){
+      notasFiscais[getNotaFiscalKey(id, parcela)]=url;
+      if(typeof saveAll==='function') saveAll();
+      renderSalary();
+      showToast('NF '+parcela+' anexada!','sage');
+    });
   });
 }
 function removerNotaFiscal(id, parcela){
@@ -5859,7 +5889,9 @@ function manutAbaPagamento(m){
 function manutUploadAnexoNF(id,event){
   const m=manutencoes.find(function(x){return x.id===id;}); if(!m) return;
   const f=event.target.files&&event.target.files[0]; if(!f) return;
-  _lerArquivoBase64(f,function(dataUrl){ m.anexoNF=dataUrl; if(typeof saveAll==='function') saveAll(); manutRenderAba(m); });
+  _lerArquivoBase64(f,function(dataUrl,nome){
+    _enviarAnexo(dataUrl,nome,function(url){ m.anexoNF=url; if(typeof saveAll==='function') saveAll(); manutRenderAba(m); });
+  });
 }
 
 function manutAbaCompras(m){
@@ -6201,9 +6233,11 @@ function manutUploadFotos(id,event){
   Array.prototype.forEach.call(files,function(file){
     const isVideo=file.type.startsWith('video/');
     const loader=isVideo?_lerArquivoBase64:_lerImagemReduzida;
-    loader(file,function(dataUrl){
-      m.fotos.push(dataUrl); pend--;
-      if(pend<=0){ if(typeof saveAll==='function') saveAll(); manutRenderAba(m); }
+    loader(file,function(dataUrl,nome){
+      _enviarAnexo(dataUrl,nome,function(url){
+        m.fotos.push(url); pend--;
+        if(pend<=0){ if(typeof saveAll==='function') saveAll(); manutRenderAba(m); }
+      });
     });
   });
   event.target.value='';
@@ -6537,13 +6571,15 @@ function projUploadAnexos(event){
   let pend=files.length;
   Array.prototype.forEach.call(files,function(file){
     _lerArquivoBase64(file,function(dataUrl,nome){
-      p.anexos.push({nome:nome, tipo:file.type||'', dataUrl:dataUrl});
-      pend--;
-      if(pend<=0){
-        if(typeof saveAll==='function') saveAll();
-        renderProjetosKanban();
-        projMudarAba('anexos',document.getElementById('ptab-anexos'));
-      }
+      _enviarAnexo(dataUrl,nome,function(url){
+        p.anexos.push({nome:nome, tipo:file.type||'', dataUrl:url});
+        pend--;
+        if(pend<=0){
+          if(typeof saveAll==='function') saveAll();
+          renderProjetosKanban();
+          projMudarAba('anexos',document.getElementById('ptab-anexos'));
+        }
+      });
     });
   });
   event.target.value='';
@@ -7092,7 +7128,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 95;
+const APP_VERSION = 96;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

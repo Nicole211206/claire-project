@@ -537,7 +537,6 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   loadSettings();
   renderOnboardingKanban();
   renderProjetosKanban();
-  renderReunioes();
   renderCompras();
   renderFocusInsights();
   renderPerformance();
@@ -3759,6 +3758,7 @@ function _carimbarTsEDeletes(){
   if(tombstones.length>500) tombstones=tombstones.filter(t=>(t.ts||0)>=corte);
 }
 
+let _avisouStorageCheio=false; // evita repetir o toast de armazenamento cheio a cada 5s
 function saveAll(){
   try{
     _carimbarTsEDeletes();
@@ -3768,17 +3768,34 @@ function saveAll(){
     // pra "agora" a cada 5s mesmo sem edição — o que fazia o dispositivo NUNCA
     // puxar dados novos do servidor (a condição "servidor >= local" nunca batia).
     let mudou=false;
+    let cotaCheia=false;
     for(const k in _PERSIST_KEYS){
       const novo=JSON.stringify(_PERSIST_KEYS[k]());
-      if(localStorage.getItem(k)!==novo){ localStorage.setItem(k, novo); mudou=true; }
+      if(localStorage.getItem(k)!==novo){
+        // Grava chave por chave (não a lista inteira de uma vez): antes, se UMA
+        // chave não coubesse (localStorage do navegador cheio, ~5-10MB por site
+        // — ex.: aparelho com muitas fotos/anexos em base64 acumulados), o
+        // setItem lançava QuotaExceededError e abortava o loop INTEIRO ali,
+        // pulando "mudou=true"/"_kvDirty=true" — ou seja, nada mais sincronizava
+        // com o servidor pra NENHUM módulo, dali em diante, em silêncio (só um
+        // console.warn que ninguém vê). Agora cada chave é isolada: se uma
+        // falhar por falta de espaço, as outras (que ainda cabem) continuam
+        // sendo salvas e enviadas normalmente.
+        try{ localStorage.setItem(k, novo); mudou=true; }
+        catch(e){ cotaCheia=true; console.warn('saveAll: sem espaço para gravar '+k, e); }
+      }
     }
     if(mudou){
-      localStorage.setItem('nx_lastSaved', String(Date.now()));
+      try{ localStorage.setItem('nx_lastSaved', String(Date.now())); }catch(e){ cotaCheia=true; }
       _kvDirty=true; // marca pra sincronizar — o push real acontece espaçado em _kvFlush()
       // Agenda um envio ao servidor logo após a mudança (respeitando o intervalo
       // mínimo). Assim o que uma pessoa lança aparece para as outras em ~1 min,
       // sem precisar fechar a aba nem esperar o ciclo longo.
       if(typeof _kvFlushThrottled==='function') _kvFlushThrottled();
+    }
+    if(cotaCheia && !_avisouStorageCheio){
+      _avisouStorageCheio=true;
+      if(typeof showToast==='function') showToast('Armazenamento do navegador está cheio — avise a Nicole, alguns dados podem não estar sincronizando neste aparelho.','vermelha');
     }
   }catch(e){ console.warn('saveAll falhou', e); }
 }
@@ -7075,7 +7092,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 94;
+const APP_VERSION = 95;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

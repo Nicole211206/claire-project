@@ -7075,7 +7075,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 93;
+const APP_VERSION = 94;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;
@@ -7088,7 +7088,24 @@ async function _checkAppVersion(){
       if(publicada>APP_VERSION && sessionStorage.getItem('_verReload')!==String(publicada)){
         sessionStorage.setItem('_verReload', String(publicada)); // 1x por versão/sessão → sem loop
         try{ if(typeof saveAll==='function') saveAll(); }catch(e){}
-        try{ await _kvFlush(); }catch(e){}                        // garante que o que está aberto suba antes
+        // Garante que a mudança pendente REALMENTE chegue ao servidor antes de
+        // recarregar. Antes, se o flush automático de 60s já estivesse em
+        // andamento (_kvPushing=true) nesse exato momento, _kvFlush() se recusa
+        // a rodar 2x ao mesmo tempo e retornava na hora sem enviar nada — e o
+        // reload disparava 1s depois do mesmo jeito. Se aquele outro flush não
+        // tivesse terminado ainda (rede lenta), a edição ficava só no
+        // localStorage e nunca mais subia (o _kvDirty reseta pra false no
+        // próximo carregamento da página). Era exatamente isso que fazia uma
+        // manutenção/passagem de turno recém-criada "não se estabelecer no
+        // servidor" quando o reload de atualização caía em cima da criação.
+        // Agora espera qualquer envio já em curso terminar e tenta de novo até
+        // não sobrar nada pendente (ou até um limite de tentativas).
+        try{
+          for(let i=0;i<10 && (_kvDirty||_kvPushing);i++){
+            if(_kvPushing){ await new Promise(function(r){ setTimeout(r,300); }); continue; }
+            await _kvFlush();
+          }
+        }catch(e){}
         try{ if(typeof showToast==='function') showToast('Atualizando para a nova versão...','sage'); }catch(e){}
         setTimeout(function(){ location.reload(); }, 1000);
       }

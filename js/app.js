@@ -3357,9 +3357,35 @@ function zerarRespMes(id){
 }
 
 // ═══════════════════ KPI EXPORT / RESET ═══════════════════
+// Recalcula o atingimento global de um mês qualquer, sem tocar em kpiPeriodo
+// (usado só pra comparar com o mês anterior no relatório).
+function calcGlobalParaMes(mes){
+  const valores=kpiVals[mes];
+  if(!valores) return null;
+  let tot=0, totalPeso=0, temAlgum=false;
+  KPI_DEFS.forEach(k=>{
+    const p=k.calc(valores[k.id]);
+    if(p===null) return;
+    temAlgum=true;
+    tot+=(p/100)*k.peso; totalPeso+=k.peso;
+  });
+  return (temAlgum && totalPeso>0)?Math.round((tot/totalPeso)*100):null;
+}
+function _mesAnteriorStr(mes){
+  const [y,m]=mes.split('-').map(Number);
+  const d=new Date(y,m-2,1);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+}
 function exportarKPIPDF(){
   const g=calcGlobal(),band=getBand(g),nv=NIVEIS[selNivelIdx],vp=Math.round(nv.variavel*band.mult);
-  const mes=new Date().toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  const [_anoM,_mesM]=kpiPeriodo.split('-').map(Number);
+  const mes=new Date(_anoM,_mesM-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  const nomeColaborador=(typeof ls==='function'?ls('nx_name'):'')||'Nicole';
+  const gAnterior=calcGlobalParaMes(_mesAnteriorStr(kpiPeriodo));
+  const delta=gAnterior!==null?g-gAnterior:null;
+  const deltaHtml=delta===null?''
+    :'<div><div style="font-size:12px;color:#666;">vs. mês anterior</div><div style="font-weight:700;font-size:15px;color:'+(delta>0?'#2e7d32':delta<0?'#c62828':'#666')+';">'+(delta>0?'▲ +':delta<0?'▼ ':'')+delta+' p.p.</div></div>';
+
   const linhasKPI=KPI_DEFS.map(k=>{
     const p=k.calc(_kv()[k.id]),ps=p!==null?Math.round(p):null;
     const sub=_ksv()[k.id]||{};
@@ -3367,20 +3393,63 @@ function exportarKPIPDF(){
     if(k.id==='av'&&(sub.airbnb||sub.booking))detalhe=' (Airbnb: '+(sub.airbnb||'—')+' | Booking: '+(sub.booking||'—')+' | Média: '+(_kv().av||'—')+')';
     if(k.id==='cv'&&(sub.reviews||sub.checkouts))detalhe=' ('+(sub.reviews||0)+' reviews / '+(sub.checkouts||0)+' checkouts)';
     if(k.id==='tr'){const atts=['patricia','sara','lisarb','lais'];const vals=atts.filter(a=>sub[a]).map(a=>sub[a]+'min');if(vals.length)detalhe=' ('+vals.join(' | ')+')'}
-    return '<tr><td style="padding:8px;border-bottom:1px solid #eee;">'+k.label+'</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:center;">'+Math.round(k.peso*100)+'%</td><td style="padding:8px;border-bottom:1px solid #eee;">'+(_kv()[k.id]||'—')+' '+k.unit+detalhe+'</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:center;font-weight:600;color:'+(ps===null?'#999':ps>=100?'#2e7d32':ps>=80?'#f57c00':'#c62828')+'">'+(ps!==null?ps+'%':'—')+'</td></tr>';
+    const kBand=ps!==null?getBand(ps):null;
+    const barPct=ps!==null?Math.min(ps,150)/150*100:0;
+    const barCor=kBand?(kBand.cls==='vermelha'?'#c62828':kBand.cls==='amarela'?'#f57c00':kBand.cls==='verde'?'#2e7d32':kBand.cls==='azul'?'#1565c0':'#6a1b9a'):'#ddd';
+    return '<tr>'+
+      '<td style="padding:9px 8px;border-bottom:1px solid #eee;"><div style="font-weight:600;">'+k.label+'</div><div style="font-size:10.5px;color:#999;">'+k.hint+'</div></td>'+
+      '<td style="padding:9px 8px;border-bottom:1px solid #eee;text-align:center;">'+Math.round(k.peso*100)+'%</td>'+
+      '<td style="padding:9px 8px;border-bottom:1px solid #eee;">'+(_kv()[k.id]||'—')+' '+k.unit+'<div style="font-size:10.5px;color:#999;">'+detalhe.trim()+'</div></td>'+
+      '<td style="padding:9px 8px;border-bottom:1px solid #eee;text-align:center;color:#666;">'+k.meta+' '+k.unit+'</td>'+
+      '<td style="padding:9px 8px;border-bottom:1px solid #eee;width:120px;"><div style="background:#eee;border-radius:6px;height:8px;overflow:hidden;"><div style="width:'+barPct+'%;height:100%;background:'+barCor+';"></div></div></td>'+
+      '<td style="padding:9px 8px;border-bottom:1px solid #eee;text-align:center;">'+(kBand?'<span class="band '+kBand.cls+'" style="font-size:11px;padding:2px 9px;">'+ps+'%</span>':'<span style="color:#bbb;">—</span>')+'</td>'+
+      '</tr>';
   }).join('');
-  const html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Relatório KPI — '+mes+'</title><style>body{font-family:Arial,sans-serif;padding:40px;color:#222}h1{color:#c0616a;font-size:22px}h2{font-size:16px;color:#444;margin-top:24px}table{width:100%;border-collapse:collapse}th{background:#f5f5f5;padding:8px;text-align:left;border-bottom:2px solid #ddd;font-size:12px}td{font-size:13px}.band{display:inline-block;padding:4px 12px;border-radius:20px;font-weight:700;font-size:14px}.verde{background:#e8f5e9;color:#2e7d32}.amarela{background:#fff8e1;color:#f57c00}.vermelha{background:#ffebee;color:#c62828}.azul{background:#e3f2fd;color:#1565c0}.elite{background:#f3e5f5;color:#6a1b9a}.footer{margin-top:32px;font-size:11px;color:#999;border-top:1px solid #eee;padding-top:12px}@media print{button{display:none}}</style></head><body>'+
+
+  const linhasNivel=NIVEIS.map((n,i)=>{
+    const atual=i===selNivelIdx;
+    return '<tr'+(atual?' style="background:#fdf1f2;"':'')+'>'+
+      '<td style="padding:6px 8px;border-bottom:1px solid #eee;font-weight:'+(atual?'700':'400')+';">'+n.n+(atual?' ← atual':'')+'</td>'+
+      '<td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center;">'+brl(n.fixo)+'</td>'+
+      '<td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center;">'+brl(n.variavel)+'</td>'+
+      '<td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center;font-weight:600;">'+brl(n.fixo+n.variavel)+'</td>'+
+      '</tr>';
+  }).join('');
+
+  const html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Relatório KPI — '+mes+'</title><style>'+
+    'body{font-family:Arial,sans-serif;padding:40px;color:#222;max-width:820px;margin:0 auto;}'+
+    'h1{color:#c0616a;font-size:22px;margin-bottom:4px;}'+
+    'h2{font-size:15px;color:#444;margin-top:28px;border-bottom:2px solid #f0f0f0;padding-bottom:6px;}'+
+    'table{width:100%;border-collapse:collapse;}'+
+    'th{background:#f9f5f5;padding:8px;text-align:left;border-bottom:2px solid #eee;font-size:11px;text-transform:uppercase;color:#888;letter-spacing:0.3px;}'+
+    'td{font-size:13px;vertical-align:middle;}'+
+    '.band{display:inline-block;padding:4px 12px;border-radius:20px;font-weight:700;font-size:14px;}'+
+    '.verde{background:#e8f5e9;color:#2e7d32}.amarela{background:#fff8e1;color:#f57c00}.vermelha{background:#ffebee;color:#c62828}.azul{background:#e3f2fd;color:#1565c0}.elite{background:#f3e5f5;color:#6a1b9a}'+
+    '.legenda{display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:#888;margin-top:10px;}'+
+    '.footer{margin-top:32px;font-size:11px;color:#999;border-top:1px solid #eee;padding-top:12px;}'+
+    '@media print{button{display:none}}'+
+    '</style></head><body>'+
     '<h1>📊 Relatório de KPIs — WeCare</h1>'+
-    '<p style="color:#666;font-size:13px;">Período: <strong>'+mes+'</strong> · Gerado em: '+new Date().toLocaleString('pt-BR')+'</p>'+
-    '<div style="background:#f9f9f9;border-radius:8px;padding:16px;margin:16px 0;display:flex;gap:24px;align-items:center;">'+
+    '<p style="color:#666;font-size:13px;">Colaborador: <strong>'+esc(nomeColaborador)+'</strong> · Período: <strong>'+mes+'</strong> · Gerado em: '+new Date().toLocaleString('pt-BR')+'</p>'+
+    '<div style="background:#f9f9f9;border-radius:8px;padding:16px;margin:16px 0;display:flex;gap:28px;align-items:center;flex-wrap:wrap;">'+
     '<div><div style="font-size:12px;color:#666;text-transform:uppercase;">Atingimento Global</div><div style="font-size:36px;font-weight:700;color:#c0616a;">'+g+'%</div></div>'+
     '<div><div style="font-size:12px;color:#666;margin-bottom:4px;">Bandeira</div><span class="band '+band.cls+'">'+band.name+'</span></div>'+
+    deltaHtml+
     '<div><div style="font-size:12px;color:#666;">Nível</div><div style="font-weight:600;">'+nv.n+' — Fixo '+brl(nv.fixo)+'</div></div>'+
-    '<div><div style="font-size:12px;color:#666;">Variável</div><div style="font-weight:600;color:#2e7d32;">'+brl(vp)+'</div></div>'+
+    '<div><div style="font-size:12px;color:#666;">Variável</div><div style="font-weight:600;color:#2e7d32;">'+brl(vp)+' <span style="font-weight:400;color:#999;">de '+brl(nv.variavel*2)+' máx</span></div></div>'+
     '<div><div style="font-size:12px;color:#666;">Total Estimado</div><div style="font-weight:700;font-size:18px;">'+brl(nv.fixo+vp)+'</div></div>'+
     '</div>'+
     '<h2>Detalhamento por KPI</h2>'+
-    '<table><thead><tr><th>KPI</th><th>Peso</th><th>Valor</th><th>Atingimento</th></tr></thead><tbody>'+linhasKPI+'</tbody></table>'+
+    '<table><thead><tr><th>KPI</th><th style="text-align:center;">Peso</th><th>Valor Lançado</th><th style="text-align:center;">Meta</th><th>Atingimento</th><th style="text-align:center;">Bandeira</th></tr></thead><tbody>'+linhasKPI+'</tbody></table>'+
+    '<div class="legenda">'+
+    '<span>0–79% <strong style="color:#c62828;">Vermelha</strong> (0% do variável)</span>'+
+    '<span>80–99% <strong style="color:#f57c00;">Amarela</strong> (50%)</span>'+
+    '<span>100–120% <strong style="color:#2e7d32;">Verde</strong> (100%)</span>'+
+    '<span>121–149% <strong style="color:#1565c0;">Azul</strong> (150%)</span>'+
+    '<span>≥150% <strong style="color:#6a1b9a;">Elite</strong> (200%)</span>'+
+    '</div>'+
+    '<h2>Estrutura de Níveis Salariais</h2>'+
+    '<table><thead><tr><th>Nível</th><th style="text-align:center;">Fixo</th><th style="text-align:center;">Variável (meta 100%)</th><th style="text-align:center;">OTE Total</th></tr></thead><tbody>'+linhasNivel+'</tbody></table>'+
     '<div class="footer">Claire · Painel de Gestão WeCare · '+new Date().getFullYear()+'</div>'+
     '<script>window.onload=function(){window.print();}<\/script></body></html>';
   const win=window.open('','_blank');
@@ -6962,7 +7031,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 89;
+const APP_VERSION = 90;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

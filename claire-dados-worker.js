@@ -51,6 +51,37 @@ const KEY = 'claire-state-v1';
 const BACKUP_PREFIX = 'claire-backup-'; // chave agora é por HORA (ex.: claire-backup-2026-07-02T14), não mais por dia
 const BACKUP_TTL = 8 * 24 * 3600; // 8 dias em segundos
 
+// Coleções do KV sendo migradas pra D1 (Fase 2, por ondas — ver plano de
+// arquitetura). Chave = nome no documento KV, valor = nome da coleção no D1.
+// Onda 1 = só manutenções; próximas ondas só precisam adicionar uma linha aqui.
+const D1_MIRROR_COLLECTIONS = { nx_manutencoes: 'manutencoes' };
+
+// Espelha um array de registros (com .id) na tabela genérica `records` do D1.
+// Usa o .id do próprio registro do KV (não gera um novo) para o backfill e o
+// espelhamento contínuo apontarem pro mesmo registro. Só atualiza se o registro
+// que está chegando for mais novo (ou igual) que o que já está no D1 — evita
+// um /save fora de ordem (ex.: retry de rede) reverter um dado mais recente.
+async function _mirrorCollectionToD1(env, collection, arr, tombMap) {
+  const agora = Date.now();
+  for (const rec of arr) {
+    if (!rec || rec.id == null) continue;
+    const id = String(rec.id);
+    const ts = Number(rec._ts || agora);
+    await env.claire_db.prepare(
+      'INSERT INTO records (collection, id, data_json, updated_at, updated_by, deleted_at) VALUES (?1, ?2, ?3, ?4, NULL, NULL) ' +
+      'ON CONFLICT(collection, id) DO UPDATE SET data_json=excluded.data_json, updated_at=excluded.updated_at, deleted_at=NULL ' +
+      'WHERE excluded.updated_at >= records.updated_at'
+    ).bind(collection, id, JSON.stringify(rec), ts).run();
+  }
+  if (tombMap && tombMap.size) {
+    for (const [tid, tts] of tombMap) {
+      await env.claire_db.prepare(
+        'UPDATE records SET deleted_at=?1 WHERE collection=?2 AND id=?3 AND (deleted_at IS NULL OR deleted_at<?1)'
+      ).bind(tts, collection, String(tid)).run();
+    }
+  }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -167,8 +198,8 @@ export default {
             // marcado como apagado com ts >= _ts do registro (assim delete funciona
             // mesmo com a união acima, sem "ressuscitar" o que foi apagado de verdade).
             const tombs = Array.isArray(merged.nx_tombstones) ? merged.nx_tombstones : [];
+            const tMap = new Map(); for (const t of tombs) if (t && t.id != null) tMap.set(t.id, Number(t.ts || 0));
             if (tombs.length) {
-              const tMap = new Map(); for (const t of tombs) if (t && t.id != null) tMap.set(t.id, Number(t.ts || 0));
               for (const k of MERGE_POR_ID) {
                 if (!Array.isArray(merged[k])) continue;
                 merged[k] = merged[k].filter(o => { const tt = tMap.get(o.id); return !(tt !== undefined && tt >= _tsNum(o)); });
@@ -201,6 +232,17 @@ export default {
             const fNew = (Array.isArray(parsed.nx_atts) ? parsed.nx_atts : []).filter(x => x && x.foto).length;
             if (fOld >= 2 && fNew === 0) { merged.nx_atts = prev.nx_atts; }
             merged.nx_lastSaved = String(Date.now());
+            // Espelha coleções "em transição" (Fase 2, Onda 1 do plano de
+            // arquitetura) pro D1 — best-effort, nunca bloqueia nem derruba o
+            // /save principal (o KV continua sendo a fonte de verdade nesta
+            // onda; o D1 só está sendo alimentado em paralelo pra validação).
+            if (env.claire_db) {
+              for (const [kvKey, colName] of Object.entries(D1_MIRROR_COLLECTIONS)) {
+                if (Array.isArray(merged[kvKey])) {
+                  try { await _mirrorCollectionToD1(env, colName, merged[kvKey], tMap); } catch (e) {}
+                }
+              }
+            }
             bodyToSave = JSON.stringify(merged);
           }
         } catch (e) { /* falha-segura: salva o body original */ }
@@ -520,7 +562,11 @@ async function handleRecordsApi(request, url, env, cors) {
     if (method === 'POST' && !id) {
       const body = await request.json();
       const newId = body.id != null ? String(body.id) : String(Date.now());
-      const now = Date.now();
+      // Se o corpo já vier com _ts (ex.: backfill de um registro antigo do KV,
+      // que carrega seu _ts original), usa ele como updated_at — assim o
+      // espelhamento contínuo consegue comparar carimbos de verdade depois.
+      // Sem _ts (criação nova de fato), usa "agora".
+      const now = Number(body._ts) || Date.now();
       await db.prepare(
         'INSERT INTO records (collection, id, data_json, updated_at, updated_by, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, NULL) ' +
         'ON CONFLICT(collection, id) DO UPDATE SET data_json=excluded.data_json, updated_at=excluded.updated_at, updated_by=excluded.updated_by, deleted_at=NULL'

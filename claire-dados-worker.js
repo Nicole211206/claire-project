@@ -234,7 +234,13 @@ export default {
         return jsonResp({ data: v ? JSON.parse(v) : null }, cors);
       }
       if (url.pathname.endsWith('/health')) {
-        return jsonResp({ ok: true, kv: !!env.CLAIRE_KV }, cors);
+        return jsonResp({ ok: true, kv: !!env.CLAIRE_KV, db: !!env.claire_db }, cors);
+      }
+
+      // ═══ API v2 — backend por registro (D1), Fase 2 da reforma de sync ═══
+      // Checado ANTES da API Jarvis (que também mora em /api/) para não colidir.
+      if (url.pathname.startsWith('/api/v2/')) {
+        return handleRecordsApi(request, url, env, cors);
       }
 
       // ═══ API Jarvis ═══
@@ -467,6 +473,76 @@ async function handleApi(request, url, env, cors) {
       return jsonResp({ ok: true, manutencao: m }, cors, 201);
     }
 
+    return jsonResp({ error: 'rota nao encontrada' }, cors, 404);
+  } catch (e) {
+    return jsonResp({ error: String(e && e.message || e) }, cors, 500);
+  }
+}
+
+// ─── API v2 — backend por registro (D1) ───
+// Onda 0 da Fase 2 do plano de arquitetura: tabela genérica records(collection,
+// id, data_json, updated_at, updated_by, deleted_at) em vez de uma tabela por
+// coleção — os dados já são JSON solto no cliente, e uma tabela só dá um
+// endpoint reutilizável pra qualquer coleção nova sem migração de schema.
+// PATCH usa json_patch() do SQLite: mescla atomicamente só os campos enviados
+// no registro certo, no banco, numa única instrução — é isso que substitui as
+// dezenas de linhas de mesclagem manual por campo que hoje existem no cliente
+// (_mergeManutencoes, _mergeAtts) e no /save acima (MERGE_POR_ID). Diferente
+// do KV (só put(), sobrescreve tudo), aqui dois registros DIFERENTES nunca
+// colidem, e campos DIFERENTES do MESMO registro editados quase ao mesmo
+// tempo se mesclam sozinhos sem precisar de código novo por tipo de dado.
+// Ainda não é usado pelo app (nenhuma coleção foi migrada pra cá ainda) —
+// puramente aditivo, sem risco pro que já funciona.
+async function handleRecordsApi(request, url, env, cors) {
+  if (!env.claire_db) return jsonResp({ error: 'D1 nao configurado: crie o binding claire_db' }, cors, 500);
+  const db = env.claire_db;
+  const parts = url.pathname.replace('/api/v2/', '').split('/').filter(Boolean);
+  const collection = parts[0];
+  const id = parts[1];
+  if (!collection) return jsonResp({ error: 'colecao obrigatoria' }, cors, 400);
+  const method = request.method;
+
+  try {
+    if (method === 'GET' && !id) {
+      const { results } = await db.prepare(
+        'SELECT id, data_json, updated_at FROM records WHERE collection=?1 AND deleted_at IS NULL ORDER BY updated_at DESC'
+      ).bind(collection).all();
+      const items = results.map(r => ({ ...JSON.parse(r.data_json), id: r.id, _ts: r.updated_at }));
+      return jsonResp({ items }, cors);
+    }
+    if (method === 'GET' && id) {
+      const row = await db.prepare(
+        'SELECT id, data_json, updated_at FROM records WHERE collection=?1 AND id=?2 AND deleted_at IS NULL'
+      ).bind(collection, id).first();
+      if (!row) return jsonResp({ error: 'nao encontrado' }, cors, 404);
+      return jsonResp({ item: { ...JSON.parse(row.data_json), id: row.id, _ts: row.updated_at } }, cors);
+    }
+    if (method === 'POST' && !id) {
+      const body = await request.json();
+      const newId = body.id != null ? String(body.id) : String(Date.now());
+      const now = Date.now();
+      await db.prepare(
+        'INSERT INTO records (collection, id, data_json, updated_at, updated_by, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, NULL) ' +
+        'ON CONFLICT(collection, id) DO UPDATE SET data_json=excluded.data_json, updated_at=excluded.updated_at, updated_by=excluded.updated_by, deleted_at=NULL'
+      ).bind(collection, newId, JSON.stringify(body), now, body._by || '').run();
+      return jsonResp({ ok: true, item: { ...body, id: newId, _ts: now } }, cors, 201);
+    }
+    if (method === 'PATCH' && id) {
+      const patch = await request.json();
+      const existing = await db.prepare('SELECT data_json FROM records WHERE collection=?1 AND id=?2').bind(collection, id).first();
+      if (!existing) return jsonResp({ error: 'nao encontrado' }, cors, 404);
+      const now = Date.now();
+      await db.prepare(
+        'UPDATE records SET data_json = json_patch(data_json, ?1), updated_at=?2, updated_by=?3, deleted_at=NULL WHERE collection=?4 AND id=?5'
+      ).bind(JSON.stringify(patch), now, patch._by || '', collection, id).run();
+      const row = await db.prepare('SELECT data_json, updated_at FROM records WHERE collection=?1 AND id=?2').bind(collection, id).first();
+      return jsonResp({ ok: true, item: { ...JSON.parse(row.data_json), id, _ts: row.updated_at } }, cors);
+    }
+    if (method === 'DELETE' && id) {
+      const now = Date.now();
+      await db.prepare('UPDATE records SET deleted_at=?1 WHERE collection=?2 AND id=?3').bind(now, collection, id).run();
+      return jsonResp({ ok: true }, cors);
+    }
     return jsonResp({ error: 'rota nao encontrada' }, cors, 404);
   } catch (e) {
     return jsonResp({ error: String(e && e.message || e) }, cors, 500);

@@ -5,3 +5,8 @@ main = "claire-dados-worker.js"
 [[kv_namespaces]]
 binding = "CLAIRE_KV"
 id = "730daecb06fb4d53b8ccd0668eaebe29"
+
+[[d1_databases]]
+binding = "claire_db"
+database_name = "claire-db"
+database_id = "8d4cd3e6-9932-4026-8968-3a7b371a4cc3"

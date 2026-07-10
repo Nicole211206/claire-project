@@ -3386,6 +3386,9 @@ function _pillBandeiraReport(name){
   const c=m[name]||m.VERMELHA;
   return '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:0.3px;text-transform:uppercase;background:'+c.bg+';color:'+c.fg+';white-space:nowrap;">'+c.ic+' '+name+'</span>';
 }
+// Logo da WeCare — arquivo em assets/wecare-logo.png (caminho relativo,
+// mesma origem do app, resolve normalmente na janela do relatório).
+const WECARE_LOGO_SRC='assets/wecare-logo.png';
 function exportarKPIPDF(){
   const g=calcGlobal(),band=getBand(g),nv=NIVEIS[selNivelIdx],vp=Math.round(nv.variavel*band.mult);
   const [_anoM,_mesM]=kpiPeriodo.split('-').map(Number);
@@ -3396,6 +3399,13 @@ function exportarKPIPDF(){
   const deltaTexto=delta===null?''
     :' · Mês anterior: <strong>'+gAnterior+'%</strong> (<span style="color:'+(delta>0?'#5aab82':delta<0?'#d4726a':'#b0a89e')+';font-weight:600;">'+(delta>0?'▲ +':delta<0?'▼ ':'')+delta+' p.p.</span>)';
 
+  const RC_ITENS=[
+    {key:'limpeza',label:'Limpeza'},
+    {key:'manutencao',label:'Manutenção'},
+    {key:'setup',label:'On-boarding (Setup)'},
+    {key:'margem',label:'Margem Operacional'},
+    {key:'extras',label:'Serviços Extras'},
+  ];
   const cardsKPI=KPI_DEFS.map(k=>{
     const p=k.calc(_kv()[k.id]),ps=p!==null?Math.round(p):null;
     const kBand=ps!==null?getBand(ps):null;
@@ -3404,10 +3414,26 @@ function exportarKPIPDF(){
     if(k.id==='av'&&(sub.airbnb||sub.booking))detalhe='Airbnb: '+(sub.airbnb||'—')+' | Booking: '+(sub.booking||'—')+' | Média: '+(_kv().av||'—');
     if(k.id==='cv'&&(sub.reviews||sub.checkouts))detalhe=(sub.reviews||0)+' reviews / '+(sub.checkouts||0)+' checkouts';
     if(k.id==='tr'){const atts=['patricia','sara','lisarb','lais'];const vals=atts.filter(a=>sub[a]).map(a=>sub[a]+'min');if(vals.length)detalhe=vals.join(' | ');}
+    let tabelaRc='';
+    if(k.id==='rc'){
+      const linhas=RC_ITENS.map(it=>{
+        const d=sub[it.key]||{};
+        const prev=parseFloat(d.previsto), gasto=parseFloat(d.gasto);
+        const eco=(prev>0 && !isNaN(gasto))?(((prev-gasto)/prev)*100).toFixed(1)+'%':'—';
+        return '<tr><td style="padding:3px 4px;color:#666;">'+it.label+'</td>'+
+          '<td style="padding:3px 4px;text-align:right;">'+(d.previsto?brl(prev):'—')+'</td>'+
+          '<td style="padding:3px 4px;text-align:right;">'+(d.gasto?brl(gasto):'—')+'</td>'+
+          '<td style="padding:3px 4px;text-align:right;font-weight:600;">'+eco+'</td></tr>';
+      }).join('');
+      tabelaRc='<table style="width:100%;font-size:10.5px;border-collapse:collapse;margin-top:8px;">'+
+        '<thead><tr style="border-bottom:1px solid #eee;"><th align="left" style="padding:3px 4px;color:#b0a89e;font-weight:600;">Item</th><th style="padding:3px 4px;color:#b0a89e;font-weight:600;">Previsto</th><th style="padding:3px 4px;color:#b0a89e;font-weight:600;">Gasto</th><th style="padding:3px 4px;color:#b0a89e;font-weight:600;">Economia</th></tr></thead>'+
+        '<tbody>'+linhas+'</tbody></table>';
+    }
     const scoreColor=ps===null?'#b0a89e':ps>=100?'#82b09a':ps>=80?'#d4a843':'#d4726a';
     const barPct=ps!==null?Math.min(ps,150):0;
     const iconCor=_KPI_ICON_COLORS[k.color]||_KPI_ICON_COLORS.rose;
     const barCor=_KPI_BAR_COLORS[k.color]||_KPI_BAR_COLORS.rose;
+    const temValor=_kv()[k.id]!=null && _kv()[k.id]!=='';
     return '<div style="background:#fdfcfb;border:1px solid rgba(0,0,0,0.07);border-radius:14px;overflow:hidden;">'+
       '<div style="padding:13px 16px;border-bottom:1px solid rgba(0,0,0,0.07);display:flex;align-items:center;gap:10px;">'+
       '<div style="width:28px;height:28px;border-radius:8px;background:'+iconCor.bg+';color:'+iconCor.fg+';display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;"><i class="fa-solid '+k.icon+'"></i></div>'+
@@ -3415,12 +3441,11 @@ function exportarKPIPDF(){
       (kBand?_pillBandeiraReport(kBand.name):'')+
       '</div>'+
       '<div style="padding:13px 16px;">'+
-      '<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12px;margin-bottom:5px;">'+
-      '<span style="color:#b0a89e;">'+k.hint+'</span>'+
-      '<span style="font-weight:700;color:'+scoreColor+';">'+(ps!==null?ps+'%':'—')+'</span>'+
-      '</div>'+
+      '<div style="font-size:32px;font-weight:700;color:'+scoreColor+';line-height:1;">'+(ps!==null?ps+'%':'Sem dados')+'</div>'+
+      '<div style="font-size:11px;color:#b0a89e;margin:4px 0 8px;">'+k.hint+'</div>'+
       '<div style="height:6px;background:#e8e4de;border-radius:3px;overflow:hidden;margin-bottom:10px;"><div style="height:100%;width:'+barPct+'%;background:'+barCor+';"></div></div>'+
-      '<div style="font-size:12.5px;"><strong>'+(_kv()[k.id]||'—')+' '+k.unit+'</strong>'+(detalhe?' <span style="color:#b0a89e;">'+detalhe+'</span>':'')+'</div>'+
+      (temValor?'<div style="font-size:12.5px;"><strong>'+_kv()[k.id]+' '+k.unit+'</strong>'+(detalhe?' <span style="color:#b0a89e;">'+detalhe+'</span>':'')+'</div>':'<div style="font-size:12.5px;color:#b0a89e;font-style:italic;">Sem dados lançados este mês</div>')+
+      tabelaRc+
       '</div></div>';
   }).join('');
 
@@ -3428,13 +3453,13 @@ function exportarKPIPDF(){
     '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">'+
     '<style>'+
     'body{font-family:Arial,sans-serif;padding:32px 40px;color:#2d2926;max-width:900px;margin:0 auto;background:#fff;}'+
-    'h1{color:#c0616a;font-size:21px;margin-bottom:6px;}'+
+    'h1{color:#2d2926;font-size:20px;margin:0;display:flex;align-items:center;gap:12px;}'+
     'h2{font-size:14px;color:#2d2926;margin:24px 0 12px;}'+
     '.footer{margin-top:28px;font-size:11px;color:#b0a89e;border-top:1px solid rgba(0,0,0,0.07);padding-top:12px;}'+
     '@media print{button{display:none}}'+
     '</style></head><body>'+
-    '<h1>📊 Relatório de KPIs — WeCare</h1>'+
-    '<p style="color:#666;font-size:13px;">Colaborador: <strong>'+esc(nomeColaborador)+'</strong> · Período: <strong>'+mes+'</strong> · Gerado em: '+new Date().toLocaleString('pt-BR')+deltaTexto+'</p>'+
+    '<h1><img src="'+WECARE_LOGO_SRC+'" alt="WeCare" style="height:40px;border-radius:6px;">Relatório de KPIs — WeCare</h1>'+
+    '<p style="color:#666;font-size:13px;margin-top:8px;">Colaborador: <strong>'+esc(nomeColaborador)+'</strong> · Período: <strong>'+mes+'</strong> · Gerado em: '+new Date().toLocaleString('pt-BR')+deltaTexto+'</p>'+
     '<div style="background:#fdfcfb;border:1px solid rgba(0,0,0,0.07);border-radius:14px;padding:20px 24px;margin:16px 0;display:grid;grid-template-columns:1fr auto;gap:20px;align-items:center;">'+
     '<div>'+
     '<div style="font-size:11px;color:#b0a89e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Atingimento Global Ponderado</div>'+
@@ -7042,7 +7067,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 91;
+const APP_VERSION = 92;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

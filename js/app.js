@@ -87,14 +87,7 @@ function _syncSetupKpiDoOnboarding(){
   const m=_obSetupPorMes[kpiPeriodo];
   if(!_ksv().rc)_ksv().rc={limpeza:{previsto:'',gasto:''},manutencao:{previsto:'',gasto:''},setup:{previsto:'',gasto:''},margem:{previsto:'',gasto:''},extras:{previsto:'',gasto:''}};
   _ksv().rc.setup=m?{previsto:String(m.previsto),gasto:String(m.gasto)}:{previsto:'',gasto:''};
-  // Recalcular o KPI rc (mesma lógica de setKPIRcSub)
-  const itens=['limpeza','manutencao','setup','margem','extras'];
-  const economias=itens.map(it=>{
-    const prev=parseFloat(_ksv().rc[it].previsto), gasto=parseFloat(_ksv().rc[it].gasto);
-    if(!prev||isNaN(prev)||isNaN(gasto))return null;
-    return((prev-gasto)/prev)*100;
-  }).filter(x=>x!==null);
-  _kv().rc=economias.length>0?(economias.reduce((s,x)=>s+x,0)/economias.length).toFixed(2):null;
+  _recalcularRC();
 }
 function _fetchObImoveis(){
   if(_obData!==null){_renderObList();return;}
@@ -747,14 +740,14 @@ function renderKPIs(){
       const sub=_ksv().av||{};
       const hasA=sub.airbnb!==undefined&&sub.airbnb!=='';
       const hasB=sub.booking!==undefined&&sub.booking!=='';
-      const partesAvg=[];
-      if(hasA) partesAvg.push(+sub.airbnb||0);
-      if(hasB) partesAvg.push((+sub.booking||0)/2);
-      const avg=partesAvg.length?(partesAvg.reduce((a,b)=>a+b,0)/partesAvg.length).toFixed(2):null;
+      let somaW=0, pesoW=0;
+      if(hasA){ const w=(+sub.qtdAirbnb||0)>0?(+sub.qtdAirbnb):1; somaW+=(+sub.airbnb||0)*w; pesoW+=w; }
+      if(hasB){ const w=(+sub.qtdBooking||0)>0?(+sub.qtdBooking):1; somaW+=((+sub.booking||0)/2)*w; pesoW+=w; }
+      const avg=pesoW>0?(somaW/pesoW).toFixed(2):null;
       inputHTML='<div style="display:grid;gap:6px;">'+
-        '<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:90px;">Airbnb (0-5):</label><input type="number" step="0.01" min="0" max="5" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub.airbnb||'')+'" placeholder="—" onchange="setKPISub(\'av\',\'airbnb\',this.value)"></div>'+
-        '<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:90px;">Booking (0-10):</label><input type="number" step="0.01" min="0" max="10" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub.booking||'')+'" placeholder="—" onchange="setKPISub(\'av\',\'booking\',this.value)"></div>'+
-        (avg!==null?'<div style="font-size:12px;font-weight:700;color:var(--sage);margin-top:2px;">Média Total: '+avg+' estrelas <span style="font-weight:400;color:var(--text3);">(Booking normalizado p/ 0-5)</span></div>':'')+'</div>';
+        '<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:90px;">Airbnb (0-5):</label><input type="number" step="0.01" min="0" max="5" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub.airbnb||'')+'" placeholder="—" onchange="setKPISub(\'av\',\'airbnb\',this.value)"><label style="font-size:11px;color:var(--text3);margin-left:6px;">Qtd. avaliações:</label><input type="number" step="1" min="0" class="form-input" style="width:70px;padding:5px 8px;" value="'+(sub.qtdAirbnb||'')+'" placeholder="—" onchange="setKPISub(\'av\',\'qtdAirbnb\',this.value)"></div>'+
+        '<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:90px;">Booking (0-10):</label><input type="number" step="0.01" min="0" max="10" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub.booking||'')+'" placeholder="—" onchange="setKPISub(\'av\',\'booking\',this.value)"><label style="font-size:11px;color:var(--text3);margin-left:6px;">Qtd. avaliações:</label><input type="number" step="1" min="0" class="form-input" style="width:70px;padding:5px 8px;" value="'+(sub.qtdBooking||'')+'" placeholder="—" onchange="setKPISub(\'av\',\'qtdBooking\',this.value)"></div>'+
+        (avg!==null?'<div style="font-size:12px;font-weight:700;color:var(--sage);margin-top:2px;">Média Ponderada: '+avg+' estrelas <span style="font-weight:400;color:var(--text3);">(Booking normalizado p/ 0-5, ponderado pela qtd. de avaliações de cada canal)</span></div>':'')+'</div>';
     } else if(k.id==='cv'){
       const sub=_ksv().cv||{};
       const pct2=(sub.reviews!==undefined&&sub.checkouts!==undefined&&+sub.checkouts>0?(((+sub.reviews||0)/(+sub.checkouts||1))*100).toFixed(1):null);
@@ -787,8 +780,13 @@ function renderKPIs(){
         {key:'extras',     label:'Serviços Extras',     hint:'Valor cobrado vs. custo dos serviços extras (automático)'},
       ];
       const calcEco=(key)=>{const p=parseFloat(rcSub[key].previsto),g2=parseFloat(rcSub[key].gasto);return(p>0&&!isNaN(g2))?((p-g2)/p*100).toFixed(1):null;};
-      const allEcos=['limpeza','manutencao','setup','margem','extras'].map(calcEco).filter(x=>x!==null);
-      const med=allEcos.length>0?(allEcos.reduce((a,b)=>a+parseFloat(b),0)/allEcos.length).toFixed(1):null;
+      // Soma tudo de previsto e tudo de gasto dos itens preenchidos, e só
+      // depois tira a % em cima dos totais — não é mais média das % de cada
+      // item (que dava peso igual pra um item de R$50 e outro de R$5.000).
+      const itensComDados=['limpeza','manutencao','setup','margem','extras'].filter(key=>{const p=parseFloat(rcSub[key].previsto),g2=parseFloat(rcSub[key].gasto);return p>0&&!isNaN(g2);});
+      const totalPrevisto=itensComDados.reduce((s,key)=>s+parseFloat(rcSub[key].previsto),0);
+      const totalGasto=itensComDados.reduce((s,key)=>s+parseFloat(rcSub[key].gasto),0);
+      const med=itensComDados.length>0?(((totalPrevisto-totalGasto)/totalPrevisto)*100).toFixed(1):null;
       inputHTML='<div style="margin-top:10px;">'+
         '<div style="display:grid;grid-template-columns:1fr 90px 90px 70px;gap:4px;margin-bottom:4px;padding:4px 0;border-bottom:2px solid var(--border);">'+
         '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;">Item</div>'+
@@ -820,8 +818,10 @@ function renderKPIs(){
             '<div style="text-align:center;font-size:13px;font-weight:700;color:'+ecoColor+';">'+(eco!==null?eco+'%':'—')+'</div>'+
             '</div>';
         }).join('')+
-        '<div style="display:grid;grid-template-columns:1fr 90px 90px 70px;gap:4px;padding:7px 0;">'+
-        '<div style="grid-column:1/4;font-size:12px;font-weight:700;text-align:right;padding-right:8px;">Média da Economia →</div>'+
+        '<div style="display:grid;grid-template-columns:1fr 90px 90px 70px;gap:4px;padding:7px 0;border-top:2px solid var(--border);margin-top:4px;">'+
+        '<div style="font-size:12px;font-weight:700;">Total</div>'+
+        '<div style="text-align:center;font-size:12.5px;font-weight:700;">'+(itensComDados.length?brl(totalPrevisto):'—')+'</div>'+
+        '<div style="text-align:center;font-size:12.5px;font-weight:700;">'+(itensComDados.length?brl(totalGasto):'—')+'</div>'+
         '<div style="text-align:center;font-size:14px;font-weight:700;color:'+(med?parseFloat(med)>=10?'var(--sage)':'var(--amarela)':'var(--text3)')+';">'+(med?med+'%':'—')+'</div>'+
         '</div>'+
         '</div>';
@@ -910,15 +910,39 @@ function removerKpiConfig(i){
 
 function setKPI(id,v){_kv()[id]=v;renderKPIs();if(typeof saveAll==='function')saveAll();}
 
+// Avaliação dos Hóspedes: média PONDERADA pela quantidade de avaliações de
+// cada canal (não é mais 50/50 fixo) — pedido do gestor, pra um canal com
+// muito mais avaliações pesar mais que um com poucas. Sem quantidade
+// preenchida, cai pra peso 1 (equivalente à média simples de antes).
+function _recalcularAV(){
+  const s=_ksv().av||{};
+  const hasA=s.airbnb!==undefined&&s.airbnb!=='';
+  const hasB=s.booking!==undefined&&s.booking!=='';
+  let soma=0, pesoTotal=0;
+  if(hasA){ const w=(+s.qtdAirbnb||0)>0?(+s.qtdAirbnb):1; soma+=(+s.airbnb||0)*w; pesoTotal+=w; }
+  if(hasB){ const w=(+s.qtdBooking||0)>0?(+s.qtdBooking):1; soma+=((+s.booking||0)/2)*w; pesoTotal+=w; }
+  _kv().av=pesoTotal>0?(soma/pesoTotal).toFixed(2):null;
+}
+// Redução de Custos: soma TODO o previsto e TODO o gasto dos itens
+// preenchidos e tira a % em cima dos totais — pedido do gestor, em vez de
+// tirar a média das porcentagens de cada item (que dava peso igual pra um
+// item de R$ 50 e outro de R$ 5.000).
+function _recalcularRC(){
+  const itens=['limpeza','manutencao','setup','margem','extras'];
+  const rc=_ksv().rc||{};
+  let somaPrevisto=0, somaGasto=0, temAlgum=false;
+  itens.forEach(it=>{
+    const d=rc[it]||{};
+    const prev=parseFloat(d.previsto), gasto=parseFloat(d.gasto);
+    if(prev>0 && !isNaN(gasto)){ somaPrevisto+=prev; somaGasto+=gasto; temAlgum=true; }
+  });
+  _kv().rc=temAlgum?(((somaPrevisto-somaGasto)/somaPrevisto)*100).toFixed(2):null;
+}
 function setKPISub(id,subKey,value){
   if(!_ksv()[id])_ksv()[id]={};
   _ksv()[id][subKey]=value;
   if(id==='av'){
-    const s=_ksv().av;
-    const partes=[];
-    if(s.airbnb!==undefined&&s.airbnb!=='') partes.push(+s.airbnb||0);
-    if(s.booking!==undefined&&s.booking!=='') partes.push((+s.booking||0)/2);
-    _kv().av=partes.length?(partes.reduce((a,b)=>a+b,0)/partes.length).toFixed(2):null;
+    _recalcularAV();
   } else if(id==='cv'){
     const s=_ksv().cv;
     if(s.reviews!==undefined&&s.reviews!==''&&s.checkouts!==undefined&&s.checkouts!==''&&+s.checkouts>0){
@@ -936,14 +960,7 @@ function setKPIRcSub(item,campo,valor){
   if(!_ksv().rc)_ksv().rc={limpeza:{previsto:'',gasto:''},manutencao:{previsto:'',gasto:''},setup:{previsto:'',gasto:''},margem:{previsto:'',gasto:''},extras:{previsto:'',gasto:''}};
   if(!_ksv().rc.extras)_ksv().rc.extras={previsto:'',gasto:''};
   _ksv().rc[item][campo]=valor;
-  const itens=['limpeza','manutencao','setup','margem','extras'];
-  const economias=itens.map(it=>{
-    const prev=parseFloat(_ksv().rc[it].previsto);
-    const gasto=parseFloat(_ksv().rc[it].gasto);
-    if(!prev||isNaN(prev)||isNaN(gasto))return null;
-    return((prev-gasto)/prev)*100;
-  }).filter(x=>x!==null);
-  _kv().rc=economias.length>0?(economias.reduce((s,x)=>s+x,0)/economias.length).toFixed(2):null;
+  _recalcularRC();
   renderKPIs();if(typeof saveAll==='function')saveAll();
 }
 
@@ -953,14 +970,7 @@ function sincronizarMargemKPI(){
   const totalMargem = comprasList.filter(c=>c.margemOperacional && c.mesVigente===mes).reduce((s,c)=>s+(parseFloat(c.valor)||0),0);
   if(!_ksv().rc) _ksv().rc={limpeza:{previsto:'',gasto:''},manutencao:{previsto:'',gasto:''},setup:{previsto:'',gasto:''},margem:{previsto:'',gasto:''}};
   _ksv().rc.margem.gasto = totalMargem>0 ? totalMargem.toFixed(2) : '';
-  // Recalcular o KPI rc (mesma lógica de setKPIRcSub)
-  const itens=['limpeza','manutencao','setup','margem'];
-  const economias=itens.map(it=>{
-    const prev=parseFloat(_ksv().rc[it].previsto), gasto=parseFloat(_ksv().rc[it].gasto);
-    if(!prev||isNaN(prev)||isNaN(gasto)) return null;
-    return ((prev-gasto)/prev)*100;
-  }).filter(x=>x!==null);
-  _kv().rc = economias.length>0 ? (economias.reduce((s,x)=>s+x,0)/economias.length).toFixed(2) : null;
+  _recalcularRC();
   if(typeof renderKPIs==='function') renderKPIs();
 }
 
@@ -976,9 +986,7 @@ function sincronizarExtrasKPI(){
   if(!_ksv().rc.extras) _ksv().rc.extras={previsto:'',gasto:''};
   _ksv().rc.extras.previsto = totalCobrado>0?totalCobrado.toFixed(2):'';
   _ksv().rc.extras.gasto = totalGasto>0?totalGasto.toFixed(2):'';
-  const itens=['limpeza','manutencao','setup','margem','extras'];
-  const economias=itens.map(it=>{const p=parseFloat(_ksv().rc[it].previsto),g=parseFloat(_ksv().rc[it].gasto);if(!p||isNaN(p)||isNaN(g))return null;return ((p-g)/p)*100;}).filter(x=>x!==null);
-  _kv().rc = economias.length>0?(economias.reduce((s,x)=>s+x,0)/economias.length).toFixed(2):null;
+  _recalcularRC();
   if(typeof renderKPIs==='function') renderKPIs();
 }
 
@@ -3411,7 +3419,7 @@ function exportarKPIPDF(){
     const kBand=ps!==null?getBand(ps):null;
     const sub=_ksv()[k.id]||{};
     let detalhe='';
-    if(k.id==='av'&&(sub.airbnb||sub.booking))detalhe='Airbnb: '+(sub.airbnb||'—')+' | Booking: '+(sub.booking||'—')+' | Média: '+(_kv().av||'—');
+    if(k.id==='av'&&(sub.airbnb||sub.booking))detalhe='Airbnb: '+(sub.airbnb||'—')+(sub.qtdAirbnb?' ('+sub.qtdAirbnb+' aval.)':'')+' | Booking: '+(sub.booking||'—')+(sub.qtdBooking?' ('+sub.qtdBooking+' aval.)':'')+' | Média ponderada: '+(_kv().av||'—');
     if(k.id==='cv'&&(sub.reviews||sub.checkouts))detalhe=(sub.reviews||0)+' reviews / '+(sub.checkouts||0)+' checkouts';
     if(k.id==='tr'){const atts=['patricia','sara','lisarb','lais'];const vals=atts.filter(a=>sub[a]).map(a=>sub[a]+'min');if(vals.length)detalhe=vals.join(' | ');}
     let tabelaRc='';
@@ -7067,7 +7075,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 92;
+const APP_VERSION = 93;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

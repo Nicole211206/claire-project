@@ -64,9 +64,9 @@ function _renderObList(){
   const el=document.getElementById('ob-onboarding-list');
   if(!el||!Array.isArray(_obData))return;
   const lista=_obData;
-  const calcDias=im=>{const fim=im.dataAtivacao?new Date(im.dataAtivacao):new Date();return Math.max(0,Math.round((fim-new Date(im.dataCriacao))/(1000*60*60*24)));};
-  const marcadosDoMes=lista.filter(im=>im.incluirKpiClaire&&im.mesReferenciaKpi===kpiPeriodo&&im.dataCriacao&&im.dataAtivacao);
-  const outros=lista.filter(im=>!marcadosDoMes.includes(im)&&im.dataCriacao&&calcDias(im)>=0);
+  const calcDias=im=>{const fim=im.dataAtivacao?new Date(im.dataAtivacao):new Date();return Math.max(0,Math.round((fim-new Date(im.dataContratoAssinado))/(1000*60*60*24)));};
+  const marcadosDoMes=lista.filter(im=>im.incluirKpiClaire&&im.mesReferenciaKpi===kpiPeriodo&&im.dataContratoAssinado&&im.dataAtivacao);
+  const outros=lista.filter(im=>!marcadosDoMes.includes(im)&&im.dataContratoAssinado&&calcDias(im)>=0);
   if(!marcadosDoMes.length&&!outros.length){el.innerHTML='<div style="font-size:12px;color:var(--text3);text-align:center;padding:8px;">Nenhum imóvel no módulo de Onboarding ainda.</div>';return;}
   const m=_obKpiPorMes&&_obKpiPorMes[kpiPeriodo];
   el.innerHTML=

@@ -515,6 +515,26 @@ async function handleApi(request, url, env, cors) {
       return jsonResp({ ok: true, manutencao: m }, cors, 201);
     }
 
+    // ── /api/extras ───────────────────────────────────────────
+    if (resource === 'extras' && method === 'POST' && !param1) {
+      const body = await request.json();
+      if (!body.imovelNome) return jsonResp({ error: 'campo imovelNome obrigatorio' }, cors, 400);
+      let extras = state.nx_extras || [];
+      const hoje = new Date().toISOString().split('T')[0];
+      const e = {
+        id: Date.now(), mesVigente: body.mesVigente || hoje.slice(0, 7),
+        data: hoje, dataSolicitacao: hoje, dataExecucao: '', dataPagamento: hoje,
+        pago: true, anexo: '', origem: 'onboarding',
+        descricao: body.descricao || 'Resumo financeiro onboarding',
+        imovelNome: body.imovelNome, cobrado: +body.cobrado || 0, gasto: +body.gasto || 0,
+        obs: body.obs || '',
+      };
+      extras.unshift(e);
+      state.nx_extras = extras;
+      await kvSave(env, state);
+      return jsonResp({ ok: true, extra: e }, cors, 201);
+    }
+
     return jsonResp({ error: 'rota nao encontrada' }, cors, 404);
   } catch (e) {
     return jsonResp({ error: String(e && e.message || e) }, cors, 500);

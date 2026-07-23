@@ -39,6 +39,27 @@ function kpiScoreGeneric(v,k){
 function _wireKpiCalc(arr){ arr.forEach(k=>{ k.calc=function(v){return kpiScoreGeneric(v,k);}; }); return arr; }
 _wireKpiCalc(KPI_DEFS);
 
+// Tag de "KPI relacionado" em tarefas/projetos — mesmas cores hex das variáveis
+// CSS usadas em KPI_DEFS (--rose/--lavender/--sage/--peach/--sky/--gold) mais
+// --vermelha pro "NÃO RELACIONADO". Itens sem kpiTag (tarefas/projetos antigos,
+// nunca migrados) caem no fallback do getKpiTagInfo() e já aparecem vermelhos —
+// de propósito, pra facilitar achar o que falta alinhar com o chefe.
+const KPI_TAG_OPTIONS=[
+  {id:'av',   label:'Avaliação dos Hóspedes',  color:'#e8a4b0'},
+  {id:'tr',   label:'Tempo de Resposta',       color:'#a89ece'},
+  {id:'ob',   label:'Tempo de Onboarding',     color:'#82b09a'},
+  {id:'cv',   label:'Conversão de Avaliações', color:'#e0a882'},
+  {id:'rc',   label:'Redução de Custos',       color:'#89b4d4'},
+  {id:'av360',label:'Avaliação 360',           color:'#c9a84c'},
+  {id:'nao_relacionado', label:'NÃO RELACIONADO', color:'#d4726a'},
+];
+function getKpiTagInfo(id){ return KPI_TAG_OPTIONS.find(o=>o.id===id) || KPI_TAG_OPTIONS[KPI_TAG_OPTIONS.length-1]; }
+function renderKpiTagSelect(selId){
+  const sel=document.getElementById(selId); if(!sel) return;
+  const val=sel.value;
+  sel.innerHTML=KPI_TAG_OPTIONS.map(o=>'<option value="'+o.id+'"'+(val===o.id?' selected':'')+'>'+o.label+'</option>').join('');
+}
+
 let kpiVals={};
 let kpiSubVals={};
 let kpiPeriodo=new Date().toISOString().substring(0,7);
@@ -1096,7 +1117,9 @@ function renderExtras(){
   const res=document.getElementById('extras-resumo');
   if(res) res.innerHTML=[{l:'Total Cobrado',v:brl(tc),c:'sage',i:'fa-arrow-down'},{l:'Total Custo',v:brl(tg),c:'rose',i:'fa-arrow-up'},{l:'Margem',v:brl(tc-tg),c:'gold',i:'fa-coins'}].map(x=>'<div class="metric-card '+x.c+'"><div class="metric-icon '+x.c+'"><i class="fa-solid '+x.i+'"></i></div><div class="metric-value" style="font-size:22px;">'+x.v+'</div><div class="metric-label">'+x.l+'</div></div>').join('');
   const _df=function(d){return d?d.split('-').reverse().join('/'):'—';};
-  tb.innerHTML=extras.length===0?'<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text3);">Nenhum serviço extra. Clique em "Novo Extra".</td></tr>':extras.map(e=>{
+  const _bf=document.getElementById('extras-busca'); const _bv=_bf?_bf.value.trim().toLowerCase():'';
+  const _listaExtras=_bv?extras.filter(e=>((e.descricao||'')+' '+(e.imovelNome||'')+' '+(e.obs||'')).toLowerCase().includes(_bv)):extras;
+  tb.innerHTML=_listaExtras.length===0?'<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text3);">'+(extras.length===0?'Nenhum serviço extra. Clique em "Novo Extra".':'Nenhum resultado para a busca.')+'</td></tr>':_listaExtras.map(e=>{
     const margem=(parseFloat(e.cobrado)||0)-(parseFloat(e.gasto)||0);
     const datas='<div style="font-size:10px;color:var(--text3);line-height:1.5;">Sol: '+_df(e.dataSolicitacao||e.data)+'<br>Exec: '+_df(e.dataExecucao)+'<br>Pag: '+_df(e.dataPagamento)+'</div>';
     const status=e.pago?'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--sage)22;color:var(--sage);">Pago</span>':'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--peach)22;color:var(--peach);">Pendente</span>';
@@ -1242,6 +1265,8 @@ function renderTasks(f){
     list=filtrarSequenciaProjetos(list);
   }
   list=aplicarFiltroPrazo(list);
+  const _bf=document.getElementById('task-busca'); const _bv=_bf?_bf.value.trim().toLowerCase():'';
+  if(_bv) list=list.filter(t=>(t.text||'').toLowerCase().includes(_bv));
   const _listaEl=document.getElementById('all-tasks-list');
   if(_listaEl) _listaEl.innerHTML=list.map(t=>{
     const cat=getCatInfo(t.cat);
@@ -1255,7 +1280,7 @@ function renderTasks(f){
       '</div>'+
       '<div style="flex:1;min-width:0;"><div onclick="'+detalheFn+'" style="font-size:13.5px;cursor:pointer;'+(t.done?'text-decoration:line-through;color:var(--text3);':'')+'" title="Ver detalhes">'+esc(t.text)+(t.recorrente&&t.tipoRecorrencia?'<span style="font-size:10px;color:var(--lavender);margin-left:6px;">🔁</span>':'')+'</div>'+
       '<div style="display:flex;gap:6px;margin-top:3px;align-items:center;flex-wrap:wrap;">'+
-      (t._isManutTarefa?statusBadge+'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--peach)22;color:var(--peach);border:1px solid var(--peach)44;"><i class="fa-solid fa-wrench"></i> Manutenção</span>':t._isDemand?statusBadge:'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:'+cat.color+'22;color:'+cat.color+';border:1px solid '+cat.color+'44;">'+cat.label+'</span>')+
+      (t._isManutTarefa?statusBadge+'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--peach)22;color:var(--peach);border:1px solid var(--peach)44;"><i class="fa-solid fa-wrench"></i> Manutenção</span>':t._isDemand?statusBadge:'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:'+cat.color+'22;color:'+cat.color+';border:1px solid '+cat.color+'44;">'+cat.label+'</span>'+(function(){const kt=getKpiTagInfo(t.kpiTag);return '<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:'+kt.color+'22;color:'+kt.color+';border:1px solid '+kt.color+'44;">'+kt.label+'</span>';})())+
       (t.due?'<span style="font-size:11px;color:var(--text3);"><i class="fa-regular fa-calendar fa-xs"></i> '+fd(t.due)+'</span>':'')+
       ((t.updates&&t.updates.length>0)?'<span style="font-size:10px;color:var(--text3);"><i class="fa-solid fa-message fa-xs"></i> '+t.updates.length+'</span>':'')+
       (t._isDemand&&!t.done?'<select onchange="mudarStatusDemanda(\''+t._attId+'\','+t._demIdx+',this.value);this.blur();" onclick="event.stopPropagation();" style="font-size:10px;padding:1px 6px;border-radius:8px;border:1px solid var(--border2);background:var(--bg2);color:var(--text);cursor:pointer;"><option value="todo"'+(t.status==='todo'?' selected':'')+'>A fazer</option><option value="doing"'+(t.status==='doing'?' selected':'')+'>Em andamento</option><option value="done"'+(t.status==='done'?' selected':'')+'>Concluída</option></select>':'')+
@@ -1453,7 +1478,8 @@ function abrirDetalheTask(id){
     '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:3px;">Prazo</label><input type="date" class="form-input" style="padding:5px 8px;font-size:12.5px;" value="'+(t.due||'')+'" onchange="editarTaskCampo('+t.id+',\'due\',this.value)"></div>'+
     '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:3px;">Prioridade</label><select class="form-select" style="padding:5px 8px;font-size:12.5px;" onchange="editarTaskCampo('+t.id+',\'prio\',this.value)"><option value="high"'+(t.prio==='high'?' selected':'')+'>Alta</option><option value="med"'+(t.prio==='med'?' selected':'')+'>Média</option><option value="low"'+(t.prio==='low'?' selected':'')+'>Baixa</option></select></div>'+
     '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:3px;">Status</label><select class="form-select" style="padding:5px 8px;font-size:12.5px;" onchange="editarTaskStatus('+t.id+',this.value)"><option value="todo"'+((!t.done&&(t.status==='todo'||!t.status))?' selected':'')+'>A fazer</option><option value="doing"'+((!t.done&&t.status==="doing")?' selected':'')+'>Em andamento</option><option value="backlog"'+((!t.done&&t.status==='backlog')?' selected':'')+'>Pausada</option><option value="done"'+(t.done?' selected':'')+'>Concluída</option></select></div>'+
-    '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:3px;">Categoria</label><select class="form-select" style="padding:5px 8px;font-size:12.5px;" onchange="editarTaskCampo('+t.id+',\'cat\',this.value)">'+taskCats.map(c=>'<option value="'+c.id+'"'+(t.cat===c.id?' selected':'')+'>'+c.label+'</option>').join('')+'</select></div>';
+    '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:3px;">Categoria</label><select class="form-select" style="padding:5px 8px;font-size:12.5px;" onchange="editarTaskCampo('+t.id+',\'cat\',this.value)">'+taskCats.map(c=>'<option value="'+c.id+'"'+(t.cat===c.id?' selected':'')+'>'+c.label+'</option>').join('')+'</select></div>'+
+    '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:3px;">KPI Relacionado</label><select class="form-select" style="padding:5px 8px;font-size:12.5px;" onchange="editarTaskCampo('+t.id+',\'kpiTag\',this.value)">'+KPI_TAG_OPTIONS.map(o=>'<option value="'+o.id+'"'+((t.kpiTag||'nao_relacionado')===o.id?' selected':'')+'>'+o.label+'</option>').join('')+'</select></div>';
   renderTaskUpdates();
   document.getElementById('modal-task-detalhe').classList.add('open');
   setTimeout(()=>document.getElementById('td-nova-update').focus(),150);
@@ -1705,6 +1731,8 @@ function renderKanban(){
     base=filtrarSequenciaProjetos(base);
     base=aplicarFiltroPrazo(base);
   }
+  const _bfk=document.getElementById('task-busca'); const _bvk=_bfk?_bfk.value.trim().toLowerCase():'';
+  if(_bvk) base=base.filter(t=>(t.text||'').toLowerCase().includes(_bvk));
   document.getElementById('kanban-board').innerHTML=cols.map(col=>{
     const cards=base.filter(t=>t.status===col.id);
     return '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:12px;min-height:220px;transition:background 0.15s,border-style 0.15s;" '+
@@ -1724,7 +1752,8 @@ function renderKanban(){
         const tagHtml=t._isManutTarefa
           ?'<span style="font-size:9.5px;padding:1px 6px;border-radius:10px;font-weight:600;background:var(--peach)22;color:var(--peach);"><i class="fa-solid fa-wrench"></i> Manutenção</span>'
           :t._isDemand?'<span style="font-size:9.5px;padding:1px 6px;border-radius:10px;font-weight:600;background:var(--bg3);color:var(--text3);">'+(t.status==='doing'?'Em andamento':t.status==='done'?'Concluída':'A fazer')+'</span>'
-          :'<span style="font-size:9.5px;padding:1px 6px;border-radius:10px;font-weight:600;background:'+cat.color+'22;color:'+cat.color+';">'+cat.label+'</span>';
+          :(function(){ const kt=getKpiTagInfo(t.kpiTag); return '<span style="font-size:9.5px;padding:1px 6px;border-radius:10px;font-weight:600;background:'+cat.color+'22;color:'+cat.color+';">'+cat.label+'</span>'+
+            '<span style="font-size:9.5px;padding:1px 6px;border-radius:10px;font-weight:600;background:'+kt.color+'22;color:'+kt.color+';">'+kt.label+'</span>'; })();
         return '<div '+dragAttr+
           'onclick="'+clickFn+'" '+
           'style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px;margin-bottom:7px;cursor:'+(t._isManutTarefa?'pointer':'grab')+';user-select:none;transition:opacity 0.15s;'+((col.id==='done'||t.done)?'opacity:0.6;':'')+'">'+
@@ -1777,6 +1806,8 @@ function openAddTask(){
   document.getElementById('t-gcal').checked=false;
   document.getElementById('t-recorr-detail').style.display='none';
   renderTaskCatSelect();
+  document.getElementById('t-kpitag').value='nao_relacionado';
+  renderKpiTagSelect('t-kpitag');
   document.getElementById('modal-task').classList.add('open');
   setTimeout(()=>document.getElementById('t-title').focus(),100);
 }
@@ -1790,6 +1821,7 @@ function addTask(){
   const nova={
     id:Date.now(),text,
     cat:document.getElementById('t-cat').value,
+    kpiTag:document.getElementById('t-kpitag').value,
     prio:document.getElementById('t-prio').value,
     dataInicio:document.getElementById('t-inicio').value,
     due,hora,done:false,status:'todo',
@@ -2131,9 +2163,11 @@ function renderPerformance(){
 
   let kpiRows='';
   KPI_DEFS.forEach(k=>{
-    const p=k.calc(_kv()[k.id]),ps=p!==null?Math.round(p):null;
+    const rawVal=_kv()[k.id];
+    const p=k.calc(rawVal),ps=p!==null?Math.round(p):null;
     const barC=ps===null?'#E5E7EB':ps>=100?'#3ECFB2':ps>0?'#F59E0B':'#E5E7EB';
     const txtC=ps===null?'#9CA3AF':ps>=100?'#0D9488':ps>0?'#B45309':'#9CA3AF';
+    const rawHtml=(rawVal!=null&&rawVal!=='')?`<span style="font-size:11px;color:#9CA3AF;">(${rawVal} ${k.unit})</span>`:'';
     kpiRows+=`<div style="padding:12px 0;border-bottom:0.5px solid #E2E5EA;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;">
         <span style="font-size:12px;font-weight:500;color:#374151;">${k.label}</span>
@@ -2141,6 +2175,7 @@ function renderPerformance(){
       </div>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
         <span style="font-family:'SF Mono','Fira Code',monospace;font-size:18px;font-weight:700;color:${txtC};min-width:46px;">${ps!==null?ps+'%':'—'}</span>
+        ${rawHtml}
         <div style="flex:1;height:4px;background:#E5E7EB;border-radius:2px;overflow:hidden;">
           <div style="width:${ps!==null?Math.min(ps,100):0}%;height:100%;background:${barC};transition:width .22s,background .22s;"></div>
         </div>
@@ -2241,7 +2276,7 @@ function renderPerformance(){
   // qualquer pagador. Antes só considerava manutenção paga pelo Seguro
   // EasyCover, que nunca é usado aqui — por isso sempre aparecia R$ 0,00.
   const _saldoIni=parseFloat(localStorage.getItem('nx_saldo_seguro'))||0;
-  const _economiaManut=(typeof manutencoes!=='undefined'?manutencoes:[]).filter(function(m){return m.status==='pago'&&(m.valorPago||m.valorGasto);}).reduce(function(s,m){return s+(parseFloat(m.valorPago)||0)-(parseFloat(m.valorGasto)||0);},0);
+  const _economiaManut=(typeof manutencoes!=='undefined'?_manutencoesComSaldoGeral():[]).filter(function(m){return m.status==='pago'&&(m.valorPago||m.valorGasto);}).reduce(function(s,m){return s+(parseFloat(m.valorPago)||0)-(parseFloat(m.valorGasto)||0);},0);
   const _saldoAtual=_saldoIni+_economiaManut;
   const _saldoC=_saldoAtual>=0?'#0D9488':'#DC2626';
   const _saldoEl=document.getElementById('perf-saldo-seguro');
@@ -6364,6 +6399,20 @@ function manutCardTitulo(m){
   const imovel=(m.imovelNome||'').replace(/^WC-\d+\s*-\s*/,'').trim();
   return [item,imovel].filter(Boolean).join(' — ')||'(sem título)';
 }
+// Imóveis com saldo individual (im.saldoIndividual===true) saem do saldo GERAL
+// pra não contar a mesma economia duas vezes — o dinheiro deles só aparece no
+// card de saldo individual dele (renderManutSaldoImoveis). Vínculo é por nome
+// (m.imovelNome), igual todo o resto do módulo Manutenção já faz.
+function _manutencoesComSaldoGeral(){
+  const nomesIndividuais=imovelsCatalog.filter(function(im){return im.saldoIndividual;}).map(function(im){return im.nome;});
+  return manutencoes.filter(function(m){return nomesIndividuais.indexOf(m.imovelNome)===-1;});
+}
+function calcularSaldoImovel(im){
+  const inicial=parseFloat(im.saldoInicialIndividual)||0;
+  const economia=manutencoes.filter(function(m){return m.imovelNome===im.nome&&m.status==='pago'&&(m.valorPago||m.valorGasto);})
+    .reduce(function(s,m){return s+(parseFloat(m.valorPago)||0)-(parseFloat(m.valorGasto)||0);},0);
+  return inicial+economia;
+}
 function renderManutResumo(){
   const el=document.getElementById('manutencao-resumo'); if(!el) return;
   const hoje=new Date().toISOString().split('T')[0];
@@ -6371,7 +6420,7 @@ function renderManutResumo(){
   const pendentes=manutencoes.filter(function(m){return m.status!=='pago';}).length;
   const concluidas=manutencoes.filter(function(m){return m.status==='pago';}).length;
   const saldoInicial=parseFloat(localStorage.getItem('nx_saldo_seguro'))||0;
-  const economiaConcluidas=manutencoes.filter(function(m){return m.status==='pago'&&(m.valorPago||m.valorGasto);}).reduce(function(s,m){return s+(parseFloat(m.valorPago)||0)-(parseFloat(m.valorGasto)||0);},0);
+  const economiaConcluidas=_manutencoesComSaldoGeral().filter(function(m){return m.status==='pago'&&(m.valorPago||m.valorGasto);}).reduce(function(s,m){return s+(parseFloat(m.valorPago)||0)-(parseFloat(m.valorGasto)||0);},0);
   const saldoRestante=saldoInicial+economiaConcluidas;
   const saldoColor=saldoRestante>=0?'var(--sage)':'var(--vermelha)';
   el.innerHTML='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:4px;">'+
@@ -6397,7 +6446,7 @@ function renderManutResumo(){
 function renderManutSaldoGeral(){
   const el=document.getElementById('manutencao-saldo-geral'); if(!el) return;
   const saldoInicial=parseFloat(localStorage.getItem('nx_saldo_seguro'))||0;
-  const itens=manutencoes.filter(function(m){return m.valorPago||m.valorGasto;}).sort(function(a,b){return (a.dataCriacao||'')>(b.dataCriacao||'')?1:-1;});
+  const itens=_manutencoesComSaldoGeral().filter(function(m){return m.valorPago||m.valorGasto;}).sort(function(a,b){return (a.dataCriacao||'')>(b.dataCriacao||'')?1:-1;});
   let acumulado=saldoInicial;
   let rows='';
   itens.forEach(function(m){
@@ -6421,7 +6470,7 @@ function renderManutSaldoGeral(){
       '</td>'+
     '</tr>';
   });
-  const saldoFinal=saldoInicial+manutencoes.filter(function(m){return m.status==='pago'&&(m.valorPago||m.valorGasto);}).reduce(function(s,m){return s+(parseFloat(m.valorPago)||0)-(parseFloat(m.valorGasto)||0);},0);
+  const saldoFinal=saldoInicial+_manutencoesComSaldoGeral().filter(function(m){return m.status==='pago'&&(m.valorPago||m.valorGasto);}).reduce(function(s,m){return s+(parseFloat(m.valorPago)||0)-(parseFloat(m.valorGasto)||0);},0);
   const corFinal=saldoFinal>=0?'var(--sage)':'var(--vermelha)';
   el.innerHTML=
     '<div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;">'+
@@ -6433,7 +6482,9 @@ function renderManutSaldoGeral(){
         '<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:3px;">Saldo Atual</div>'+
         '<div style="font-size:20px;font-weight:700;color:'+corFinal+';">R$ '+saldoFinal.toFixed(2).replace('.',',')+'</div>'+
       '</div>'+
-      '<div style="font-size:12px;color:var(--text3);max-width:300px;">Considera manutenções com Valor Pago e/ou Valor Gasto preenchidos, status <strong>Pago/Concluído</strong>. Independente do pagador. Configure o saldo inicial em Configurações.</div>'+
+      '<div style="font-size:12px;color:var(--text3);max-width:300px;">Considera manutenções com Valor Pago e/ou Valor Gasto preenchidos, status <strong>Pago/Concluído</strong>. Independente do pagador. Configure o saldo inicial em Configurações.'+
+        (imovelsCatalog.some(function(im){return im.saldoIndividual;})?' Não inclui imóveis com saldo individual (veja abaixo).':'')+
+      '</div>'+
     '</div>'+
     (itens.length===0?
       '<div style="padding:24px;text-align:center;color:var(--text3);font-size:13px;">Nenhuma manutenção com valores preenchidos registrada.</div>':
@@ -6453,8 +6504,10 @@ function renderManutSaldoGeral(){
 function renderManutencaoKanban(){
   const el=document.getElementById('manutencao-kanban'); if(!el) return;
   renderManutResumo();
+  const _bf=document.getElementById('manut-busca'); const _bv=_bf?_bf.value.trim().toLowerCase():'';
+  const _filtroBusca=function(m){ return !_bv || (manutCardTitulo(m)+' '+(m.obs||'')).toLowerCase().includes(_bv); };
   const barEl=document.getElementById('manutencao-pausadas-bar');
-  const pausadas=manutencoes.filter(function(m){return m.pausado;});
+  const pausadas=manutencoes.filter(function(m){return m.pausado;}).filter(_filtroBusca);
   // barra de pausadas — fora do grid
   if(barEl){
     if(!pausadas.length){ barEl.innerHTML=''; }
@@ -6484,7 +6537,7 @@ function renderManutencaoKanban(){
     }
   }
   el.innerHTML=MANUT_COLS.map(function(col){
-    const cards=manutencoes.filter(function(m){return m.status===col.id && !m.pausado;});
+    const cards=manutencoes.filter(function(m){return m.status===col.id && !m.pausado;}).filter(_filtroBusca);
     return '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:8px;min-height:140px;">'+
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'+
       '<div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:'+col.color+';">'+col.label+'</div>'+
@@ -6515,7 +6568,53 @@ function switchManutTab(tab,btn){
   document.getElementById('manutencao-tab-saldo').style.display=tab==='saldo'?'':'none';
   document.querySelectorAll('#panel-manutencao .tab-btn').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
-  if(tab==='saldo') renderManutSaldoGeral();
+  if(tab==='saldo'){ renderManutSaldoGeral(); renderManutSaldoImoveis(); }
+}
+// Cards de saldo individual (imóveis pontuais que não usam o saldo geral) +
+// controle simples pra ativar em um imóvel do catálogo. Ver _manutencoesComSaldoGeral()
+// e calcularSaldoImovel() logo acima de renderManutResumo().
+function renderManutSaldoImoveis(){
+  const el=document.getElementById('manutencao-saldo-imoveis'); if(!el) return;
+  const comSaldo=imovelsCatalog.filter(function(im){return im.saldoIndividual;});
+  const semSaldo=imovelsCatalog.filter(function(im){return !im.saldoIndividual;});
+  let html='<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin-bottom:10px;">Saldo por Imóvel</div>';
+  if(comSaldo.length===0){
+    html+='<div style="font-size:12.5px;color:var(--text3);margin-bottom:14px;">Nenhum imóvel com saldo individual ainda.</div>';
+  } else {
+    html+='<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:16px;">'+
+      comSaldo.map(function(im){
+        const atual=calcularSaldoImovel(im);
+        const cor=atual>=0?'var(--sage)':'var(--vermelha)';
+        return '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 18px;min-width:180px;">'+
+          '<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:3px;">'+esc(im.nome)+'</div>'+
+          '<div style="font-size:18px;font-weight:700;color:'+cor+';">R$ '+atual.toFixed(2).replace('.',',')+'</div>'+
+          '<div style="font-size:10px;color:var(--text3);">base R$ '+(parseFloat(im.saldoInicialIndividual)||0).toFixed(2).replace('.',',')+'</div>'+
+        '</div>';
+      }).join('')+
+    '</div>';
+  }
+  html+='<div style="display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;padding:12px;border:1px dashed var(--border2);border-radius:var(--r-sm);">'+
+    '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:3px;">Imóvel</label>'+
+    '<select class="form-select" id="manut-saldoind-imovel" style="width:auto;padding:6px 10px;font-size:12.5px;">'+
+      (semSaldo.length===0?'<option value="">— nenhum disponível —</option>':semSaldo.map(function(im){return '<option value="'+im.id+'">'+esc(im.nome)+'</option>';}).join(''))+
+    '</select></div>'+
+    '<div><label style="font-size:10px;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:3px;">Saldo inicial</label>'+
+    '<input type="number" step="0.01" class="form-input" id="manut-saldoind-valor" placeholder="0,00" style="width:120px;padding:6px 10px;font-size:12.5px;"></div>'+
+    '<button class="btn btn-rose btn-sm" onclick="manutCriarSaldoIndividual()"'+(semSaldo.length===0?' disabled':'')+'><i class="fa-solid fa-plus"></i> Criar Saldo Individual</button>'+
+  '</div>'+
+  '<div style="font-size:11px;color:var(--text3);margin-top:6px;">Ao criar, as manutenções já vinculadas a esse imóvel (pelo nome) passam a compor só o saldo dele, e saem do saldo geral acima.</div>';
+  el.innerHTML=html;
+}
+function manutCriarSaldoIndividual(){
+  const selEl=document.getElementById('manut-saldoind-imovel'); if(!selEl||!selEl.value) return;
+  const im=imovelsCatalog.find(function(x){return x.id===selEl.value;}); if(!im) return;
+  const valEl=document.getElementById('manut-saldoind-valor');
+  im.saldoIndividual=true;
+  im.saldoInicialIndividual=parseFloat(valEl.value)||0;
+  if(typeof saveAll==='function') saveAll();
+  renderManutSaldoGeral();
+  renderManutSaldoImoveis();
+  if(typeof showToast==='function') showToast('Saldo individual criado para "'+im.nome+'"!','sage');
 }
 
 // ═══════════════════ PROJETOS ═══════════════════
@@ -6529,7 +6628,7 @@ function abrirNovoProjeto(){
   const p={
     id:Date.now(),nome:'',status:'planejamento',
     tempoEstimado:'',colaboradores:'',objetivos:'',
-    dataInicio:'',dataFim:'',
+    dataInicio:'',dataFim:'',kpiTag:null,
     notas:'',tarefas:[],anexos:[],dataCriacao:new Date().toISOString()
   };
   projetos.push(p);
@@ -6569,6 +6668,7 @@ function projMudarAba(aba,btn){
       '<div class="form-group"><label class="form-label">Previsão de término</label><input type="date" class="form-input" value="'+esc(p.dataFim||'')+'" onchange="const pr=projetos.find(x=>x.id===projetoAtivo);if(pr){pr.dataFim=this.value;if(typeof saveAll===\'function\')saveAll();if(typeof renderProjetosGantt===\'function\')renderProjetosGantt();}"></div>'+
       '</div>'+
       '<div class="form-group"><label class="form-label">Colaboradores</label><input class="form-input" value="'+esc(p.colaboradores||'')+'" placeholder="Ex: Gabriela, Felipe, Nicole" onchange="const pr=projetos.find(x=>x.id===projetoAtivo);if(pr){pr.colaboradores=this.value;if(typeof saveAll===\'function\')saveAll();}"></div>'+
+      '<div class="form-group"><label class="form-label">KPI Relacionado</label><select class="form-select" onchange="const pr=projetos.find(x=>x.id===projetoAtivo);if(pr){pr.kpiTag=this.value;if(typeof saveAll===\'function\')saveAll();renderProjetosKanban();}">'+KPI_TAG_OPTIONS.map(o=>'<option value="'+o.id+'"'+((p.kpiTag||'nao_relacionado')===o.id?' selected':'')+'>'+o.label+'</option>').join('')+'</select></div>'+
       '<div class="form-group"><label class="form-label">Objetivos</label><textarea class="form-input" rows="5" placeholder="Descreva os objetivos do projeto..." onchange="const pr=projetos.find(x=>x.id===projetoAtivo);if(pr){pr.objetivos=this.value;if(typeof saveAll===\'function\')saveAll();}">'+esc(p.objetivos||'')+'</textarea></div>';
     const reuVinc=transcricoes.filter(r=>String(r.projetoId)===String(p.id));
     if(reuVinc.length){
@@ -6802,8 +6902,10 @@ function renderPlantao(){
 
 function renderProjetosKanban(){
   const el=document.getElementById('projetos-kanban');if(!el)return;
+  const _bf=document.getElementById('proj-busca'); const _bv=_bf?_bf.value.trim().toLowerCase():'';
+  const _filtroBusca=function(p){ return !_bv || ((p.nome||'')+' '+(p.objetivos||'')+' '+(p.colaboradores||'')).toLowerCase().includes(_bv); };
   el.innerHTML=PROJ_STATUS.map(st=>{
-    const cards=projetos.filter(p=>p.status===st.id);
+    const cards=projetos.filter(p=>p.status===st.id).filter(_filtroBusca);
     return '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:12px;min-height:160px;">'+
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'+
       '<div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:'+st.color+';">'+st.label+'</div>'+
@@ -6811,8 +6913,10 @@ function renderProjetosKanban(){
       cards.map(p=>{
         const tarefasTotal=tasks.filter(t=>t.projetoId===p.id).length;
         const tarefasDone=tasks.filter(t=>t.projetoId===p.id&&t.done).length;
+        const kt=getKpiTagInfo(p.kpiTag);
         return '<div onclick="abrirProjetoModal('+p.id+')" style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px;cursor:pointer;margin-bottom:8px;transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'var(--bg3)\'">'+
           '<div style="font-size:13px;font-weight:600;margin-bottom:4px;">'+esc(p.nome||'(sem nome)')+'</div>'+
+          '<div style="margin-bottom:5px;"><span style="font-size:9.5px;padding:1px 6px;border-radius:10px;font-weight:600;background:'+kt.color+'22;color:'+kt.color+';">'+kt.label+'</span></div>'+
           (p.tempoEstimado?'<div style="font-size:11px;color:var(--text3);margin-bottom:3px;"><i class="fa-regular fa-clock"></i> '+esc(p.tempoEstimado)+'</div>':'')+
           (p.colaboradores?'<div style="font-size:11px;color:var(--text3);margin-bottom:3px;"><i class="fa-solid fa-users" style="font-size:10px;"></i> '+esc(p.colaboradores)+'</div>':'')+
           (tarefasTotal>0?'<div style="font-size:11px;color:var(--sage);">✅ '+tarefasDone+'/'+tarefasTotal+' tarefas</div>':'')+

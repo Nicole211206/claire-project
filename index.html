@@ -422,6 +422,7 @@ function _validarLogin(){
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap;">
         <div class="tab-bar"><button class="tab-btn active" onclick="switchView('crono',this)">Cronograma</button><button class="tab-btn" onclick="switchView('kanban',this)">Kanban</button></div>
         <select class="form-select" style="width:auto;padding:6px 10px;font-size:12.5px;" id="task-filter-sel" onchange="filterTasks(this.value)"></select>
+        <input type="text" class="form-input" id="task-busca" placeholder="Buscar tarefa..." oninput="renderTasks();renderKanban();" style="width:180px;padding:6px 10px;font-size:12.5px;">
         <select class="form-select" style="width:auto;padding:6px 10px;font-size:12.5px;" id="task-status-filter" onchange="renderTasks();renderKanban();">
           <option value="ativas">Ativas</option>
           <option value="todas">Todas</option>
@@ -682,6 +683,7 @@ function _validarLogin(){
         <div><h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Serviços Extras</h2><p style="color:var(--text3);font-size:13px;margin-top:2px;">Serviços cobrados (foto extra, etc.) · alimenta o KPI de Redução de Custos</p></div>
         <button class="btn btn-rose" onclick="abrirNovoExtra()"><i class="fa-solid fa-plus"></i> Novo Extra</button>
       </div>
+      <div style="margin-bottom:14px;"><input type="text" class="form-input" id="extras-busca" placeholder="Buscar serviço, imóvel ou observação..." oninput="renderExtras()" style="width:260px;padding:6px 10px;font-size:13px;"></div>
       <div class="metrics-grid" id="extras-resumo" style="margin-bottom:16px;"></div>
       <div class="card"><div style="overflow-x:auto;"><table class="data-table"><thead><tr><th>Mês</th><th>Data</th><th>Serviço</th><th>Imóvel</th><th>Cobrado</th><th>Custo</th><th>Margem</th><th>Obs</th><th></th></tr></thead><tbody id="extras-tbody"></tbody></table></div></div>
     </div>
@@ -739,6 +741,7 @@ function _validarLogin(){
         <button class="btn btn-rose" onclick="abrirNovaManutencao()"><i class="fa-solid fa-plus"></i> Nova Solicitação</button>
       </div>
       <div id="manutencao-resumo" style="margin-bottom:14px;"></div>
+      <div style="margin-bottom:14px;"><input type="text" class="form-input" id="manut-busca" placeholder="Buscar manutenção, imóvel ou observação..." oninput="renderManutencaoKanban()" style="width:260px;padding:6px 10px;font-size:13px;"></div>
       <div style="display:flex;gap:8px;margin-bottom:16px;">
         <button class="tab-btn active" id="manut-tab-kanban" onclick="switchManutTab('kanban',this)">Kanban</button>
         <button class="tab-btn" id="manut-tab-saldo" onclick="switchManutTab('saldo',this)">Saldo Geral</button>
@@ -749,6 +752,7 @@ function _validarLogin(){
       </div>
       <div id="manutencao-tab-saldo" style="display:none;">
         <div id="manutencao-saldo-geral"></div>
+        <div id="manutencao-saldo-imoveis" style="margin-top:24px;"></div>
       </div>
     </div>
 
@@ -761,6 +765,7 @@ function _validarLogin(){
         </div>
         <button class="btn btn-rose" onclick="abrirNovoProjeto()"><i class="fa-solid fa-plus"></i> Novo Projeto</button>
       </div>
+      <div style="margin-bottom:14px;"><input type="text" class="form-input" id="proj-busca" placeholder="Buscar projeto, objetivo ou colaborador..." oninput="renderProjetosKanban()" style="width:260px;padding:6px 10px;font-size:13px;"></div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;" id="projetos-kanban"></div>
     </div>
 
@@ -885,6 +890,9 @@ function _validarLogin(){
     <div class="form-row">
       <div class="form-group"><label class="form-label">Categoria</label><select class="form-select" id="t-cat"></select></div>
       <div class="form-group"><label class="form-label">Prioridade</label><select class="form-select" id="t-prio"><option value="high">Alta</option><option value="med">Média</option><option value="low">Baixa</option></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">KPI Relacionado</label><select class="form-select" id="t-kpitag"></select></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Data de início</label><input type="date" class="form-input" id="t-inicio"></div>

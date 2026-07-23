@@ -194,6 +194,30 @@ export default {
                 return n || p; // só de um lado → mantém
               });
             }
+            // ── MESCLAGEM PROFUNDA (nx_kpivals/nx_kpisub) ──
+            // Dicionário por mês (período), cada mês com vários campos (alguns
+            // aninhados, ex.: rc.limpeza.previsto). Sem isso, o spread "{...prev,
+            // ...parsed}" acima troca o documento INTEIRO de nx_kpivals pelo que
+            // chegou agora — se um aparelho ainda não tinha recalculado o KPI de
+            // um mês que outro aparelho tinha acabado de lançar, esse envio
+            // apagava o valor do outro pro MESMO mês. Aqui mescla recursivamente:
+            // em qualquer profundidade, o que chegou agora (parsed) vence só nas
+            // chaves que ele de fato trouxe; o resto do lado antigo (prev) fica.
+            const MERGE_KPI_DICT = ['nx_kpivals', 'nx_kpisub'];
+            const _mergeProfundo = (a, b) => {
+              if (b && typeof b === 'object' && !Array.isArray(b) && a && typeof a === 'object' && !Array.isArray(a)) {
+                const out = { ...a };
+                for (const k of Object.keys(b)) out[k] = _mergeProfundo(a[k], b[k]);
+                return out;
+              }
+              return b !== undefined ? b : a;
+            };
+            for (const k of MERGE_KPI_DICT) {
+              const P = prev[k], N = parsed[k];
+              if (!P || typeof P !== 'object' || Array.isArray(P)) continue;
+              if (!N || typeof N !== 'object' || Array.isArray(N)) continue;
+              merged[k] = _mergeProfundo(P, N);
+            }
             // Tombstones: exclusões explícitas { id, ts }. Remove das listas o id
             // marcado como apagado com ts >= _ts do registro (assim delete funciona
             // mesmo com a união acima, sem "ressuscitar" o que foi apagado de verdade).

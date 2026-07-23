@@ -4056,6 +4056,20 @@ function _mergeManutencoes(base, local, server){
   }
   return out;
 }
+// Mescla profunda pra nx_kpivals/nx_kpisub (dicionário por mês → campos, alguns
+// aninhados, ex.: rc.limpeza.previsto). Antes, se o mês já existia dos dois lados,
+// o mês INTEIRO de A vencia (achando que "é o que a pessoa está editando agora"),
+// apagando qualquer campo que B tivesse calculado/lançado pro MESMO mês que A ainda
+// não tinha. Aqui mantém o que A já conhece (mesmo null — inclui apagão intencional)
+// e só herda de B as chaves (mês ou campo, em qualquer profundidade) que A não tem.
+function _mergeKpiObj(a, b){
+  if(!a || typeof a!=='object' || Array.isArray(a)) return a!==undefined ? a : b;
+  const out={...a};
+  if(b && typeof b==='object' && !Array.isArray(b)){
+    for(const k in b){ if(!(k in out)) out[k]=b[k]; else out[k]=_mergeKpiObj(out[k], b[k]); }
+  }
+  return out;
+}
 // Envia ao KV SOMENTE se houver mudança real (deduplicado). Chamado por um intervalo espaçado.
 async function _kvFlush(){
   const s=window.CLAIRE_SYNC||{};
@@ -4115,18 +4129,16 @@ async function _kvFlush(){
             } else if(sv.length > lv.length){
               local[k]=sv; try{ localStorage.setItem(k, JSON.stringify(sv)); }catch(e){} ajustou=true;
             }
-          // nx_kpivals/nx_kpisub são organizados por mês (período). Se o mês já
-          // existe localmente, o valor local manda — é o que a pessoa está
-          // editando agora, inclusive apagar um KPI lançado errado. A contagem
-          // de campos preenchidos (usada abaixo pros demais objetos) fazia um
-          // valor apagado voltar sozinho, porque o servidor ainda tinha mais
-          // campos preenchidos que o local depois do apagão. Só recupera do
-          // servidor um mês que este aparelho nunca viu.
+          // nx_kpivals/nx_kpisub são organizados por mês (período), cada mês com
+          // vários campos (alguns aninhados, ex.: rc.limpeza.previsto). Mescla
+          // profunda: mantém o que este aparelho já tem (inclusive apagar um KPI
+          // de propósito) e só herda do servidor mês/campo que este aparelho
+          // ainda não conhece — sem isso, um mês já conhecido aqui (mas com
+          // menos campos calculados) sobrescrevia o mês INTEIRO do servidor,
+          // apagando o que outro aparelho tinha acabado de lançar pro mesmo mês.
           } else if((k==='nx_kpivals'||k==='nx_kpisub') && sv && typeof sv==='object' && !Array.isArray(sv) && lv && typeof lv==='object' && !Array.isArray(lv)){
-            const merged=Object.assign({},lv);
-            let mudouPeriodo=false;
-            for(const periodo in sv){ if(!(periodo in merged)){ merged[periodo]=sv[periodo]; mudouPeriodo=true; } }
-            if(mudouPeriodo){
+            const merged=_mergeKpiObj(lv, sv);
+            if(JSON.stringify(merged)!==JSON.stringify(lv)){
               local[k]=merged; try{ localStorage.setItem(k, JSON.stringify(merged)); }catch(e){} ajustou=true;
             }
           // objeto (demais chaves, ex.: headFixo): conta valores não-nulos — servidor tem mais → local está incompleto
@@ -4208,18 +4220,14 @@ async function kvPull(){
             if(localStorage.getItem(k)!==novo){ localStorage.setItem(k, novo); aplicou=true; }
             continue;
           }
-          // nx_kpivals/nx_kpisub: mesmo motivo do _kvFlush acima — o mês que já
-          // existe localmente não deve ser trocado pela versão do servidor (senão
-          // um KPI apagado de propósito volta sozinho a cada sincronização). Só
-          // traz do servidor um mês que este aparelho ainda não tem.
+          // nx_kpivals/nx_kpisub: mesmo motivo do _kvFlush acima — mescla campo a
+          // campo (e não o mês inteiro), senão um KPI apagado de propósito volta
+          // sozinho, OU um campo que outro aparelho lançou pro mesmo mês nunca
+          // chega aqui porque o mês já existia localmente.
           if((k==='nx_kpivals'||k==='nx_kpisub') && sv && typeof sv==='object' && !Array.isArray(sv) && lv && typeof lv==='object' && !Array.isArray(lv)){
-            const merged=Object.assign({},lv);
-            let mudouPeriodo=false;
-            for(const periodo in sv){ if(!(periodo in merged)){ merged[periodo]=sv[periodo]; mudouPeriodo=true; } }
-            if(mudouPeriodo){
-              const novo=JSON.stringify(merged);
-              if(localStorage.getItem(k)!==novo){ localStorage.setItem(k, novo); aplicou=true; }
-            }
+            const merged=_mergeKpiObj(lv, sv);
+            const novo=JSON.stringify(merged);
+            if(JSON.stringify(lv)!==novo){ localStorage.setItem(k, novo); aplicou=true; }
             continue;
           }
           // Proteção genérica (demais chaves): servidor com menos dados não apaga
@@ -7153,13 +7161,17 @@ setInterval(function(){
   kvPull().then(function(ok){ if(ok && typeof _renderTudo==='function') _renderTudo(); });
 }, 60000);
 window.addEventListener('beforeunload', function(){ saveAll(); _kvFlush(); }); // sempre salva ao fechar
-window.addEventListener('visibilitychange', function(){ if(document.visibilityState==='hidden'){ saveAll(); _kvFlushThrottled(); } }); // troca de aba respeita throttle
+// força (ignora o throttle de 1 min) ao esconder a aba/app: no celular, trocar de
+// app ou minimizar pode suspender a aba antes do throttle liberar o envio — uma
+// tarefa lançada nos últimos segundos ficaria presa só neste aparelho até a
+// próxima vez que ele fosse aberto.
+window.addEventListener('visibilitychange', function(){ if(document.visibilityState==='hidden'){ saveAll(); _kvFlushThrottled(true); } });
 
 // ── AUTO-ATUALIZAÇÃO ──
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 97;
+const APP_VERSION = 98;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

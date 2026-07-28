@@ -3826,7 +3826,7 @@ const _PERSIST_KEYS = {
 
 // Listas com id próprio que o servidor mescla registro a registro (id + _ts).
 // DEVE espelhar a MERGE_POR_ID do worker.
-const _MERGE_POR_ID_KEYS=['nx_manutencoes','nx_tasks','nx_plantao','nx_projetos','nx_compras','nx_extras','nx_conquistas','nx_despesas','nx_anotacoes_controle','nx_superhost','nx_cancelamentos'];
+const _MERGE_POR_ID_KEYS=['nx_manutencoes','nx_tasks','nx_plantao','nx_projetos','nx_compras','nx_extras','nx_conquistas','nx_despesas','nx_anotacoes_controle','nx_superhost','nx_cancelamentos','nx_imoveis'];
 function _semTs(o){ const c=Object.assign({},o); delete c._ts; return JSON.stringify(c); }
 // Antes de salvar: carimba _ts nos registros novos/alterados e cria tombstone
 // para os que foram apagados. Assim o servidor sabe qual versão é a mais recente
@@ -4091,6 +4091,81 @@ function _mergeManutencoes(base, local, server){
   }
   return out;
 }
+// Mescla 3-vias GENÉRICA e recursiva para campos-objeto (dicionário) de chaves
+// dinâmicas — ex.: im.compras (chave 'Cama__Item__tier' → {tem,valorUnit}) e
+// im.ops (fotos/limpeza/vistoria → {data,responsavel,hora}). Ao contrário de
+// _mergeKpiObj (2-vias, sem base), aqui compara contra a BASE em cada nível:
+// só adota o servidor no que o local não mudou desde a última sincronização.
+// Arrays dentro do dicionário (ex.: comentarios[fase]) mesclam por posição
+// (nunca encolhem). Sem isso, editar "Já Tem" de UM item de compras podia
+// perder o preço que outro aparelho tinha acabado de lançar no MESMO item
+// (ou vice-versa), porque o campo inteiro (o dicionário todo) era tratado
+// como uma unidade só pela mesclagem de cima.
+function _mergeDictField(bO, lO, sO){
+  bO = bO && typeof bO==='object' && !Array.isArray(bO) ? bO : {};
+  lO = lO && typeof lO==='object' && !Array.isArray(lO) ? lO : {};
+  sO = sO && typeof sO==='object' && !Array.isArray(sO) ? sO : {};
+  const out={...lO};
+  const keys=new Set([...Object.keys(lO), ...Object.keys(sO)]);
+  for(const k of keys){
+    const lHas=k in lO, sHas=k in sO;
+    if(!lHas){ out[k]=sO[k]; continue; }   // só existe no servidor → mantém
+    if(!sHas){ out[k]=lO[k]; continue; }   // só existe no local → mantém
+    const lv=lO[k], sv=sO[k], bv=bO[k];
+    if(Array.isArray(lv) && Array.isArray(sv)){
+      out[k]=_mergePositional(bv, lv, sv);
+    } else if(lv && sv && typeof lv==='object' && typeof sv==='object' && !Array.isArray(lv) && !Array.isArray(sv)){
+      out[k]=_mergeDictField(bv, lv, sv);
+    } else {
+      const bvj = bv!==undefined ? JSON.stringify(bv) : undefined;
+      const localMudou = JSON.stringify(lv)!==bvj;
+      out[k]=localMudou ? lv : sv;
+    }
+  }
+  return out;
+}
+// Mescla nx_imoveis (cards de onboarding) campo a campo. Antes, o card INTEIRO
+// (todas as abas — Dados, Contrato, Definições, Compras, Produção, Final) era
+// tratado como um registro só pela mesclagem genérica por id: se qualquer
+// campo divergisse, um lado vencia por completo e o outro sumia — mesmo em
+// abas que ninguém tinha tocado. Era esse o bug de "campos e abas inteiras
+// sumindo direto" (ex.: quantidade de itens na aba Compras revertendo).
+// Segue o mesmo padrão de _mergeManutencoes: por campo, local só perde para o
+// servidor onde NÃO mudou desde a última sincronização; os dicionários de
+// chave dinâmica mesclam profundo (_mergeDictField) e os arrays sem id
+// mesclam por posição (nunca encolhem).
+const _IMOVEL_DEEP_FIELDS = ['compras','comentarios','ops','defLimpeza','defEnxoval'];
+const _IMOVEL_POSITIONAL_FIELDS = ['camas','custos','plataformas'];
+function _mergeImoveis(base, local, server){
+  local  = Array.isArray(local)?local:[];
+  server = Array.isArray(server)?server:[];
+  const bMap=new Map((Array.isArray(base)?base:[]).map(m=>[m.id, m]));
+  const sMap=new Map(server.map(m=>[m.id, m]));
+  const lMap=new Map(local.map(m=>[m.id, m]));
+  const ordem=[]; const visto=new Set();
+  for(const m of local){  if(!visto.has(m.id)){ visto.add(m.id); ordem.push(m.id); } }
+  for(const m of server){ if(!visto.has(m.id)){ visto.add(m.id); ordem.push(m.id); } }
+  const out=[];
+  for(const id of ordem){
+    const b=bMap.get(id), l=lMap.get(id), s=sMap.get(id);
+    if(l && s){
+      const porTs=_tsVence(l,s);
+      if(porTs){ out.push(porTs); continue; }
+      const merged={...l};
+      Object.keys(s).forEach(k=>{
+        if(_IMOVEL_DEEP_FIELDS.includes(k) || _IMOVEL_POSITIONAL_FIELDS.includes(k)) return; // tratados abaixo
+        const bv = b?JSON.stringify(b[k]):undefined;
+        const localMudou = JSON.stringify(l[k])!==bv;
+        if(!localMudou) merged[k]=s[k];
+      });
+      _IMOVEL_DEEP_FIELDS.forEach(k=>{ merged[k]=_mergeDictField(b&&b[k], l[k], s[k]); });
+      _IMOVEL_POSITIONAL_FIELDS.forEach(k=>{ merged[k]=_mergePositional(b&&b[k], l[k], s[k]); });
+      out.push(merged);
+    } else if(l){ out.push(l); }
+    else if(s){ out.push(s); }
+  }
+  return out;
+}
 // Mescla profunda pra nx_kpivals/nx_kpisub (dicionário por mês → campos, alguns
 // aninhados, ex.: rc.limpeza.previsto). Antes, se o mês já existia dos dois lados,
 // o mês INTEIRO de A vencia (achando que "é o que a pessoa está editando agora"),
@@ -4146,6 +4221,14 @@ async function _kvFlush(){
             // Mescla campo a campo (evita que editar valores apague status/itens
             // que outra pessoa mudou na mesma manutenção, e vice-versa).
             const merged=_mergeManutencoes(baseBlob?baseBlob[k]:null, lv, sv);
+            if(JSON.stringify(merged)!==JSON.stringify(lv)){
+              local[k]=merged; try{ localStorage.setItem(k, JSON.stringify(merged)); }catch(e){} ajustou=true;
+            }
+          } else if(k==='nx_imoveis' && Array.isArray(sv) && Array.isArray(lv)){
+            // Mescla campo a campo (evita que abrir/editar uma aba do card
+            // apague o que outra pessoa mudou em outra aba do MESMO card, ex.:
+            // quantidade "já tem" em Compras sumindo ao sincronizar).
+            const merged=_mergeImoveis(baseBlob?baseBlob[k]:null, lv, sv);
             if(JSON.stringify(merged)!==JSON.stringify(lv)){
               local[k]=merged; try{ localStorage.setItem(k, JSON.stringify(merged)); }catch(e){} ajustou=true;
             }
@@ -4245,6 +4328,12 @@ async function kvPull(){
           }
           if(k==='nx_manutencoes' && Array.isArray(sv) && Array.isArray(lv)){
             const merged=_mergeManutencoes(baseBlob?baseBlob[k]:null, lv, sv);
+            const novo=JSON.stringify(merged);
+            if(localStorage.getItem(k)!==novo){ localStorage.setItem(k, novo); aplicou=true; }
+            continue;
+          }
+          if(k==='nx_imoveis' && Array.isArray(sv) && Array.isArray(lv)){
+            const merged=_mergeImoveis(baseBlob?baseBlob[k]:null, lv, sv);
             const novo=JSON.stringify(merged);
             if(localStorage.getItem(k)!==novo){ localStorage.setItem(k, novo); aplicou=true; }
             continue;
@@ -5141,10 +5230,11 @@ function obAbaCompras(im){
           const key = 'Cama__' + item + '__' + tier;
           const label = item + ' (' + TIER_LABELS[tier] + ')';
           const necessario = QTD_POR_COLCHAO[item] * camasPorTier[tier];
-          if (!im.compras[key] || typeof im.compras[key] !== 'object') {
-            im.compras[key] = { tem: 0, valorUnit: (PRECOS_ENXOVAL[item][tier]||0) };
-          }
-          const data = im.compras[key];
+          // Não grava no card só de renderizar (isso "sujava" o card para o sync
+          // achar que houve edição local e apagar mudanças de outro aparelho).
+          // O valor só é gravado de fato em obSalvarCompra, quando o usuário edita.
+          const data = (im.compras[key] && typeof im.compras[key] === 'object')
+            ? im.compras[key] : { tem: 0, valorUnit: (PRECOS_ENXOVAL[item][tier]||0) };
           const tem = parseInt(data.tem) || 0;
           const falta = Math.max(0, necessario - tem);
           const faltaColor = falta > 0 ? 'color:var(--vermelha);font-weight:700;' : 'color:var(--sage);font-weight:700;';
@@ -5159,10 +5249,9 @@ function obAbaCompras(im){
         return;
       }
       const key = cat + '__' + item;
-      if (!im.compras[key] || typeof im.compras[key] !== 'object') {
-        im.compras[key] = { tem: 0, valorUnit: (PRECOS_ITENS[item]||0) };
-      }
-      const data = im.compras[key];
+      // Mesma correção acima: não gravar default no card só de renderizar.
+      const data = (im.compras[key] && typeof im.compras[key] === 'object')
+        ? im.compras[key] : { tem: 0, valorUnit: (PRECOS_ITENS[item]||0) };
       const necessario = calcQtdNecessaria(item, cat, im);
       const tem = parseInt(data.tem) || 0;
       const falta = Math.max(0, necessario - tem);

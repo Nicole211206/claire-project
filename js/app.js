@@ -39,6 +39,22 @@ function kpiScoreGeneric(v,k){
 function _wireKpiCalc(arr){ arr.forEach(k=>{ k.calc=function(v){return kpiScoreGeneric(v,k);}; }); return arr; }
 _wireKpiCalc(KPI_DEFS);
 
+// Itens da tabela de "Redução de Custos" (Limpeza, Manutenção, ...). Cada um
+// tem seu próprio limiar de verde/vermelho pra colorir a % de economia,
+// configurável na tela "Configurar KPIs" e guardado em KPI_DEFS['rc'].rcLimiares.
+const RC_ITEM_DEFS=[
+  {key:'limpeza',    label:'Limpeza'},
+  {key:'manutencao', label:'Manutenção'},
+  {key:'setup',      label:'On-boarding (Setup)'},
+  {key:'margem',     label:'Despesas Operacionais'},
+  {key:'extras',     label:'Serviços Extras'},
+];
+function _rcLimiarItem(itemKey){
+  const k=KPI_DEFS.find(x=>x.id==='rc');
+  const l=k&&k.rcLimiares&&k.rcLimiares[itemKey];
+  return {verde:(l&&l.verde!=null&&l.verde!=='')?+l.verde:10, vermelho:(l&&l.vermelho!=null&&l.vermelho!=='')?+l.vermelho:0};
+}
+
 // Tag de "KPI relacionado" em tarefas/projetos — mesmas cores hex das variáveis
 // CSS usadas em KPI_DEFS (--rose/--lavender/--sage/--peach/--sky/--gold) mais
 // --vermelha pro "NÃO RELACIONADO". Itens sem kpiTag (tarefas/projetos antigos,
@@ -847,7 +863,8 @@ function renderKPIs(){
         '</div>'+
         rcItens.map(it=>{
           const eco=calcEco(it.key);
-          const ecoColor=eco===null?'var(--text3)':parseFloat(eco)>=10?'var(--sage)':parseFloat(eco)>=0?'var(--amarela)':'var(--vermelha)';
+          const lim=_rcLimiarItem(it.key);
+          const ecoColor=eco===null?'var(--text3)':parseFloat(eco)>=lim.verde?'var(--sage)':parseFloat(eco)>=lim.vermelho?'var(--amarela)':'var(--vermelha)';
           return '<div style="display:grid;grid-template-columns:1fr 90px 90px 70px;gap:4px;padding:5px 0;border-bottom:1px solid var(--border);align-items:center;">'+
             '<div><div style="font-size:12.5px;font-weight:500;">'+it.label+'</div><div style="font-size:10.5px;color:var(--text3);">'+it.hint+'</div></div>'+
             (it.key==='extras'
@@ -929,6 +946,19 @@ function renderKpiConfig(){
       '<div><label style="font-size:10px;color:#1D4ED8;display:block;margin-bottom:3px;">💎 Azul (a partir de)</label><input type="number" step="0.01" class="form-input" style="padding:5px 8px;font-size:12.5px;" value="'+k.limAzul+'" onchange="setKpiConfigField('+i+',\'limAzul\',+this.value)"></div>'+
       '<div><label style="font-size:10px;color:#7C3AED;display:block;margin-bottom:3px;">🏆 Elite (a partir de)</label><input type="number" step="0.01" class="form-input" style="padding:5px 8px;font-size:12.5px;" value="'+k.limElite+'" onchange="setKpiConfigField('+i+',\'limElite\',+this.value)"></div>'+
     '</div>'+
+    (k.id==='rc'?(
+      '<div style="font-size:9.5px;color:var(--text3);text-transform:uppercase;font-weight:700;margin:12px 0 4px;">Limiares por item (tabela de economia)</div>'+
+      '<div style="display:grid;gap:6px;">'+
+      RC_ITEM_DEFS.map(it=>{
+        const lim=_rcLimiarItem(it.key);
+        return '<div style="display:grid;grid-template-columns:1fr 100px 100px;gap:8px;align-items:center;">'+
+          '<div style="font-size:12px;color:var(--text2);">'+it.label+'</div>'+
+          '<div><label style="font-size:9px;color:var(--sage);display:block;margin-bottom:2px;">✅ Verde a partir de</label><input type="number" step="0.01" class="form-input" style="padding:4px 6px;font-size:12px;" value="'+lim.verde+'" onchange="setKpiConfigRcItem(\''+it.key+'\',\'verde\',this.value)"></div>'+
+          '<div><label style="font-size:9px;color:var(--vermelha);display:block;margin-bottom:2px;">🚩 Vermelho abaixo de</label><input type="number" step="0.01" class="form-input" style="padding:4px 6px;font-size:12px;" value="'+lim.vermelho+'" onchange="setKpiConfigRcItem(\''+it.key+'\',\'vermelho\',this.value)"></div>'+
+          '</div>';
+      }).join('')+
+      '</div>'
+    ):'')+
     '</div></div>'
   ).join('')+
   '<button class="btn" onclick="adicionarKpiConfig()" style="margin-top:4px;"><i class="fa-solid fa-plus"></i> Adicionar novo KPI</button>';
@@ -936,6 +966,15 @@ function renderKpiConfig(){
 function setKpiConfigField(i,field,value){
   const k=KPI_DEFS[i]; if(!k) return;
   k[field]=value;
+  renderKpiConfig();
+  renderKPIs();
+  if(typeof saveAll==='function') saveAll();
+}
+function setKpiConfigRcItem(itemKey,field,value){
+  const k=KPI_DEFS.find(x=>x.id==='rc'); if(!k) return;
+  if(!k.rcLimiares) k.rcLimiares={};
+  if(!k.rcLimiares[itemKey]) k.rcLimiares[itemKey]={};
+  k.rcLimiares[itemKey][field]=+value;
   renderKpiConfig();
   renderKPIs();
   if(typeof saveAll==='function') saveAll();

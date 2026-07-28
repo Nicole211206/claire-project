@@ -30,31 +30,25 @@ window._claireKVPromise = (async function(){
     // fábrica por cima dos dados reais (foi o que apagou tarefas/fotos).
     window.__claireServerSeen = true;
     if(j && j.data){
-      var kvTs = parseInt(j.data.nx_lastSaved || '0');
-      var localTs = parseInt(localStorage.getItem('nx_lastSaved') || '0');
-      // Só sobrescreve o localStorage se o KV tiver dados mais recentes
-      // Isso evita perder edições feitas antes dos 5min de flush
-      if(kvTs >= localTs){
-        // Aplica os dados do KV CHAVE POR CHAVE, com uma proteção:
-        // nunca deixa um array VAZIO do servidor apagar uma lista local que tem
-        // itens. Isso cobre dois casos ao mesmo tempo:
-        //  - sincroniza normalmente o que o servidor tem (ex.: Passagem de Turno,
-        //    usuários/acessos) — antes uma contagem global bloqueava isso;
-        //  - protege dados criados num dispositivo que ainda NÃO subiram ao KV
-        //    (ex.: manutenções da Patrícia) de serem apagados ao recarregar.
-        for(var k in j.data){
-          try{
-            var kvVal = j.data[k];
-            if(Array.isArray(kvVal) && kvVal.length === 0){
-              var localRaw = localStorage.getItem(k);
-              if(localRaw){
-                var localVal = JSON.parse(localRaw);
-                if(Array.isArray(localVal) && localVal.length > 0){ continue; } // mantém o local
-              }
-            }
-            localStorage.setItem(k, JSON.stringify(kvVal));
-          }catch(e){}
-        }
+      // IMPORTANTE: aqui só SEMEIA chaves que este aparelho NUNCA teve
+      // localmente (primeiro acesso, ou uma chave nova que ainda não existe
+      // neste dispositivo) — nunca sobrescreve uma chave que já existe local.
+      // ANTES, comparava um único carimbo (nx_lastSaved) do documento INTEIRO:
+      // se o servidor parecesse "mais novo" (porque QUALQUER outro aparelho
+      // sincronizou QUALQUER outra coisa), sobrescrevia TODAS as chaves locais
+      // pela versão do servidor, inteira, sem mesclar por registro — isso
+      // acontecia ANTES do app.js sequer carregar, ou seja, apagava uma
+      // tarefa/KPI criado aqui mas ainda não enviado, sem chance nenhuma da
+      // mesclagem cuidadosa por id/campo (kvPull, mais abaixo) entrar em ação,
+      // porque o dado já tinha sumido do localStorage antes disso rodar. Um
+      // dispositivo com QUALQUER dado local (mesmo antigo) fica de fora deste
+      // preenchimento — o kvPull() do app.js, chamado logo depois no
+      // DOMContentLoaded, já faz a reconciliação segura registro a registro.
+      for(var k in j.data){
+        try{
+          if(localStorage.getItem(k) !== null) continue; // já tem dado local — deixa o app.js mesclar
+          localStorage.setItem(k, JSON.stringify(j.data[k]));
+        }catch(e){}
       }
     }
   }catch(e){ /* offline: usa o que tiver local */ }
@@ -1678,6 +1672,6 @@ function _validarLogin(){
   </div>
 </div>
 
-<script src="js/app.js?v=99"></script>
+<script src="js/app.js?v=100"></script>
 </body>
 </html>

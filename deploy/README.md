@@ -155,9 +155,23 @@ sudo certbot renew --dry-run
 
 ## 8. Auto-deploy (git pull + restart a cada 5 minutos)
 
-O `deploy/auto-deploy.sh` faz `git fetch`, e só mexe em algo se houver commit novo em
-`origin/main`: `git pull --ff-only` → `uv sync` → `alembic upgrade head` → `systemctl restart`.
+O `deploy/auto-deploy.sh` faz `git fetch` em **`origin/develop`** (não `main` — enquanto o
+projeto estiver em validação, a `main` só recebe merge manual quando algo é considerado
+definitivo), e só mexe em algo se houver commit novo:
+
+1. `git pull --ff-only`
+2. Se o pull trouxe mudança em `backend/`: `uv sync` → `alembic upgrade head` →
+   `systemctl restart claire-project`
+3. Se o pull trouxe mudança só em frontend (`index.html`/`css/`/`js/`/`assets/`): nada a
+   buildar nem reiniciar — o nginx já serve direto do checkout, o próprio `git pull` é o
+   deploy.
+
 Sem commit novo, cada execução é só um `git fetch` (barato) e sai sem logar nada.
+
+> Avaliei usar um webhook do GitHub em vez de polling por cron (deploy quase instantâneo em
+> vez de até 5min de atraso), mas descartei por agora: precisa de permissão de **Admin** no
+> repositório (Settings → Webhooks), que vai além do que temos como colaborador com permissão
+> de escrita. Cron é suficiente e não exige acesso novo.
 
 ### 8.1 Sudoers (restart sem senha)
 

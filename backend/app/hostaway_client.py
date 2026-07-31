@@ -1,9 +1,26 @@
 import math
+import time
 from typing import Any
 
 import httpx
 
-HOSTAWAY_BASE = "https://api.hostaway.com/v1"
+from .config import settings
+
+HOSTAWAY_BASE = settings.hostaway_base_url
+
+# Fallback caso a resposta do Hostaway não traga expires_in: o token dura
+# ~24 meses (confirmado pela própria API), então esse valor só entra em jogo
+# se o campo vier ausente — não é o caminho normal.
+FALLBACK_TOKEN_TTL_SECONDS = 24 * 30 * 24 * 3600
+
+# Margem de segurança: renova um pouco antes do vencimento real, pra nunca
+# usar um token que expirou entre o cache-hit e a chamada de fato à API.
+TOKEN_SAFETY_MARGIN_SECONDS = 24 * 3600
+
+# Cache em memória do processo — o token dura meses, não faz sentido pedir
+# um novo a cada request. Reseta sozinho quando o serviço reinicia (barato:
+# só refaz 1 chamada extra no próximo /reviews).
+_token_cache: dict[str, Any] = {"token": None, "expires_at": 0.0}
 
 # Mapa de canais do Hostaway (channelId -> nome).
 CANAIS = {
@@ -26,6 +43,10 @@ def round2(x: float) -> float:
 
 
 async def get_token(client: httpx.AsyncClient, account_id: str, api_key: str) -> str:
+    now = time.time()
+    if _token_cache["token"] and now < _token_cache["expires_at"]:
+        return _token_cache["token"]
+
     body = {
         "grant_type": "client_credentials",
         "client_id": account_id,
@@ -41,6 +62,10 @@ async def get_token(client: httpx.AsyncClient, account_id: str, api_key: str) ->
     token = d.get("access_token")
     if not token:
         raise RuntimeError(f"Falha ao obter token do Hostaway: {d}")
+
+    ttl = d.get("expires_in") or FALLBACK_TOKEN_TTL_SECONDS
+    _token_cache["token"] = token
+    _token_cache["expires_at"] = now + ttl - TOKEN_SAFETY_MARGIN_SECONDS
     return token
 
 

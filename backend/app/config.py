@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     port: int = 18792
     hostaway_account_id: str = ""
     hostaway_api_key: str = ""
+    hostaway_base_url: str = "https://api.hostaway.com/v1"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

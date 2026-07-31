@@ -1,0 +1,7 @@
+.env
+claire.db
+uploads/*
+!uploads/.gitkeep
+.venv/
+__pycache__/
+*.pyc

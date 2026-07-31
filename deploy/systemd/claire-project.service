@@ -1,0 +1,15 @@
+[Unit]
+Description=Claire — Backend API (FastAPI: claire-dados + proxy Hostaway)
+After=network.target
+
+[Service]
+User=jarvis
+Group=jarvis
+WorkingDirectory=/home/jarvis/apps/claire-project/backend
+ExecStart=/home/jarvis/.local/bin/uv run uvicorn app.main:app --host 127.0.0.1 --port 18792
+Restart=always
+RestartSec=5
+EnvironmentFile=-/home/jarvis/apps/claire-project/backend/.env
+
+[Install]
+WantedBy=multi-user.target

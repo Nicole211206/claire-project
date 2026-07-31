@@ -6,7 +6,7 @@
 
 ## 1. Contexto
 
-A **WeCare Hosting** gerencia imóveis de temporada (Airbnb/Booking). Já existe um painel chamado **Claire** (hospedado em Cloudflare Pages, repositório GitHub `Nicole211206/claire-project`). A Claire tem hoje um módulo de Onboarding, mas vamos **desmembrá-lo num sistema NOVO e 100% independente** — repositório próprio, deploy próprio.
+A **WeCare Hosting** gerencia imóveis de temporada (Airbnb/Booking). Já existe um painel chamado **Claire** (hospedado no VPS Jarvis, `claire.wecarehosting.com.br` — backend FastAPI+SQLite e frontend estático no mesmo domínio; ver `deploy/README.md`. Histórico: já passou por Cloudflare Pages/Workers antes desta migração. Repositório GitHub `Nicole211206/claire-project`). A Claire tem hoje um módulo de Onboarding, mas vamos **desmembrá-lo num sistema NOVO e 100% independente** — repositório próprio, deploy próprio.
 
 **Objetivo:** sistema dedicado ao processo de implementação de novos imóveis (do contrato assinado até o anúncio ativo), com MAIS funcionalidades que o módulo atual da Claire.
 

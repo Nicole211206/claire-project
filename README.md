@@ -11,28 +11,46 @@ claire-project/
 │   └── styles.css      ← Todos os estilos (variáveis, componentes, layout)
 ├── js/
 │   └── app.js          ← Toda a lógica (KPIs, equipe, salários, integrações)
-└── README.md           ← Este arquivo
+├── backend/             ← API FastAPI + SQLite (persistência compartilhada)
+├── deploy/              ← systemd, nginx, cron/sudoers do auto-deploy no VPS
+└── README.md            ← Este arquivo
 ```
+
+## Produção
+
+Site e API rodam juntos no VPS Jarvis, no mesmo domínio:
+**https://claire.wecarehosting.com.br**
+
+nginx serve `index.html`/`css`/`js`/`assets` estaticamente e faz proxy das rotas de API
+(`/load`, `/save`, `/upload`, `/backups`, `/load-backup`, `/health`, `/api/*`, `/hostaway/*`)
+pro backend FastAPI (porta 18792, só localhost). Deploy completo documentado em
+[`deploy/README.md`](deploy/README.md).
+
+> **Histórico:** antes desta migração, o site já foi hospedado no Netlify (deploy manual via
+> drag-and-drop) e os dados já passaram por um Cloudflare Worker + KV (`claire-dados`). Nenhum
+> dos dois está mais em uso — tudo roda no VPS Jarvis hoje.
 
 ## Como rodar localmente
 
-Abra diretamente no navegador — não precisa de servidor:
-```
-Duplo clique em index.html
-```
+O front pode abrir direto no navegador, mas para login/sincronização funcionarem de verdade
+também precisa do backend rodando local:
 
-Ou use um servidor local simples:
 ```bash
-npx serve .
-# ou
-python3 -m http.server 3000
+cd backend
+uv sync
+cp .env.example .env   # ajuste CLAIRE_TOKEN
+uv run alembic upgrade head
+uv run uvicorn app.main:app --reload --port 18792
 ```
 
-## Como publicar (Netlify)
+Frontend (outro terminal, na raiz do repo):
+```bash
+python3 -m http.server 3000
+# ou: npx serve .
+```
 
-1. Acesse https://app.netlify.com/drop
-2. Arraste a **pasta inteira** `claire-project/`
-3. Clique "Rename and deploy"
+Aponte `window.CLAIRE_SYNC` em `index.html` pra `http://localhost:18792` com o mesmo
+`CLAIRE_TOKEN` do `.env` do backend enquanto testar localmente.
 
 ## Configurações (dentro do painel)
 
@@ -44,6 +62,7 @@ Clique no ícone ⚙️ no canto superior direito e configure:
 | Google Drive OAuth Token | Listar, criar e editar arquivos |
 | Google Agenda OAuth Token | Sincronizar eventos da agenda |
 | Gmail OAuth Token | Ler e enviar e-mails |
+| URL do Worker Hostaway | Proxy de avaliações/reservas (hoje: `https://claire.wecarehosting.com.br/hostaway`) |
 
 ### Como gerar tokens Google (OAuth 2.0 Playground)
 

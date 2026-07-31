@@ -155,9 +155,12 @@ sudo certbot renew --dry-run
 
 ## 8. Auto-deploy (git pull + restart a cada 5 minutos)
 
-O `deploy/auto-deploy.sh` faz `git fetch` em **`origin/develop`** (não `main` — enquanto o
-projeto estiver em validação, a `main` só recebe merge manual quando algo é considerado
-definitivo), e só mexe em algo se houver commit novo:
+O `deploy/auto-deploy.sh` faz `git fetch` em **`origin/main`** — `main` é o que roda de
+verdade (Nicole e Felipe dependem disso pro trabalho, não é mais um ambiente de teste).
+`develop` é onde qualquer mudança é testada/validada antes; só vai pra `main` (merge
+deliberado, não automático) quando estiver confirmada. O cron nunca acompanha `develop`
+diretamente — isso evitaria justamente a separação entre "testando" e "no ar". Só mexe em
+algo se houver commit novo em `main`:
 
 1. `git pull --ff-only`
 2. Se o pull trouxe mudança em `backend/`: `uv sync` → `alembic upgrade head` →

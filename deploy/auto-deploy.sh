@@ -14,7 +14,7 @@ set -euo pipefail
 REPO_DIR="/home/jarvis/apps/claire-project"
 BACKEND_DIR="$REPO_DIR/backend"
 SERVICE_NAME="claire-project"
-BRANCH="develop"
+BRANCH="main"
 UV_BIN="/home/jarvis/.local/bin/uv"
 LOG_FILE="$REPO_DIR/deploy/auto-deploy.log"
 LOCK_FILE="/tmp/claire-project-autodeploy.lock"

@@ -1,3 +1,4 @@
+# Config das variáveis de ambiente do backend (lidas de .env).
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 

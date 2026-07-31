@@ -659,4 +659,3 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; margin:
   25%{ transform:translateX(-6px); }
   75%{ transform:translateX(6px); }
 }
-/* teste: comentario inofensivo (valida caminho frontend-only do auto-deploy) */

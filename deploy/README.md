@@ -1,13 +1,16 @@
 # Deploy — Claire Project (Jarvis VPS)
 
 Segue o mesmo padrão do [wecare-onboarding](../../wecare-onboarding/deploy/README.md): Ubuntu no
-VPS Jarvis, backend FastAPI atrás de nginx, systemd, certbot. Diferença: aqui não tem frontend
-estático pra servir — `index.html`/`js/app.js`/`css/` são publicados no **Netlify** (ver
-`netlify.toml` no repo), então este VPS só roda a API (claire-dados + proxy Hostaway).
+VPS Jarvis, backend FastAPI atrás de nginx, systemd, certbot. Frontend (`index.html`/`js/`/`css/`)
+e backend vivem no mesmo domínio e no mesmo checkout do repositório neste VPS — nginx serve os
+arquivos estáticos direto e faz proxy só das rotas de API pro backend. (Versão anterior deste
+deploy hospedava o frontend no Netlify, com o VPS só respondendo pela API; migrado para cá — ver
+`netlify.toml` no repo como histórico, não é mais o caminho usado em produção.)
 
-**Domínio:** `claire.wecarehosting.com.br` (placeholder — ainda a definir, troque nos arquivos abaixo quando decidir)
+**Domínio:** `claire.wecarehosting.com.br` (DNS já apontado pro VPS, certificado já emitido)
 **Backend:** porta `18792` (FastAPI + uvicorn, só localhost — nginx é quem expõe pra fora)
-**Frontend:** Netlify, fora deste VPS (nada a fazer aqui)
+**Frontend:** servido pelo próprio nginx deste VPS, a partir da raiz do checkout (`index.html`,
+`css/`, `js/`, `assets/`) — sem Netlify.
 
 ---
 
@@ -68,28 +71,29 @@ uv run alembic upgrade head
 
 ---
 
-## 4. Frontend (Netlify — fora deste VPS)
+## 4. Frontend (servido pelo próprio nginx deste VPS)
 
-Nada pra fazer no servidor: `index.html`/`js/app.js`/`css/` são publicados direto no Netlify a
-partir deste mesmo repositório (ver `netlify.toml`).
+Nada a instalar: os mesmos arquivos do checkout (`index.html`, `css/`, `js/`, `assets/`) já ficam
+na raiz do repositório clonado no passo 2 — o nginx (passo 5) aponta `root` direto pra lá.
 
-Antes de publicar, confirme que apontam pro domínio de produção (não pro `localhost:18792`
-usado em dev):
+Confirme que `index.html` aponta pro domínio de produção (não pro Cloudflare Worker antigo nem
+pro `localhost:18792` usado em dev):
 
 ```bash
-# window.CLAIRE_SYNC.url e window.CLAIRE_HOSTAWAY_URL (index.html)
-grep -n "CLAIRE_SYNC\|CLAIRE_HOSTAWAY_URL" index.html
+grep -n "CLAIRE_SYNC" index.html
 ```
 
-Troque `http://localhost:18792` por `https://claire.wecarehosting.com.br` (e
-`http://localhost:18792/hostaway` por `https://claire.wecarehosting.com.br/hostaway`) antes do
-deploy no Netlify.
+Deve ser `window.CLAIRE_SYNC = { url: 'https://claire.wecarehosting.com.br', token: '<CLAIRE_TOKEN-igual-ao-.env-do-backend>' };`.
+Se quiser usar o proxy Hostaway pelas Configurações da própria Claire, o campo "URL do Worker
+Hostaway" aceita `https://claire.wecarehosting.com.br/hostaway`.
 
 ---
 
 ## 5. Nginx
 
 ```bash
+sudo cp /home/jarvis/apps/claire-project/deploy/nginx/proxy_params_claire /etc/nginx/proxy_params_claire
+
 sudo cp /home/jarvis/apps/claire-project/deploy/nginx/claire.wecarehosting.com.br.conf \
   /etc/nginx/sites-available/claire.wecarehosting.com.br
 
@@ -99,6 +103,16 @@ sudo ln -sf /etc/nginx/sites-available/claire.wecarehosting.com.br \
 sudo nginx -t
 sudo systemctl reload nginx
 ```
+
+O `root` do bloco nginx é a raiz do checkout (`/home/jarvis/apps/claire-project` — onde vive o
+`index.html`), com rotas específicas (`/load`, `/save`, `/upload`, `/backups`, `/load-backup`,
+`/health`, `/files/`, `/api/`, `/hostaway/`) proxyando pro backend e um catch-all servindo o
+frontend estático.
+
+> **Permissão do diretório home:** o nginx roda como `www-data` e precisa conseguir atravessar
+> `/home/jarvis` pra chegar nos arquivos estáticos. Se `/home/jarvis` estiver com permissão `750`
+> (padrão do Ubuntu), rode `sudo chmod o+x /home/jarvis` — isso libera só trânsito (não lista nem
+> lê o conteúdo do diretório), não expõe nada além do necessário.
 
 Confirme que o DNS de `claire.wecarehosting.com.br` já aponta pro IP do VPS antes do certbot.
 
@@ -195,9 +209,12 @@ sudo systemctl restart claire-project
 
 - [ ] `.env` do backend preenchido (`CLAIRE_TOKEN` igual ao do frontend, credenciais do Hostaway)
 - [ ] `alembic upgrade head` executado
-- [ ] `index.html` (Netlify) apontando pro domínio de produção, não `localhost`
+- [ ] `index.html` apontando pro domínio de produção (`claire.wecarehosting.com.br`), não pro
+      Cloudflare Worker antigo nem pro `localhost:18792` de dev
 - [ ] Serviço systemd `claire-project` ativo na porta 18792 (só localhost)
-- [ ] Nginx proxyando todas as rotas da API pra 18792
+- [ ] `proxy_params_claire` copiado pra `/etc/nginx/`
+- [ ] `/home/jarvis` com permissão de trânsito (`o+x`) pro nginx conseguir servir os estáticos
+- [ ] Nginx servindo o frontend estático na raiz e proxyando as rotas de API pra 18792
 - [ ] Certbot emitiu SSL e HTTPS funcionando
 - [ ] Sudoers + cron do `auto-deploy.sh` instalados e `deploy/auto-deploy.log` sendo criado
-- [ ] Domínio definitivo escolhido e DNS apontado (o usado aqui é só placeholder)
+- [ ] Domínio já definido e DNS apontado (`claire.wecarehosting.com.br`)

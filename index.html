@@ -56,22 +56,18 @@ window._claireKVPromise = (async function(){
 })();
 
 // LOGIN MULTIUSUÁRIO — independente do app.js
-// Seed do admin padrão (só na primeira vez, se não houver nada local nem no KV)
+// Seed do admin padrão (só na primeira vez, se não houver nenhum nx_users
+// local nem no KV — bootstrap de instalação nova). Antes também recriava
+// Gabriela/Felipe/Nilson com senha fixa em TODA tentativa de login (sucesso
+// ou erro), mesmo que a conta tivesse sido removida de propósito — isso foi
+// removido: cada pessoa agora só existe se for cadastrada pelo painel.
 function _seedAdmin(){
   try{
     var raw=localStorage.getItem('nx_users');
-    var users=[];
-    try{ users=JSON.parse(raw||'[]'); }catch(e){ users=[]; }
     if(!raw){
-      users=[{email:'nicole@wecarehosting.com.br',senha:'Nick@2026',nome:'Nicole',perfil:'admin',modulos:[]}];
+      var users=[{email:'nicole@wecarehosting.com.br',senha:'TROQUE-ESTA-SENHA',nome:'Nicole',perfil:'admin',modulos:[]}];
+      localStorage.setItem('nx_users', JSON.stringify(users));
     }
-    var seeds=[
-      {email:'gabriela@wecarehosting.com.br',senha:'Gabi@2026',nome:'Gabriela',perfil:'coordenacao',modulos:['salary','team'],attId:'',attsPermitidos:[]},
-      {email:'felipe@wecarehosting.com.br',senha:'Felipe@2026',nome:'Felipe',perfil:'coordenacao',modulos:['salary','team'],attId:'',attsPermitidos:[]},
-      {email:'nilson@wecarehosting.com.br',senha:'Nilson@2026',nome:'Nilson',perfil:'coordenacao',modulos:['salary'],attId:'',attsPermitidos:[]},
-    ];
-    seeds.forEach(function(s){ if(!users.find(function(u){ return u.email===s.email; })) users.push(s); });
-    localStorage.setItem('nx_users', JSON.stringify(users));
   }catch(e){}
 }
 

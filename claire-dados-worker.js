@@ -177,7 +177,7 @@ export default {
             //     _ts antigo) e NÃO consegue mais reverter o que outro editou depois.
             //   • presente só de um lado → é mantido (união) — nada é apagado.
             // (Deletes só se propagam via nx_tombstones, tratado logo abaixo.)
-            const MERGE_POR_ID = ['nx_manutencoes','nx_tasks','nx_plantao','nx_projetos','nx_compras','nx_extras','nx_conquistas','nx_despesas','nx_anotacoes_controle','nx_superhost','nx_cancelamentos','nx_imoveis'];
+            const MERGE_POR_ID = ['nx_manutencoes','nx_tasks','nx_plantao','nx_projetos','nx_compras','nx_extras','nx_conquistas','nx_despesas','nx_anotacoes_controle','nx_superhost','nx_cancelamentos','nx_imoveis','nx_pagamentos_fin','nx_relatorios_fin','nx_validacoes_fin'];
             const _tsNum = o => Number(o && o._ts || 0);
             const _temId = a => Array.isArray(a) && a.every(o => o && typeof o === 'object' && o.id !== undefined && o.id !== null);
             for (const k of MERGE_POR_ID) {

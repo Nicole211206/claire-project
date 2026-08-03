@@ -217,10 +217,10 @@ let tasks=[
 ];
 
 let ATTS=[
-  {id:'patricia',name:'Patrícia', av:'av-rose', ini:'P',  rate:17, escala:'12×36', note:'',resp:'',respWeekly:[null,null,null,null],respMes:null,qtdRespWeekly:[null,null,null,null],qtdRespMes:null,demands:[]},
-  {id:'sara',    name:'Sara',     av:'av-lav',  ini:'S',  rate:14, escala:'12×36', note:'',resp:'',respWeekly:[null,null,null,null],respMes:null,qtdRespWeekly:[null,null,null,null],qtdRespMes:null,demands:[]},
-  {id:'lisarb',  name:'Lisarb',   av:'av-sage', ini:'Li', rate:14, escala:'12×36', note:'',resp:'',respWeekly:[null,null,null,null],respMes:null,qtdRespWeekly:[null,null,null,null],qtdRespMes:null,demands:[]},
-  {id:'lais',    name:'Laís',     av:'av-peach',ini:'La', rate:14, escala:'12×36', note:'',resp:'',respWeekly:[null,null,null,null],respMes:null,qtdRespWeekly:[null,null,null,null],qtdRespMes:null,demands:[]},
+  {id:'patricia',name:'Patrícia', av:'av-rose', ini:'P',  rate:17, escala:'12×36', note:'',resp:'',respWeekly:[null,null,null,null],respMes:null,qtdRespMes:null,demands:[]},
+  {id:'sara',    name:'Sara',     av:'av-lav',  ini:'S',  rate:14, escala:'12×36', note:'',resp:'',respWeekly:[null,null,null,null],respMes:null,qtdRespMes:null,demands:[]},
+  {id:'lisarb',  name:'Lisarb',   av:'av-sage', ini:'Li', rate:14, escala:'12×36', note:'',resp:'',respWeekly:[null,null,null,null],respMes:null,qtdRespMes:null,demands:[]},
+  {id:'lais',    name:'Laís',     av:'av-peach',ini:'La', rate:14, escala:'12×36', note:'',resp:'',respWeekly:[null,null,null,null],respMes:null,qtdRespMes:null,demands:[]},
 ];
 let nextAttId = 5;
 
@@ -553,7 +553,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   }, 2000);
   // guarda o estado atual como "já enviado" pra não regravar à toa logo no início
   try{ _kvLastPushed=_kvBuildBlob(); }catch(e){}
-  ATTS.forEach(a=>{if(!a.respWeekly)a.respWeekly=[null,null,null,null];if(a.respMes===undefined)a.respMes=null;if(!a.qtdRespWeekly)a.qtdRespWeekly=[null,null,null,null];if(a.qtdRespMes===undefined)a.qtdRespMes=null;});
+  ATTS.forEach(a=>{if(!a.respWeekly)a.respWeekly=[null,null,null,null];if(a.respMes===undefined)a.respMes=null;if(a.qtdRespMes===undefined)a.qtdRespMes=null;});
   verificarTarefasDespesas();
   greet();
   renderOvAgenda();
@@ -824,14 +824,18 @@ function renderKPIs(){
         (pct2!==null?'<div style="font-size:12px;font-weight:700;color:var(--sage);margin-top:2px;">Conversão: '+pct2+'%</div>':'')+'</div>';
     } else if(k.id==='tr'){
       const sub=_ksv().tr||{};
-      const atts=ATTS.map(a=>a.id);
-      const attLabels=ATTS.map(a=>a.name);
-      const vals=atts.map(a=>sub[a]!==undefined&&sub[a]!==''?+sub[a]:null);
+      const vals=ATTS.map(a=>sub[a.id]!==undefined&&sub[a.id]!==''?+sub[a.id]:null);
       const filled=vals.filter(v=>v!==null);
       const avg2=filled.length>0?(filled.reduce((a,b)=>a+b,0)/filled.length).toFixed(1):null;
+      // Qtd. de respostas por atendente vive aqui só por conveniência de
+      // lançamento (junto do Tempo de Resposta, no dia a dia) — não entra
+      // no cálculo do KPI/score, é só informativo (ver renderPerformance).
+      const qtdVals=ATTS.map(a=>a.qtdRespMes!=null?+a.qtdRespMes:null).filter(v=>v!==null);
+      const qtdAvg=qtdVals.length>0?(qtdVals.reduce((a,b)=>a+b,0)/qtdVals.length).toFixed(1):null;
       inputHTML='<div style="display:grid;gap:6px;">'+
-        atts.map((a,i)=>'<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:80px;">'+attLabels[i]+':</label><input type="number" step="0.1" min="0" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub[a]||'')+'" placeholder="min" onchange="setKPISub(\'tr\',\''+a+'\',this.value)"></div>').join('')+
-        (avg2!==null?'<div style="font-size:12px;font-weight:700;color:var(--sage);margin-top:2px;">Média: '+avg2+' min</div>':'')+'</div>';
+        ATTS.map(a=>'<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:80px;">'+a.name+':</label><input type="number" step="0.1" min="0" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub[a.id]||'')+'" placeholder="min" onchange="setKPISub(\'tr\',\''+a.id+'\',this.value)"><span style="font-size:10px;color:var(--text3);">min</span><input type="number" step="1" min="0" class="form-input" style="width:80px;padding:5px 8px;margin-left:10px;" value="'+(a.qtdRespMes!=null?a.qtdRespMes:'')+'" placeholder="qtd." onchange="setQtdRespMes(\''+a.id+'\',this.value)"><span style="font-size:10px;color:var(--text3);">respostas</span></div>').join('')+
+        (avg2!==null?'<div style="font-size:12px;font-weight:700;color:var(--sage);margin-top:2px;">Média de tempo: '+avg2+' min</div>':'')+
+        (qtdAvg!==null?'<div style="font-size:12px;font-weight:700;color:var(--sky);margin-top:2px;">Média de respostas: '+qtdAvg+' <span style="font-weight:400;color:var(--text3);">(informativo, não entra no cálculo do KPI)</span></div>':'')+'</div>';
     } else if(k.id==='ob'){
       inputHTML='<div style="margin-top:10px;"><div style="font-size:11px;color:var(--text3);margin-bottom:6px;text-transform:uppercase;font-weight:600;">Tempo de Ativação do Anúncio — Contrato → Ativo</div>'+
         '<div id="ob-onboarding-list" style="min-height:32px;"><div style="font-size:12px;color:var(--text3);text-align:center;padding:8px;">Carregando dados de onboarding…</div></div></div>';
@@ -1044,6 +1048,16 @@ function setKPISub(id,subKey,value){
     if(vals.length>0){_kv().tr=(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1);}
   }
   renderKPIs();if(typeof saveAll==='function')saveAll();
+}
+
+// Quantidade de respostas por atendente — só informativo (Performance), não
+// participa do cálculo do KPI "Tempo de Resposta" nem do score global.
+function setQtdRespMes(attId,value){
+  const a=ATTS.find(x=>x.id===attId); if(!a) return;
+  a.qtdRespMes=value===''?null:parseFloat(value);
+  renderKPIs();
+  if(typeof renderPerformance==='function' && document.getElementById('performance-body')) renderPerformance();
+  if(typeof saveAll==='function')saveAll();
 }
 
 function setKPIRcSub(item,campo,valor){
@@ -1939,7 +1953,6 @@ function abrirPerfilAtt(id) {
   document.getElementById('eap-rate').value = a.rate;
   document.getElementById('eap-escala').value = a.escala || '12×36';
   [0,1,2,3].forEach(i => { document.getElementById('eap-resp'+i).value = (a.respWeekly&&a.respWeekly[i]!=null) ? a.respWeekly[i] : ''; });
-  [0,1,2,3].forEach(i => { document.getElementById('eap-qtd'+i).value = (a.qtdRespWeekly&&a.qtdRespWeekly[i]!=null) ? a.qtdRespWeekly[i] : ''; });
   document.getElementById('modal-editar-att-perfil').classList.add('open');
 }
 function salvarPerfilAtt() {
@@ -1954,13 +1967,6 @@ function salvarPerfilAtt() {
   });
   const vals = a.respWeekly.filter(x => x !== null);
   a.respMes = vals.length > 0 ? vals.reduce((s,x) => s+x, 0) / vals.length : null;
-  if (!a.qtdRespWeekly) a.qtdRespWeekly = [null,null,null,null];
-  [0,1,2,3].forEach(i => {
-    const v = document.getElementById('eap-qtd'+i).value;
-    a.qtdRespWeekly[i] = v === '' ? null : parseFloat(v);
-  });
-  const qtdVals = a.qtdRespWeekly.filter(x => x !== null);
-  a.qtdRespMes = qtdVals.length > 0 ? qtdVals.reduce((s,x) => s+x, 0) / qtdVals.length : null;
   if (!_ksv().tr) _ksv().tr = {};
   _ksv().tr[a.id] = a.respMes !== null ? a.respMes.toFixed(1) : '';
   const trVals = ATTS.map(att => _ksv().tr && _ksv().tr[att.id] ? parseFloat(_ksv().tr[att.id]) : null).filter(x => x !== null);
@@ -3503,7 +3509,7 @@ function adicionarMembro(){
     av:cores[nextAttId%cores.length],
     ini:nome.trim().charAt(0).toUpperCase(),
     rate:14,escala:'12×36',note:'',resp:'',
-    respWeekly:[null,null,null,null],respMes:null,qtdRespWeekly:[null,null,null,null],qtdRespMes:null,demands:[]
+    respWeekly:[null,null,null,null],respMes:null,qtdRespMes:null,demands:[]
   });
   nextAttId++;
   if(typeof saveAll==='function')saveAll();

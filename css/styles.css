@@ -33,9 +33,6 @@
   --gold:        #c9a84c;
   --gold-light:  #fdf8ec;
   --gold-mid:    #f0dfa0;
-  --teal:        #4f9b90;
-  --teal-light:  #eaf6f3;
-  --teal-mid:    #b9ded7;
 
   /* Bandeira colors */
   --elite:       #b084e0;
@@ -299,7 +296,6 @@ body {
 .metric-icon.lav { background:var(--lav-light); color:var(--lavender); }
 .metric-icon.sky { background:var(--sky-light); color:var(--sky); }
 .metric-icon.gold { background:var(--gold-light); color:var(--gold); }
-.metric-icon.teal { background:var(--teal-light); color:var(--teal); }
 
 .metric-value { font-family:var(--font-display); font-size:28px; font-weight:700; line-height:1; }
 .metric-label { font-size:11px; color:var(--text3); margin-top:4px; text-transform:uppercase; letter-spacing:0.5px; }
@@ -354,7 +350,6 @@ body {
 .kpi-fill.lav  { background:var(--lavender); }
 .kpi-fill.sky  { background:var(--sky); }
 .kpi-fill.gold { background:var(--gold); }
-.kpi-fill.teal { background:var(--teal); }
 
 /* ── FORM ── */
 .form-group { margin-bottom:13px; }

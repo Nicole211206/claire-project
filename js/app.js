@@ -12,13 +12,12 @@ const NIVEIS=[
 // interpola linearmente entre esses pontos pra chegar no % de atingimento.
 // Configurável pela tela "Configurar KPIs" — por isso é `let`, não `const`.
 let KPI_DEFS=[
-  {id:'av',   label:'Avaliação dos Hóspedes', peso:0.20, unit:'estrelas', meta:4.8, limVermelha:4.7, limAzul:4.9, limElite:5.0, menorMelhor:false, color:'rose',  icon:'fa-star',        hint:'Média Airbnb + Booking'},
+  {id:'av',   label:'Avaliação dos Hóspedes', peso:0.25, unit:'estrelas', meta:4.8, limVermelha:4.7, limAzul:4.9, limElite:5.0, menorMelhor:false, color:'rose',  icon:'fa-star',        hint:'Média Airbnb + Booking'},
   {id:'tr',   label:'Tempo de Resposta',      peso:0.15, unit:'min',      meta:5,   limVermelha:6,   limAzul:4,   limElite:3,   menorMelhor:true,  color:'lav',   icon:'fa-clock',       hint:'Média da equipe (Conduit)'},
-  {id:'ob',   label:'Tempo de Onboarding',    peso:0.15, unit:'dias',     meta:10,  limVermelha:12,  limAzul:9,   limElite:8,   menorMelhor:true,  color:'sage',  icon:'fa-house-flag',  hint:'Assinatura → Anúncio ativo'},
-  {id:'cv',   label:'Conversão de Avaliações',peso:0.10, unit:'%',        meta:60,  limVermelha:50,  limAzul:70,  limElite:80,  menorMelhor:false, color:'peach', icon:'fa-comments',    hint:'% reviews/checkouts (Hostaway)'},
+  {id:'ob',   label:'Tempo de Onboarding',    peso:0.20, unit:'dias',     meta:10,  limVermelha:12,  limAzul:9,   limElite:8,   menorMelhor:true,  color:'sage',  icon:'fa-house-flag',  hint:'Assinatura → Anúncio ativo'},
+  {id:'cv',   label:'Conversão de Avaliações',peso:0.15, unit:'%',        meta:60,  limVermelha:50,  limAzul:70,  limElite:80,  menorMelhor:false, color:'peach', icon:'fa-comments',    hint:'% reviews/checkouts (Hostaway)'},
   {id:'rc',   label:'Redução de Custos',      peso:0.15, unit:'%',        meta:10,  limVermelha:0,   limAzul:20,  limElite:30,  menorMelhor:false, color:'sky',   icon:'fa-piggy-bank',  hint:'% economia gerada'},
   {id:'av360',label:'Avaliação 360',          peso:0.10, unit:'estrelas', meta:4.8, limVermelha:4.7, limAzul:4.9, limElite:4.9, menorMelhor:false, color:'gold',  icon:'fa-user-check',  hint:'Formulário de desempenho'},
-  {id:'fin',  label:'Índice Financeiro',      peso:0.15, unit:'%',        meta:95,  limVermelha:85,  limAzul:98,  limElite:100, menorMelhor:false, color:'teal',  icon:'fa-money-check-dollar', hint:'Pontualidade + Precisão + Eficiência'},
 ];
 function kpiScoreGeneric(v,k){
   if(v==null||v==='')return null;
@@ -39,21 +38,6 @@ function kpiScoreGeneric(v,k){
 }
 function _wireKpiCalc(arr){ arr.forEach(k=>{ k.calc=function(v){return kpiScoreGeneric(v,k);}; }); return arr; }
 _wireKpiCalc(KPI_DEFS);
-
-// Migração 1x: quem já tinha KPI_DEFS salvo (nx_kpidefs) antes do KPI "Índice
-// Financeiro" existir fica travado nos 6 KPIs antigos — o array default daqui
-// do código só vale pra instalação nova, sem nada em storage ainda. Roda uma
-// única vez (idempotente: se 'fin' já existe, não faz nada) e aplica o
-// reajuste de pesos pedido junto com a criação do novo KPI (25/20/15→20/15/10).
-function _migrarKpiIndiceFinanceiro(){
-  if(KPI_DEFS.some(k=>k.id==='fin')) return;
-  const av=KPI_DEFS.find(k=>k.id==='av'); if(av) av.peso=0.20;
-  const ob=KPI_DEFS.find(k=>k.id==='ob'); if(ob) ob.peso=0.15;
-  const cv=KPI_DEFS.find(k=>k.id==='cv'); if(cv) cv.peso=0.10;
-  KPI_DEFS.push({id:'fin', label:'Índice Financeiro', peso:0.15, unit:'%', meta:95, limVermelha:85, limAzul:98, limElite:100, menorMelhor:false, color:'teal', icon:'fa-money-check-dollar', hint:'Pontualidade + Precisão + Eficiência'});
-  _wireKpiCalc(KPI_DEFS);
-  if(typeof saveAll==='function') saveAll();
-}
 
 // Itens da tabela de "Redução de Custos" (Limpeza, Manutenção, ...). Cada um
 // tem seu próprio limiar de verde/vermelho pra colorir a % de economia,
@@ -83,7 +67,6 @@ const KPI_TAG_OPTIONS=[
   {id:'cv',   label:'Conversão de Avaliações', color:'#e0a882'},
   {id:'rc',   label:'Redução de Custos',       color:'#89b4d4'},
   {id:'av360',label:'Avaliação 360',           color:'#c9a84c'},
-  {id:'fin',  label:'Índice Financeiro',       color:'#4f9b90'},
   {id:'nao_relacionado', label:'NÃO RELACIONADO', color:'#d4726a'},
 ];
 function getKpiTagInfo(id){ return KPI_TAG_OPTIONS.find(o=>o.id===id) || KPI_TAG_OPTIONS[KPI_TAG_OPTIONS.length-1]; }
@@ -101,7 +84,6 @@ function _ksv(){if(!kpiSubVals[kpiPeriodo])kpiSubVals[kpiPeriodo]={};return kpiS
 function setKpiPeriodo(mes){
   kpiPeriodo=mes;
   _syncObKpiDoOnboarding();_syncSetupKpiDoOnboarding();
-  if(typeof sincronizarFinanceiroKPI==='function') sincronizarFinanceiroKPI();
   // KPIs e Performance compartilham o mesmo mês de referência — mudar em
   // qualquer um dos dois seletores tem que refletir no outro e recalcular as
   // duas telas (cancelamentos/extras do resumo de Performance dependem disso).
@@ -601,7 +583,6 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   sincronizarExtrasKPI();
   renderManutencaoKanban();
   sincronizarManutencaoKPI();
-  sincronizarFinanceiroKPI();
   const recEl=document.getElementById('d-recorrente');
   if(recEl)recEl.addEventListener('change',function(){document.getElementById('d-recorrencia').style.display=this.checked?'':'none';});
   carregarUsuarios();
@@ -635,14 +616,7 @@ function showPanel(id,btn){
   if(id==='equipe'){ setupEquipeTabs(); }
   if(id==='kpis'){renderKPIs();}
   if(id==='extras'){renderExtras();}
-  if(id==='controle'){
-    verificarTarefasDespesas();
-    if(_controleTab==='anotacoes') renderAnotacoesControle();
-    else if(_controleTab==='pagamentos') renderPagamentosFinanceiro();
-    else if(_controleTab==='relatorios') renderRelatoriosFinanceiro();
-    else if(_controleTab==='validacoes') renderValidacoesFinanceiro();
-    else renderDespesasFixas();
-  }
+  if(id==='controle'){ verificarTarefasDespesas(); if(typeof _controleTab!=='undefined'&&_controleTab==='anotacoes') renderAnotacoesControle(); else renderDespesasFixas(); }
   if(id==='legado'){ if(typeof renderLegado==='function') renderLegado(); }
   if(id==='manual'){renderManual();}
 }
@@ -923,30 +897,6 @@ function renderKPIs(){
         '<div style="text-align:center;font-size:14px;font-weight:700;color:'+(med?parseFloat(med)>=10?'var(--sage)':'var(--amarela)':'var(--text3)')+';">'+(med?med+'%':'—')+'</div>'+
         '</div>'+
         '</div>';
-    } else if(k.id==='fin'){
-      const mesF=kpiPeriodo;
-      const pagMes=pagamentosFinanceiro.filter(p=>p.mesVigente===mesF);
-      const pctPag=pagMes.length>0?((pagMes.filter(_pagamentoFinPontual).length/pagMes.length)*100).toFixed(1):null;
-      const relMes=relatoriosFinanceiro.filter(r=>r.mesVigente===mesF);
-      const totEnv=relMes.reduce((s,r)=>s+(+r.enviados||0),0), totErr=relMes.reduce((s,r)=>s+(+r.comErro||0),0);
-      const pctRel=totEnv>0?(((totEnv-totErr)/totEnv)*100).toFixed(1):null;
-      const valMes=validacoesFinanceiro.filter(v=>v.mesVigente===mesF);
-      const pctVal=valMes.length>0?((valMes.filter(_validacaoFinNoPrazo).length/valMes.length)*100).toFixed(1):null;
-      const miniItens=[
-        {label:'Pontualidade', pct:pctPag, hint:'Pagamentos'},
-        {label:'Precisão',     pct:pctRel, hint:'Relatórios'},
-        {label:'Eficiência',   pct:pctVal, hint:'Validações'},
-      ];
-      inputHTML='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px;">'+
-        miniItens.map(it=>{
-          const cor=it.pct===null?'var(--text3)':(+it.pct>=95?'var(--sage)':+it.pct>=85?'var(--amarela)':'var(--vermelha)');
-          return '<div style="text-align:center;background:var(--teal-light);border-radius:10px;padding:8px 4px;">'+
-            '<div style="font-size:16px;font-weight:700;color:'+cor+';">'+(it.pct!==null?it.pct+'%':'—')+'</div>'+
-            '<div style="font-size:10.5px;font-weight:600;color:var(--text2);">'+it.label+'</div>'+
-            '<div style="font-size:9.5px;color:var(--text3);">'+it.hint+'</div></div>';
-        }).join('')+
-        '</div>'+
-        '<div style="font-size:11px;color:var(--text3);margin-top:8px;">Gerencie os registros na aba <b>Controle → Pagamentos / Relatórios / Validações</b>.</div>';
     } else {
       inputHTML='<div style="display:flex;align-items:center;gap:8px;">'+
         '<label style="font-size:12px;color:var(--text2);white-space:nowrap;">Valor ('+k.unit+'):</label>'+
@@ -3968,15 +3918,12 @@ const _PERSIST_KEYS = {
   nx_conquistas:()=>conquistas,
   nx_despesas:()=>despesasFixas,
   nx_anotacoes_controle:()=>anotacoesControle,
-  nx_pagamentos_fin:()=>pagamentosFinanceiro,
-  nx_relatorios_fin:()=>relatoriosFinanceiro,
-  nx_validacoes_fin:()=>validacoesFinanceiro,
   nx_tombstones:()=>tombstones
 };
 
 // Listas com id próprio que o servidor mescla registro a registro (id + _ts).
 // DEVE espelhar a MERGE_POR_ID do worker.
-const _MERGE_POR_ID_KEYS=['nx_manutencoes','nx_tasks','nx_plantao','nx_projetos','nx_compras','nx_extras','nx_conquistas','nx_despesas','nx_anotacoes_controle','nx_superhost','nx_cancelamentos','nx_imoveis','nx_pagamentos_fin','nx_relatorios_fin','nx_validacoes_fin'];
+const _MERGE_POR_ID_KEYS=['nx_manutencoes','nx_tasks','nx_plantao','nx_projetos','nx_compras','nx_extras','nx_conquistas','nx_despesas','nx_anotacoes_controle','nx_superhost','nx_cancelamentos','nx_imoveis'];
 function _semTs(o){ const c=Object.assign({},o); delete c._ts; return JSON.stringify(c); }
 // Antes de salvar: carimba _ts nos registros novos/alterados e cria tombstone
 // para os que foram apagados. Assim o servidor sabe qual versão é a mais recente
@@ -4636,7 +4583,6 @@ function loadAll(){
       else kpiSubVals=v;
     }
     v=g('nx_kpidefs');    if(Array.isArray(v)&&v.length) KPI_DEFS=_wireKpiCalc(v);
-    _migrarKpiIndiceFinanceiro();
     v=g('nx_taskcats');   if(Array.isArray(v)&&v.length) taskCats=v;
     v=g('nx_catalog');    if(Array.isArray(v)&&v.length) imovelsCatalog=v;
     v=g('nx_precos');     if(v&&typeof v==='object') PRECOS_ITENS=v;
@@ -4660,9 +4606,6 @@ function loadAll(){
     v=g('nx_conquistas'); if(Array.isArray(v)) conquistas=v;
     v=g('nx_despesas'); if(Array.isArray(v)) despesasFixas=v;
     v=g('nx_anotacoes_controle'); if(Array.isArray(v)) anotacoesControle=v;
-    v=g('nx_pagamentos_fin'); if(Array.isArray(v)) pagamentosFinanceiro=v;
-    v=g('nx_relatorios_fin'); if(Array.isArray(v)) relatoriosFinanceiro=v;
-    v=g('nx_validacoes_fin'); if(Array.isArray(v)) validacoesFinanceiro=v;
     v=g('nx_tombstones'); if(Array.isArray(v)) tombstones=v;
     // Migração: atendentes só veem o próprio attId (sem attsPermitidos).
     _migAtendentesSemPerms();
@@ -7518,7 +7461,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 104;
+const APP_VERSION = 103;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;
@@ -7642,28 +7585,19 @@ function setupEquipeTabs(){
 // ═══════════════════ CONTROLE (Despesas · Anotações) ═══════════════════
 let despesasFixas = [];
 let anotacoesControle = [];
-let pagamentosFinanceiro = [];
-let relatoriosFinanceiro = [];
-let validacoesFinanceiro = [];
 let _controleTab = 'despesas';
 let _despesaEditId = null;
 let _anotacaoEditId = null;
-let _pagamentoFinEditId = null;
-let _relatorioFinEditId = null;
-let _validacaoFinEditId = null;
 
 function switchControleTab(tab, btn){
   _controleTab = tab;
-  ['despesas','anotacoes','pagamentos','relatorios','validacoes'].forEach(function(t){
+  ['despesas','anotacoes'].forEach(function(t){
     const el=document.getElementById('controle-content-'+t); if(el) el.style.display=t===tab?'':'none';
     const act=document.getElementById('controle-actions-'+t); if(act) act.style.display=t===tab?'flex':'none';
   });
   document.querySelectorAll('.controle-tab-btn').forEach(function(b){ b.classList.remove('active'); });
   if(btn) btn.classList.add('active');
   if(tab==='anotacoes') renderAnotacoesControle();
-  else if(tab==='pagamentos') renderPagamentosFinanceiro();
-  else if(tab==='relatorios') renderRelatoriosFinanceiro();
-  else if(tab==='validacoes') renderValidacoesFinanceiro();
   else renderDespesasFixas();
 }
 
@@ -7816,211 +7750,6 @@ function renderAnotacoesControle(){
       (data?'<div style="font-size:10.5px;color:var(--text3);margin-top:8px;">Atualizado em '+data+'</div>':'')+
       '</div></div>';
   }).join('');
-}
-
-// ── Índice Financeiro: Submódulo A — Pagamentos (Pontualidade) ──
-// 0 dias de atraso = pontual; qualquer atraso = não pontual (comparação de datas YYYY-MM-DD).
-function abrirNovoPagamentoFin(){
-  _pagamentoFinEditId=null;
-  document.getElementById('pgf-modal-title').textContent='Novo Pagamento';
-  document.getElementById('pgf-descricao').value='';
-  document.getElementById('pgf-prevista').value='';
-  document.getElementById('pgf-real').value='';
-  document.getElementById('pgf-mes').value=kpiPeriodo;
-  document.getElementById('pgf-obs').value='';
-  document.getElementById('modal-pagamento-fin').classList.add('open');
-}
-function abrirEditarPagamentoFin(id){
-  const p=pagamentosFinanceiro.find(x=>x.id===id); if(!p) return;
-  _pagamentoFinEditId=id;
-  document.getElementById('pgf-modal-title').textContent='Editar Pagamento';
-  document.getElementById('pgf-descricao').value=p.descricao||'';
-  document.getElementById('pgf-prevista').value=p.dataPrevista||'';
-  document.getElementById('pgf-real').value=p.dataReal||'';
-  document.getElementById('pgf-mes').value=p.mesVigente||'';
-  document.getElementById('pgf-obs').value=p.obs||'';
-  document.getElementById('modal-pagamento-fin').classList.add('open');
-}
-function salvarPagamentoFin(){
-  const descricao=document.getElementById('pgf-descricao').value.trim();
-  const mesVigente=document.getElementById('pgf-mes').value;
-  if(!descricao){ showToast('Informe a descrição do pagamento.','peach'); return; }
-  if(!mesVigente){ showToast('Informe o mês vigente.','peach'); return; }
-  const obj={
-    id:_pagamentoFinEditId||Date.now(),
-    descricao, mesVigente,
-    dataPrevista:document.getElementById('pgf-prevista').value,
-    dataReal:document.getElementById('pgf-real').value,
-    obs:document.getElementById('pgf-obs').value.trim(),
-  };
-  if(_pagamentoFinEditId){ const i=pagamentosFinanceiro.findIndex(x=>x.id===_pagamentoFinEditId); if(i>=0) pagamentosFinanceiro[i]=obj; } else pagamentosFinanceiro.unshift(obj);
-  closeModal('modal-pagamento-fin'); sincronizarFinanceiroKPI(); renderPagamentosFinanceiro(); showToast('Pagamento salvo!','sage');
-}
-function deletarPagamentoFin(id){
-  if(!confirm('Apagar este pagamento?')) return;
-  pagamentosFinanceiro=pagamentosFinanceiro.filter(x=>x.id!==id);
-  sincronizarFinanceiroKPI(); renderPagamentosFinanceiro();
-}
-function _pagamentoFinPontual(p){ return !!(p.dataPrevista && p.dataReal) && p.dataReal<=p.dataPrevista; }
-function renderPagamentosFinanceiro(){
-  const tb=document.getElementById('pagamentos-fin-tbody'); if(!tb) return;
-  const doMes=pagamentosFinanceiro.filter(p=>p.mesVigente===kpiPeriodo);
-  const pontuais=doMes.filter(_pagamentoFinPontual).length;
-  const pct=doMes.length>0?((pontuais/doMes.length)*100).toFixed(1):null;
-  const res=document.getElementById('pagamentos-fin-resumo');
-  if(res) res.innerHTML=[
-    {l:'Pagamentos no Mês',v:doMes.length,c:'sky',i:'fa-list'},
-    {l:'Pagos no Prazo',v:pontuais,c:'sage',i:'fa-check'},
-    {l:'Pontualidade',v:pct!==null?pct+'%':'—',c:'teal',i:'fa-money-check-dollar'}
-  ].map(x=>'<div class="metric-card '+x.c+'"><div class="metric-icon '+x.c+'"><i class="fa-solid '+x.i+'"></i></div><div class="metric-value" style="font-size:22px;">'+x.v+'</div><div class="metric-label">'+x.l+'</div></div>').join('');
-  tb.innerHTML=pagamentosFinanceiro.length===0?'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3);">Nenhum pagamento cadastrado. Clique em "+ Novo Pagamento".</td></tr>':pagamentosFinanceiro.slice().sort((a,b)=>(b.dataPrevista||'').localeCompare(a.dataPrevista||'')).map(p=>{
-    const ok=_pagamentoFinPontual(p);
-    const statusHTML=(!p.dataReal)?'<span style="font-size:10px;color:var(--text3);">Aguardando</span>':(ok?'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--sage)22;color:var(--sage);">No prazo</span>':'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--vermelha)22;color:var(--vermelha);">Atrasado</span>');
-    return '<tr><td>'+esc(p.descricao)+'</td><td style="font-size:12px;">'+(p.dataPrevista||'—')+'</td><td style="font-size:12px;">'+(p.dataReal||'—')+'</td><td style="font-size:12px;">'+(p.mesVigente||'—')+'</td><td>'+statusHTML+'</td><td style="white-space:nowrap;"><button onclick="abrirEditarPagamentoFin('+p.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-pen"></i></button><button onclick="deletarPagamentoFin('+p.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-trash"></i></button></td></tr>';
-  }).join('');
-}
-
-// ── Índice Financeiro: Submódulo B — Relatórios (Precisão) ──
-// Um registro por mês: quantidade enviada vs. quantidade que precisou de correção.
-function abrirNovoRelatorioFin(){
-  _relatorioFinEditId=null;
-  document.getElementById('rlf-modal-title').textContent='Novo Registro de Relatórios';
-  document.getElementById('rlf-mes').value=kpiPeriodo;
-  document.getElementById('rlf-enviados').value='';
-  document.getElementById('rlf-comerro').value='';
-  document.getElementById('rlf-obs').value='';
-  document.getElementById('modal-relatorio-fin').classList.add('open');
-}
-function abrirEditarRelatorioFin(id){
-  const r=relatoriosFinanceiro.find(x=>x.id===id); if(!r) return;
-  _relatorioFinEditId=id;
-  document.getElementById('rlf-modal-title').textContent='Editar Registro de Relatórios';
-  document.getElementById('rlf-mes').value=r.mesVigente||'';
-  document.getElementById('rlf-enviados').value=r.enviados||'';
-  document.getElementById('rlf-comerro').value=r.comErro||'';
-  document.getElementById('rlf-obs').value=r.obs||'';
-  document.getElementById('modal-relatorio-fin').classList.add('open');
-}
-function salvarRelatorioFin(){
-  const mesVigente=document.getElementById('rlf-mes').value;
-  const enviados=parseInt(document.getElementById('rlf-enviados').value,10)||0;
-  const comErro=parseInt(document.getElementById('rlf-comerro').value,10)||0;
-  if(!mesVigente){ showToast('Informe o mês vigente.','peach'); return; }
-  if(enviados<=0){ showToast('Informe a quantidade de relatórios enviados.','peach'); return; }
-  if(comErro>enviados){ showToast('Quantidade com erro não pode ser maior que a enviada.','peach'); return; }
-  const obj={
-    id:_relatorioFinEditId||Date.now(),
-    mesVigente, enviados, comErro,
-    obs:document.getElementById('rlf-obs').value.trim(),
-  };
-  if(_relatorioFinEditId){ const i=relatoriosFinanceiro.findIndex(x=>x.id===_relatorioFinEditId); if(i>=0) relatoriosFinanceiro[i]=obj; } else relatoriosFinanceiro.unshift(obj);
-  closeModal('modal-relatorio-fin'); sincronizarFinanceiroKPI(); renderRelatoriosFinanceiro(); showToast('Registro salvo!','sage');
-}
-function deletarRelatorioFin(id){
-  if(!confirm('Apagar este registro?')) return;
-  relatoriosFinanceiro=relatoriosFinanceiro.filter(x=>x.id!==id);
-  sincronizarFinanceiroKPI(); renderRelatoriosFinanceiro();
-}
-function renderRelatoriosFinanceiro(){
-  const tb=document.getElementById('relatorios-fin-tbody'); if(!tb) return;
-  const doMes=relatoriosFinanceiro.filter(r=>r.mesVigente===kpiPeriodo);
-  const totalEnviados=doMes.reduce((s,r)=>s+(+r.enviados||0),0);
-  const totalErro=doMes.reduce((s,r)=>s+(+r.comErro||0),0);
-  const pct=totalEnviados>0?(((totalEnviados-totalErro)/totalEnviados)*100).toFixed(1):null;
-  const res=document.getElementById('relatorios-fin-resumo');
-  if(res) res.innerHTML=[
-    {l:'Relatórios Enviados',v:totalEnviados,c:'sky',i:'fa-file-lines'},
-    {l:'Com Erro',v:totalErro,c:'peach',i:'fa-triangle-exclamation'},
-    {l:'Precisão',v:pct!==null?pct+'%':'—',c:'teal',i:'fa-money-check-dollar'}
-  ].map(x=>'<div class="metric-card '+x.c+'"><div class="metric-icon '+x.c+'"><i class="fa-solid '+x.i+'"></i></div><div class="metric-value" style="font-size:22px;">'+x.v+'</div><div class="metric-label">'+x.l+'</div></div>').join('');
-  tb.innerHTML=relatoriosFinanceiro.length===0?'<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text3);">Nenhum registro cadastrado. Clique em "+ Novo Registro".</td></tr>':relatoriosFinanceiro.slice().sort((a,b)=>(b.mesVigente||'').localeCompare(a.mesVigente||'')).map(r=>{
-    const p2=(+r.enviados>0)?(((+r.enviados-(+r.comErro||0))/(+r.enviados))*100).toFixed(1):null;
-    return '<tr><td style="font-size:12px;">'+(r.mesVigente||'—')+'</td><td>'+(r.enviados||0)+'</td><td>'+(r.comErro||0)+'</td><td style="font-size:12px;color:'+(p2!==null&&+p2>=95?'var(--sage)':'var(--amarela)')+';font-weight:600;">'+(p2!==null?p2+'%':'—')+'</td><td style="white-space:nowrap;"><button onclick="abrirEditarRelatorioFin('+r.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-pen"></i></button><button onclick="deletarRelatorioFin('+r.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-trash"></i></button></td></tr>';
-  }).join('');
-}
-
-// ── Índice Financeiro: Submódulo C — Validações (Eficiência) ──
-// Prazo esperado vs. prazo de conclusão das validações internas (planilhas de
-// proprietários, limpeza, conciliação de cartão).
-const VALIDACAO_FIN_TIPOS=['Planilha de Proprietários','Limpeza','Conciliação de Cartão','Outro'];
-function abrirNovaValidacaoFin(){
-  _validacaoFinEditId=null;
-  document.getElementById('vlf-modal-title').textContent='Nova Validação';
-  document.getElementById('vlf-tipo').value=VALIDACAO_FIN_TIPOS[0];
-  document.getElementById('vlf-descricao').value='';
-  document.getElementById('vlf-esperado').value='';
-  document.getElementById('vlf-concluido').value='';
-  document.getElementById('vlf-mes').value=kpiPeriodo;
-  document.getElementById('vlf-obs').value='';
-  document.getElementById('modal-validacao-fin').classList.add('open');
-}
-function abrirEditarValidacaoFin(id){
-  const v=validacoesFinanceiro.find(x=>x.id===id); if(!v) return;
-  _validacaoFinEditId=id;
-  document.getElementById('vlf-modal-title').textContent='Editar Validação';
-  document.getElementById('vlf-tipo').value=v.tipo||VALIDACAO_FIN_TIPOS[0];
-  document.getElementById('vlf-descricao').value=v.descricao||'';
-  document.getElementById('vlf-esperado').value=v.prazoEsperado||'';
-  document.getElementById('vlf-concluido').value=v.prazoConcluido||'';
-  document.getElementById('vlf-mes').value=v.mesVigente||'';
-  document.getElementById('vlf-obs').value=v.obs||'';
-  document.getElementById('modal-validacao-fin').classList.add('open');
-}
-function salvarValidacaoFin(){
-  const descricao=document.getElementById('vlf-descricao').value.trim();
-  const mesVigente=document.getElementById('vlf-mes').value;
-  if(!descricao){ showToast('Informe a descrição da validação.','peach'); return; }
-  if(!mesVigente){ showToast('Informe o mês vigente.','peach'); return; }
-  const obj={
-    id:_validacaoFinEditId||Date.now(),
-    tipo:document.getElementById('vlf-tipo').value,
-    descricao, mesVigente,
-    prazoEsperado:document.getElementById('vlf-esperado').value,
-    prazoConcluido:document.getElementById('vlf-concluido').value,
-    obs:document.getElementById('vlf-obs').value.trim(),
-  };
-  if(_validacaoFinEditId){ const i=validacoesFinanceiro.findIndex(x=>x.id===_validacaoFinEditId); if(i>=0) validacoesFinanceiro[i]=obj; } else validacoesFinanceiro.unshift(obj);
-  closeModal('modal-validacao-fin'); sincronizarFinanceiroKPI(); renderValidacoesFinanceiro(); showToast('Validação salva!','sage');
-}
-function deletarValidacaoFin(id){
-  if(!confirm('Apagar esta validação?')) return;
-  validacoesFinanceiro=validacoesFinanceiro.filter(x=>x.id!==id);
-  sincronizarFinanceiroKPI(); renderValidacoesFinanceiro();
-}
-function _validacaoFinNoPrazo(v){ return !!(v.prazoEsperado && v.prazoConcluido) && v.prazoConcluido<=v.prazoEsperado; }
-function renderValidacoesFinanceiro(){
-  const tb=document.getElementById('validacoes-fin-tbody'); if(!tb) return;
-  const doMes=validacoesFinanceiro.filter(v=>v.mesVigente===kpiPeriodo);
-  const noPrazo=doMes.filter(_validacaoFinNoPrazo).length;
-  const pct=doMes.length>0?((noPrazo/doMes.length)*100).toFixed(1):null;
-  const res=document.getElementById('validacoes-fin-resumo');
-  if(res) res.innerHTML=[
-    {l:'Validações no Mês',v:doMes.length,c:'sky',i:'fa-list'},
-    {l:'Entregues no Prazo',v:noPrazo,c:'sage',i:'fa-check'},
-    {l:'Eficiência',v:pct!==null?pct+'%':'—',c:'teal',i:'fa-money-check-dollar'}
-  ].map(x=>'<div class="metric-card '+x.c+'"><div class="metric-icon '+x.c+'"><i class="fa-solid '+x.i+'"></i></div><div class="metric-value" style="font-size:22px;">'+x.v+'</div><div class="metric-label">'+x.l+'</div></div>').join('');
-  tb.innerHTML=validacoesFinanceiro.length===0?'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3);">Nenhuma validação cadastrada. Clique em "+ Nova Validação".</td></tr>':validacoesFinanceiro.slice().sort((a,b)=>(b.prazoEsperado||'').localeCompare(a.prazoEsperado||'')).map(v=>{
-    const ok=_validacaoFinNoPrazo(v);
-    const statusHTML=(!v.prazoConcluido)?'<span style="font-size:10px;color:var(--text3);">Pendente</span>':(ok?'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--sage)22;color:var(--sage);">No prazo</span>':'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--vermelha)22;color:var(--vermelha);">Atrasado</span>');
-    return '<tr><td style="font-size:12px;">'+esc(v.tipo||'—')+'</td><td>'+esc(v.descricao)+'</td><td style="font-size:12px;">'+(v.prazoEsperado||'—')+'</td><td style="font-size:12px;">'+(v.prazoConcluido||'—')+'</td><td style="font-size:12px;">'+(v.mesVigente||'—')+'</td><td>'+statusHTML+'</td><td style="white-space:nowrap;"><button onclick="abrirEditarValidacaoFin('+v.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-pen"></i></button><button onclick="deletarValidacaoFin('+v.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-trash"></i></button></td></tr>';
-  }).join('');
-}
-
-// ── Índice Financeiro: média simples dos 3 submódulos, pro mês vigente do KPI ──
-function sincronizarFinanceiroKPI(){
-  const mes=kpiPeriodo;
-  const pagMes=pagamentosFinanceiro.filter(p=>p.mesVigente===mes);
-  const pctPag=pagMes.length>0?(pagMes.filter(_pagamentoFinPontual).length/pagMes.length)*100:null;
-  const relMes=relatoriosFinanceiro.filter(r=>r.mesVigente===mes);
-  const totalEnv=relMes.reduce((s,r)=>s+(+r.enviados||0),0);
-  const totalErr=relMes.reduce((s,r)=>s+(+r.comErro||0),0);
-  const pctRel=totalEnv>0?((totalEnv-totalErr)/totalEnv)*100:null;
-  const valMes=validacoesFinanceiro.filter(v=>v.mesVigente===mes);
-  const pctVal=valMes.length>0?(valMes.filter(_validacaoFinNoPrazo).length/valMes.length)*100:null;
-  const vals=[pctPag,pctRel,pctVal].filter(x=>x!==null);
-  _kv().fin=vals.length>0?(vals.reduce((s,x)=>s+x,0)/vals.length).toFixed(2):null;
-  if(typeof saveAll==='function') saveAll();
-  if(typeof renderKPIs==='function') renderKPIs();
 }
 
 // ── SUPERHOST ──

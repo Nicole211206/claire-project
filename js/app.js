@@ -217,10 +217,10 @@ let tasks=[
 ];
 
 let ATTS=[
-  {id:'patricia',name:'Patrícia', av:'av-rose', ini:'P',  rate:17, escala:'12×36', note:'',resp:'',respWeekly:[null,null,null,null],respMes:null,demands:[]},
-  {id:'sara',    name:'Sara',     av:'av-lav',  ini:'S',  rate:14, escala:'12×36', note:'',resp:'',respWeekly:[null,null,null,null],respMes:null,demands:[]},
-  {id:'lisarb',  name:'Lisarb',   av:'av-sage', ini:'Li', rate:14, escala:'12×36', note:'',resp:'',respWeekly:[null,null,null,null],respMes:null,demands:[]},
-  {id:'lais',    name:'Laís',     av:'av-peach',ini:'La', rate:14, escala:'12×36', note:'',resp:'',respWeekly:[null,null,null,null],respMes:null,demands:[]},
+  {id:'patricia',name:'Patrícia', av:'av-rose', ini:'P',  rate:17, escala:'12×36', note:'',resp:'',respWeekly:[null,null,null,null],respMes:null,qtdRespWeekly:[null,null,null,null],qtdRespMes:null,demands:[]},
+  {id:'sara',    name:'Sara',     av:'av-lav',  ini:'S',  rate:14, escala:'12×36', note:'',resp:'',respWeekly:[null,null,null,null],respMes:null,qtdRespWeekly:[null,null,null,null],qtdRespMes:null,demands:[]},
+  {id:'lisarb',  name:'Lisarb',   av:'av-sage', ini:'Li', rate:14, escala:'12×36', note:'',resp:'',respWeekly:[null,null,null,null],respMes:null,qtdRespWeekly:[null,null,null,null],qtdRespMes:null,demands:[]},
+  {id:'lais',    name:'Laís',     av:'av-peach',ini:'La', rate:14, escala:'12×36', note:'',resp:'',respWeekly:[null,null,null,null],respMes:null,qtdRespWeekly:[null,null,null,null],qtdRespMes:null,demands:[]},
 ];
 let nextAttId = 5;
 
@@ -553,7 +553,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   }, 2000);
   // guarda o estado atual como "já enviado" pra não regravar à toa logo no início
   try{ _kvLastPushed=_kvBuildBlob(); }catch(e){}
-  ATTS.forEach(a=>{if(!a.respWeekly)a.respWeekly=[null,null,null,null];if(a.respMes===undefined)a.respMes=null;});
+  ATTS.forEach(a=>{if(!a.respWeekly)a.respWeekly=[null,null,null,null];if(a.respMes===undefined)a.respMes=null;if(!a.qtdRespWeekly)a.qtdRespWeekly=[null,null,null,null];if(a.qtdRespMes===undefined)a.qtdRespMes=null;});
   verificarTarefasDespesas();
   greet();
   renderOvAgenda();
@@ -1939,6 +1939,7 @@ function abrirPerfilAtt(id) {
   document.getElementById('eap-rate').value = a.rate;
   document.getElementById('eap-escala').value = a.escala || '12×36';
   [0,1,2,3].forEach(i => { document.getElementById('eap-resp'+i).value = (a.respWeekly&&a.respWeekly[i]!=null) ? a.respWeekly[i] : ''; });
+  [0,1,2,3].forEach(i => { document.getElementById('eap-qtd'+i).value = (a.qtdRespWeekly&&a.qtdRespWeekly[i]!=null) ? a.qtdRespWeekly[i] : ''; });
   document.getElementById('modal-editar-att-perfil').classList.add('open');
 }
 function salvarPerfilAtt() {
@@ -1953,12 +1954,20 @@ function salvarPerfilAtt() {
   });
   const vals = a.respWeekly.filter(x => x !== null);
   a.respMes = vals.length > 0 ? vals.reduce((s,x) => s+x, 0) / vals.length : null;
+  if (!a.qtdRespWeekly) a.qtdRespWeekly = [null,null,null,null];
+  [0,1,2,3].forEach(i => {
+    const v = document.getElementById('eap-qtd'+i).value;
+    a.qtdRespWeekly[i] = v === '' ? null : parseFloat(v);
+  });
+  const qtdVals = a.qtdRespWeekly.filter(x => x !== null);
+  a.qtdRespMes = qtdVals.length > 0 ? qtdVals.reduce((s,x) => s+x, 0) / qtdVals.length : null;
   if (!_ksv().tr) _ksv().tr = {};
   _ksv().tr[a.id] = a.respMes !== null ? a.respMes.toFixed(1) : '';
   const trVals = ATTS.map(att => _ksv().tr && _ksv().tr[att.id] ? parseFloat(_ksv().tr[att.id]) : null).filter(x => x !== null);
   _kv().tr = trVals.length > 0 ? (trVals.reduce((s,x) => s+x, 0) / trVals.length).toFixed(2) : null;
   closeModal('modal-editar-att-perfil');
   renderTeam(); renderTeamOv(); renderSalary(); renderKPIs();
+  if (typeof renderPerformance === 'function' && document.getElementById('performance-body')) renderPerformance();
   if (typeof saveAll === 'function') saveAll();
   showToast('Perfil salvo!', 'sage');
 }
@@ -2200,26 +2209,43 @@ function renderPerformance(){
     g>=80 ?{txt:'⚠️ AMARELA',c:'#B45309'}:
            {txt:'— sem bandeira',c:'#9CA3AF'};
 
+  // Ciclo seguinte de KPI (av/cv também são lançados com antecedência —
+  // ex.: vendo a Performance de julho, mostra o valor já lançado de agosto).
+  const _proxMes=_mesSeguinteStr(kpiPeriodo);
+  const _proxVals=kpiVals[_proxMes]||{};
   let kpiRows='';
   KPI_DEFS.forEach(k=>{
     const rawVal=_kv()[k.id];
     const p=k.calc(rawVal),ps=p!==null?Math.round(p):null;
     const barC=ps===null?'#E5E7EB':ps>=100?'#3ECFB2':ps>0?'#F59E0B':'#E5E7EB';
     const txtC=ps===null?'#9CA3AF':ps>=100?'#0D9488':ps>0?'#B45309':'#9CA3AF';
-    const rawHtml=(rawVal!=null&&rawVal!=='')?`<span style="font-size:11px;color:#9CA3AF;">(${rawVal} ${k.unit})</span>`:'';
+    // Ênfase no valor real (ex. 4.8), não mais na % atingida — a % vira detalhe secundário.
+    const valHtml=(rawVal!=null&&rawVal!=='')?`${rawVal} ${k.unit}`:'—';
+    const pctHtml=ps!==null?`<span style="font-size:11px;color:#9CA3AF;">(${ps}%)</span>`:'';
+    let nextCycleHtml='';
+    if(k.id==='av'||k.id==='cv'){
+      const nextRaw=_proxVals[k.id];
+      const nextP=k.calc(nextRaw), nextPs=nextP!==null?Math.round(nextP):null;
+      const nextC=nextPs===null?'#9CA3AF':nextPs>=100?'#0D9488':nextPs>0?'#B45309':'#9CA3AF';
+      nextCycleHtml=`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding-top:6px;border-top:0.5px dashed #E2E5EA;">
+        <span style="font-size:10px;color:#9CA3AF;">Próximo ciclo (${_proxMes})</span>
+        <span style="font-size:13px;font-weight:700;font-family:'SF Mono','Fira Code',monospace;color:${nextC};">${(nextRaw!=null&&nextRaw!=='')?nextRaw+' '+k.unit:'—'}${nextPs!==null?` <span style="font-size:9px;font-weight:500;color:#9CA3AF;">(${nextPs}%)</span>`:''}</span>
+      </div>`;
+    }
     kpiRows+=`<div style="padding:12px 0;border-bottom:0.5px solid #E2E5EA;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;">
         <span style="font-size:12px;font-weight:500;color:#374151;">${k.label}</span>
         <span style="font-size:10px;color:#9CA3AF;">${Math.round(k.peso*100)}%</span>
       </div>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
-        <span style="font-family:'SF Mono','Fira Code',monospace;font-size:18px;font-weight:700;color:${txtC};min-width:46px;">${ps!==null?ps+'%':'—'}</span>
-        ${rawHtml}
+        <span style="font-family:'SF Mono','Fira Code',monospace;font-size:20px;font-weight:700;color:${txtC};min-width:46px;">${valHtml}</span>
+        ${pctHtml}
         <div style="flex:1;height:4px;background:#E5E7EB;border-radius:2px;overflow:hidden;">
           <div style="width:${ps!==null?Math.min(ps,100):0}%;height:100%;background:${barC};transition:width .22s,background .22s;"></div>
         </div>
       </div>
       <p style="font-size:10px;color:#9CA3AF;line-height:1.5;">${k.hint} · meta ${k.meta} ${k.unit}</p>
+      ${nextCycleHtml}
     </div>`;
   });
 
@@ -2248,6 +2274,10 @@ function renderPerformance(){
       <div style="margin-top:28px;">
         <p style="font-size:11px;font-weight:600;color:#374151;letter-spacing:.4px;text-transform:uppercase;margin-bottom:14px;">Superhost Airbnb</p>
         <div id="perf-superhost-inner"></div>
+      </div>
+      <div style="margin-top:28px;">
+        <p style="font-size:11px;font-weight:600;color:#374151;letter-spacing:.4px;text-transform:uppercase;margin-bottom:14px;">Quantidade de Respostas por Atendente</p>
+        <div id="perf-qtdresp-inner"></div>
       </div>
       <div style="margin-top:28px;">
         <p style="font-size:11px;font-weight:600;color:#374151;letter-spacing:.4px;text-transform:uppercase;margin-bottom:14px;">Cancelamentos</p>
@@ -2280,6 +2310,23 @@ function renderPerformance(){
     </div>`;
   } else {
     shEl.innerHTML=`<div style="background:#F4F6F9;border-radius:10px;padding:14px;color:#9CA3AF;font-size:13px;">Nenhum período Superhost registrado.</div>`;
+  }
+
+  // Quantidade de Respostas por atendente — média semanal (editável no Perfil do Membro, aba Equipe)
+  const _qtdEl=document.getElementById('perf-qtdresp-inner');
+  if(_qtdEl){
+    const _attsComQtd=ATTS.filter(a=>a.qtdRespMes!=null);
+    const _mediaTotalQtd=_attsComQtd.length>0?(_attsComQtd.reduce((s,a)=>s+a.qtdRespMes,0)/_attsComQtd.length):null;
+    _qtdEl.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;">
+      ${ATTS.map(a=>`<div style="background:#F4F6F9;border-radius:10px;padding:12px;text-align:center;">
+        <div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(a.name)}</div>
+        <div style="font-size:18px;font-weight:700;color:#1D4ED8;font-family:'SF Mono','Fira Code',monospace;">${a.qtdRespMes!=null?a.qtdRespMes.toFixed(1):'—'}</div>
+      </div>`).join('')}
+      <div style="background:#0D9488;border-radius:10px;padding:12px;text-align:center;">
+        <div style="font-size:10px;color:rgba(255,255,255,.8);text-transform:uppercase;margin-bottom:4px;">Média da equipe</div>
+        <div style="font-size:18px;font-weight:700;color:#fff;font-family:'SF Mono','Fira Code',monospace;">${_mediaTotalQtd!=null?_mediaTotalQtd.toFixed(1):'—'}</div>
+      </div>
+    </div>`;
   }
 
   // Cancelamentos do mês vigente (kpiPeriodo) — antes somava TODOS os
@@ -3456,7 +3503,7 @@ function adicionarMembro(){
     av:cores[nextAttId%cores.length],
     ini:nome.trim().charAt(0).toUpperCase(),
     rate:14,escala:'12×36',note:'',resp:'',
-    respWeekly:[null,null,null,null],respMes:null,demands:[]
+    respWeekly:[null,null,null,null],respMes:null,qtdRespWeekly:[null,null,null,null],qtdRespMes:null,demands:[]
   });
   nextAttId++;
   if(typeof saveAll==='function')saveAll();
@@ -3516,6 +3563,11 @@ function calcGlobalParaMes(mes){
 function _mesAnteriorStr(mes){
   const [y,m]=mes.split('-').map(Number);
   const d=new Date(y,m-2,1);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+}
+function _mesSeguinteStr(mes){
+  const [y,m]=mes.split('-').map(Number);
+  const d=new Date(y,m,1);
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
 }
 // Cores exatas da tela "Meus KPIs" (css/styles.css), pra o relatório sair

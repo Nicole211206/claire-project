@@ -116,7 +116,9 @@ function _renderObList(){
 function _syncObKpiDoOnboarding(){
   if(!_obKpiPorMes)return; // ainda não buscou do onboarding — mantém o valor já salvo
   const m=_obKpiPorMes[kpiPeriodo];
-  _kv().ob=(m&&m.mediaOnboardingDias!=null)?String(m.mediaOnboardingDias):null;
+  // '' (não null) pra realmente limpar no servidor quando o mês não tem
+  // imóvel marcado no onboarding — null é ignorado no merge de nx_kpivals.
+  _kv().ob=(m&&m.mediaOnboardingDias!=null)?String(m.mediaOnboardingDias):'';
 }
 let _obSetupPorMes=null; // {"2026-07":{previsto,gasto,count}, ...} — só imóveis marcados "Colocar o Setup na Claire?"
 function _syncSetupKpiDoOnboarding(){
@@ -554,6 +556,12 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   // guarda o estado atual como "já enviado" pra não regravar à toa logo no início
   try{ _kvLastPushed=_kvBuildBlob(); }catch(e){}
   ATTS.forEach(a=>{if(!a.respWeekly)a.respWeekly=[null,null,null,null];if(a.respMes===undefined)a.respMes=null;if(a.qtdRespMes===undefined)a.qtdRespMes=null;});
+  // Migração única: a.qtdRespMes era solto (sem mês) — se o mês vigente ainda
+  // não tem nada lançado em _ksv().qtdResp, aproveita o que já tinha sido
+  // digitado (presume que era "do mês atual", pra não perder o que já existia).
+  if(!(_ksv().qtdResp && Object.keys(_ksv().qtdResp).length)){
+    ATTS.forEach(a=>{ if(a.qtdRespMes!=null){ if(!_ksv().qtdResp)_ksv().qtdResp={}; _ksv().qtdResp[a.id]=a.qtdRespMes; } });
+  }
   verificarTarefasDespesas();
   greet();
   renderOvAgenda();
@@ -830,10 +838,14 @@ function renderKPIs(){
       // Qtd. de respostas por atendente vive aqui só por conveniência de
       // lançamento (junto do Tempo de Resposta, no dia a dia) — não entra
       // no cálculo do KPI/score, é só informativo (ver renderPerformance).
-      const qtdVals=ATTS.map(a=>a.qtdRespMes!=null?+a.qtdRespMes:null).filter(v=>v!==null);
+      // Guardado por mês em _ksv().qtdResp (igual ao próprio tr) — antes vivia
+      // solto em a.qtdRespMes (direto no atendente, sem quebra por mês), por
+      // isso não zerava/trocava ao mudar o seletor de mês.
+      const qtdSub=_ksv().qtdResp||{};
+      const qtdVals=ATTS.map(a=>qtdSub[a.id]!=null&&qtdSub[a.id]!==''?+qtdSub[a.id]:null).filter(v=>v!==null);
       const qtdAvg=qtdVals.length>0?(qtdVals.reduce((a,b)=>a+b,0)/qtdVals.length).toFixed(1):null;
       inputHTML='<div style="display:grid;gap:6px;">'+
-        ATTS.map(a=>'<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:80px;">'+a.name+':</label><input type="number" step="0.1" min="0" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub[a.id]||'')+'" placeholder="min" onchange="setKPISub(\'tr\',\''+a.id+'\',this.value)"><span style="font-size:10px;color:var(--text3);">min</span><input type="number" step="1" min="0" class="form-input" style="width:80px;padding:5px 8px;margin-left:10px;" value="'+(a.qtdRespMes!=null?a.qtdRespMes:'')+'" placeholder="qtd." onchange="setQtdRespMes(\''+a.id+'\',this.value)"><span style="font-size:10px;color:var(--text3);">respostas</span></div>').join('')+
+        ATTS.map(a=>'<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:80px;">'+a.name+':</label><input type="number" step="0.1" min="0" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub[a.id]||'')+'" placeholder="min" onchange="setKPISub(\'tr\',\''+a.id+'\',this.value)"><span style="font-size:10px;color:var(--text3);">min</span><input type="number" step="1" min="0" class="form-input" style="width:80px;padding:5px 8px;margin-left:10px;" value="'+(qtdSub[a.id]!=null?qtdSub[a.id]:'')+'" placeholder="qtd." onchange="setQtdRespMes(\''+a.id+'\',this.value)"><span style="font-size:10px;color:var(--text3);">respostas</span></div>').join('')+
         (avg2!==null?'<div style="font-size:12px;font-weight:700;color:var(--sage);margin-top:2px;">Média de tempo: '+avg2+' min</div>':'')+
         (qtdAvg!==null?'<div style="font-size:12px;font-weight:700;color:var(--sky);margin-top:2px;">Média de respostas: '+qtdAvg+' <span style="font-weight:400;color:var(--text3);">(informativo, não entra no cálculo do KPI)</span></div>':'')+'</div>';
     } else if(k.id==='ob'){
@@ -1015,7 +1027,9 @@ function _recalcularAV(){
   let soma=0, pesoTotal=0;
   if(hasA){ const w=(+s.qtdAirbnb||0)>0?(+s.qtdAirbnb):1; soma+=(+s.airbnb||0)*w; pesoTotal+=w; }
   if(hasB){ const w=(+s.qtdBooking||0)>0?(+s.qtdBooking):1; soma+=(+s.booking||0)*w; pesoTotal+=w; }
-  _kv().av=pesoTotal>0?(soma/pesoTotal).toFixed(2):null;
+  // '' em vez de null pra realmente limpar no servidor (null é ignorado no
+  // merge de nx_kpivals e o valor antigo continua contando pro score).
+  _kv().av=pesoTotal>0?(soma/pesoTotal).toFixed(2):'';
 }
 // Redução de Custos: soma TODO o previsto e TODO o gasto dos itens
 // preenchidos e tira a % em cima dos totais — pedido do gestor, em vez de
@@ -1030,7 +1044,8 @@ function _recalcularRC(){
     const prev=parseFloat(d.previsto), gasto=parseFloat(d.gasto);
     if(prev>0 && !isNaN(gasto)){ somaPrevisto+=prev; somaGasto+=gasto; temAlgum=true; }
   });
-  _kv().rc=temAlgum?(((somaPrevisto-somaGasto)/somaPrevisto)*100).toFixed(2):null;
+  // '' em vez de null pra realmente limpar no servidor (mesmo motivo do _recalcularAV acima).
+  _kv().rc=temAlgum?(((somaPrevisto-somaGasto)/somaPrevisto)*100).toFixed(2):'';
 }
 function setKPISub(id,subKey,value){
   if(!_ksv()[id])_ksv()[id]={};
@@ -1039,22 +1054,32 @@ function setKPISub(id,subKey,value){
     _recalcularAV();
   } else if(id==='cv'){
     const s=_ksv().cv;
+    // '' (não null) no else pra realmente limpar no servidor — antes, esvaziar
+    // reviews/checkouts não fazia nada aqui e o % antigo continuava contando.
     if(s.reviews!==undefined&&s.reviews!==''&&s.checkouts!==undefined&&s.checkouts!==''&&+s.checkouts>0){
       _kv().cv=(((+s.reviews||0)/(+s.checkouts||1))*100).toFixed(1);
+    } else {
+      _kv().cv='';
     }
   } else if(id==='tr'){
     const s=_ksv().tr||{};
     const vals=['patricia','sara','lisarb','lais'].map(a=>s[a]!==undefined&&s[a]!==''?+s[a]:null).filter(v=>v!==null);
-    if(vals.length>0){_kv().tr=(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1);}
+    // '' (não null) pra realmente limpar no servidor quando esvazia todos os
+    // campos — null é tratado como "sem informação" no merge e o valor antigo
+    // "cola" (mês aparece zerado na tela mas o score continua contando).
+    _kv().tr=vals.length>0?(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1):'';
   }
   renderKPIs();if(typeof saveAll==='function')saveAll();
 }
 
 // Quantidade de respostas por atendente — só informativo (Performance), não
 // participa do cálculo do KPI "Tempo de Resposta" nem do score global.
+// Guardado por mês em _ksv().qtdResp (era a.qtdRespMes, solto no atendente —
+// por isso não dividia por mês, ficava "fixo" trocando o seletor de período).
 function setQtdRespMes(attId,value){
   const a=ATTS.find(x=>x.id===attId); if(!a) return;
-  a.qtdRespMes=value===''?null:parseFloat(value);
+  if(!_ksv().qtdResp)_ksv().qtdResp={};
+  _ksv().qtdResp[attId]=value===''?'':parseFloat(value);
   renderKPIs();
   if(typeof renderPerformance==='function' && document.getElementById('performance-body')) renderPerformance();
   if(typeof saveAll==='function')saveAll();
@@ -1970,7 +1995,9 @@ function salvarPerfilAtt() {
   if (!_ksv().tr) _ksv().tr = {};
   _ksv().tr[a.id] = a.respMes !== null ? a.respMes.toFixed(1) : '';
   const trVals = ATTS.map(att => _ksv().tr && _ksv().tr[att.id] ? parseFloat(_ksv().tr[att.id]) : null).filter(x => x !== null);
-  _kv().tr = trVals.length > 0 ? (trVals.reduce((s,x) => s+x, 0) / trVals.length).toFixed(2) : null;
+  // '' (não null) pra realmente limpar no servidor — null é ignorado no merge
+  // de nx_kpivals e o valor antigo "cola" mesmo com o mês zerado na tela.
+  _kv().tr = trVals.length > 0 ? (trVals.reduce((s,x) => s+x, 0) / trVals.length).toFixed(2) : '';
   closeModal('modal-editar-att-perfil');
   renderTeam(); renderTeamOv(); renderSalary(); renderKPIs();
   if (typeof renderPerformance === 'function' && document.getElementById('performance-body')) renderPerformance();
@@ -2318,19 +2345,42 @@ function renderPerformance(){
     shEl.innerHTML=`<div style="background:#F4F6F9;border-radius:10px;padding:14px;color:#9CA3AF;font-size:13px;">Nenhum período Superhost registrado.</div>`;
   }
 
-  // Quantidade de Respostas por atendente — média semanal (editável no Perfil do Membro, aba Equipe)
+  // Quantidade de Respostas por atendente — mês vigente (kpiPeriodo), com
+  // média por dia (÷15 dias trabalhados no mês, escala 12×36) e por hora
+  // (÷12h do plantão), + variação vs. mês anterior.
   const _qtdEl=document.getElementById('perf-qtdresp-inner');
   if(_qtdEl){
-    const _attsComQtd=ATTS.filter(a=>a.qtdRespMes!=null);
-    const _mediaTotalQtd=_attsComQtd.length>0?(_attsComQtd.reduce((s,a)=>s+a.qtdRespMes,0)/_attsComQtd.length):null;
-    _qtdEl.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;">
-      ${ATTS.map(a=>`<div style="background:#F4F6F9;border-radius:10px;padding:12px;text-align:center;">
+    const _qtdSub=_ksv().qtdResp||{};
+    const _mesAntQtd=_mesAnteriorStr(kpiPeriodo);
+    const _qtdSubAnt=(kpiSubVals[_mesAntQtd]&&kpiSubVals[_mesAntQtd].qtdResp)||{};
+    const _valAtt=a=>_qtdSub[a.id]!=null&&_qtdSub[a.id]!==''?+_qtdSub[a.id]:null;
+    const _valAttAnt=a=>_qtdSubAnt[a.id]!=null&&_qtdSubAnt[a.id]!==''?+_qtdSubAnt[a.id]:null;
+    const _varHtml=(atual,anterior)=>{
+      if(atual==null||anterior==null||anterior===0) return '';
+      const variacao=((atual-anterior)/anterior)*100;
+      const cor=variacao>=0?'#0D9488':'#DC2626';
+      return `<div style="font-size:10px;color:${cor};margin-top:3px;">${variacao>=0?'+':''}${variacao.toFixed(0)}% vs ${_mesAntQtd}</div>`;
+    };
+    const _attsComQtd=ATTS.map(_valAtt).filter(v=>v!=null);
+    const _mediaTotalQtd=_attsComQtd.length>0?(_attsComQtd.reduce((s,v)=>s+v,0)/_attsComQtd.length):null;
+    const _attsComQtdAnt=ATTS.map(_valAttAnt).filter(v=>v!=null);
+    const _mediaTotalQtdAnt=_attsComQtdAnt.length>0?(_attsComQtdAnt.reduce((s,v)=>s+v,0)/_attsComQtdAnt.length):null;
+    _qtdEl.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;">
+      ${ATTS.map(a=>{
+        const v=_valAtt(a);
+        const porDia=v!=null?v/15:null;
+        const porHora=porDia!=null?porDia/12:null;
+        return `<div style="background:#F4F6F9;border-radius:10px;padding:12px;text-align:center;">
         <div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(a.name)}</div>
-        <div style="font-size:18px;font-weight:700;color:#1D4ED8;font-family:'SF Mono','Fira Code',monospace;">${a.qtdRespMes!=null?a.qtdRespMes.toFixed(1):'—'}</div>
-      </div>`).join('')}
+        <div style="font-size:18px;font-weight:700;color:#1D4ED8;font-family:'SF Mono','Fira Code',monospace;">${v!=null?v.toFixed(1):'—'}</div>
+        ${porDia!=null?`<div style="font-size:10px;color:#6B7280;margin-top:3px;">${porDia.toFixed(1)}/dia · ${porHora.toFixed(2)}/hora</div>`:''}
+        ${_varHtml(v,_valAttAnt(a))}
+      </div>`;}).join('')}
       <div style="background:#0D9488;border-radius:10px;padding:12px;text-align:center;">
         <div style="font-size:10px;color:rgba(255,255,255,.8);text-transform:uppercase;margin-bottom:4px;">Média da equipe</div>
         <div style="font-size:18px;font-weight:700;color:#fff;font-family:'SF Mono','Fira Code',monospace;">${_mediaTotalQtd!=null?_mediaTotalQtd.toFixed(1):'—'}</div>
+        ${_mediaTotalQtd!=null?`<div style="font-size:10px;color:rgba(255,255,255,.75);margin-top:3px;">${(_mediaTotalQtd/15).toFixed(1)}/dia · ${(_mediaTotalQtd/15/12).toFixed(2)}/hora</div>`:''}
+        ${(()=>{const h=_varHtml(_mediaTotalQtd,_mediaTotalQtdAnt);return h?h.replace('color:#0D9488','color:#D1FAE5').replace('color:#DC2626','color:#FEE2E2'):'';})()}
       </div>
     </div>`;
   }
@@ -2350,10 +2400,17 @@ function renderPerformance(){
     </div>`).join('')}
   </div>`;
 
-  // Preferido dos Hóspedes
-  const _totalImv=imovelsCatalog.length;
-  const _prefImv=imovelsCatalog.filter(im=>im.preferidoHospedes).length;
+  // Preferido dos Hóspedes — usa o snapshot lançado do mês vigente (Acompanhamento
+  // → Preferido dos Hóspedes → "Lançar snapshot do mês"); sem snapshot pro mês,
+  // cai pro total ao vivo (compatibilidade com quem ainda não lançou nada).
+  const _prefSnap=_ksv().preferidos;
+  const _totalImv=_prefSnap?_prefSnap.total:imovelsCatalog.length;
+  const _prefImv=_prefSnap?_prefSnap.marcados:imovelsCatalog.filter(im=>im.preferidoHospedes).length;
   const _pctPrefImv=_totalImv>0?Math.round((_prefImv/_totalImv)*100):0;
+  const _mesAntPref=_mesAnteriorStr(kpiPeriodo);
+  const _prefSnapAnt=kpiSubVals[_mesAntPref]&&kpiSubVals[_mesAntPref].preferidos;
+  const _pctPrefAnt=(_prefSnapAnt&&_prefSnapAnt.total>0)?Math.round((_prefSnapAnt.marcados/_prefSnapAnt.total)*100):null;
+  const _varPref=_pctPrefAnt!=null?(_pctPrefImv-_pctPrefAnt):null;
   const _elPref=document.getElementById('perf-preferidos-inner');
   if(_elPref) _elPref.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;">
     ${[{l:'Total de imóveis',v:_totalImv,c:'#1D4ED8'},{l:'Preferido dos hóspedes',v:_prefImv,c:'#0D9488'},{l:'% preferidos',v:_pctPrefImv+'%',c:'#D97706'}]
@@ -2361,7 +2418,7 @@ function renderPerformance(){
       <div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;margin-bottom:4px;">${x.l}</div>
       <div style="font-size:18px;font-weight:700;color:${x.c};font-family:'SF Mono','Fira Code',monospace;">${x.v}</div>
     </div>`).join('')}
-  </div>`;
+  </div>${_varPref!=null?`<div style="font-size:11px;color:${_varPref>=0?'#0D9488':'#DC2626'};margin-top:8px;">${_varPref>=0?'+':''}${_varPref} p.p. vs ${_mesAntPref} (${_pctPrefAnt}%)</div>`:(_prefSnap?`<div style="font-size:11px;color:#9CA3AF;margin-top:8px;">Sem snapshot de ${_mesAntPref} pra comparar.</div>`:'')}`;
 
   // Saldo Manutenção — mesmo cálculo do módulo Manutenção (renderManutSaldoGeral):
   // saldo inicial + economia (pago - gasto) de toda manutenção concluída, de
@@ -3535,7 +3592,8 @@ function setRespWeek(id,week,v){
   if(!_ksv().tr)_ksv().tr={};
   _ksv().tr[id]=a.respMes!==null?a.respMes.toFixed(1):'';
   const trVals=ATTS.map(att=>_ksv().tr&&_ksv().tr[att.id]?parseFloat(_ksv().tr[att.id]):null).filter(x=>x!==null);
-  _kv().tr=trVals.length>0?(trVals.reduce((s,x)=>s+x,0)/trVals.length).toFixed(2):null;
+  // '' (não null) pra realmente limpar no servidor (mesmo motivo do salvarPerfilAtt acima).
+  _kv().tr=trVals.length>0?(trVals.reduce((s,x)=>s+x,0)/trVals.length).toFixed(2):'';
   if(typeof saveAll==='function')saveAll();
   renderTeam();renderKPIs();
 }
@@ -3545,7 +3603,10 @@ function zerarRespMes(id){
   a.respWeekly=[null,null,null,null];a.respMes=null;
   if(_ksv().tr)delete _ksv().tr[id];
   const trVals=ATTS.map(att=>_ksv().tr&&_ksv().tr[att.id]?parseFloat(_ksv().tr[att.id]):null).filter(x=>x!==null);
-  _kv().tr=trVals.length>0?(trVals.reduce((s,x)=>s+x,0)/trVals.length).toFixed(2):null;
+  // '' (não null) pra realmente limpar no servidor — era o bug documentado:
+  // zerar via este botão setava null, o backend ignorava (trata null como
+  // "sem info") e o valor antigo "colava" no servidor mesmo com a tela zerada.
+  _kv().tr=trVals.length>0?(trVals.reduce((s,x)=>s+x,0)/trVals.length).toFixed(2):'';
   if(typeof saveAll==='function')saveAll();
   renderTeam();renderKPIs();
   showToast('Tempo de resposta zerado para '+a.name,'sage');
@@ -4974,7 +5035,12 @@ async function carregarReservasPeriodo(){
 // Calcula média por canal (período KPI, escalas corretas) e joga nos KPIs de avaliações (av) e conversão (cv)
 async function aplicarAvaliacoesNoKPI(){
   if(avaliacoes.length===0){ showToast('Sincronize as avaliações primeiro.','peach'); return; }
-  const per=periodoKPIAvaliacoes();
+  // periodoKPIAvaliacoes() sem argumento usa a data real de HOJE, não o mês
+  // selecionado (kpiPeriodo) — isso fazia o botão gravar o período do mês
+  // corrente de verdade em cima de qualquer mês que estivesse sendo visto
+  // (ex.: olhando um mês vazio/futuro, ele aparecia com dado "do nada").
+  const [_anoRef,_mesRef]=kpiPeriodo.split('-').map(Number);
+  const per=periodoKPIAvaliacoes(new Date(_anoRef,_mesRef-1,1));
   const refData=a=>(a.checkout||a.submittedAt||a.data||'').substring(0,10);
   const noPeriodo=avaliacoes.filter(a=>a.tipo==='guest-to-host'&&a.rating!=null&&refData(a)>=per.de&&refData(a)<=per.ate);
   // IMPORTANTE: o Hostaway entrega TODAS as notas na escala 0-10 (Airbnb e Booking).
@@ -4989,7 +5055,8 @@ async function aplicarAvaliacoesNoKPI(){
   const partes=[];
   if(mAir10!=null) partes.push(mAir10/2);
   if(mBook10!=null) partes.push(mBook10/2);
-  _kv().av = partes.length ? (partes.reduce((a,b)=>a+b,0)/partes.length).toFixed(2) : null;
+  // '' (não null) pra realmente limpar no servidor — mesmo motivo do _recalcularAV.
+  _kv().av = partes.length ? (partes.reduce((a,b)=>a+b,0)/partes.length).toFixed(2) : '';
 
   // ── KPI de Conversão (cv) = avaliações ÷ reservas (check-outs) no período ──
   const avNoPeriodo=avaliacoes.filter(a=>a.tipo==='guest-to-host'&&refData(a)>=per.de&&refData(a)<=per.ate).length;
@@ -6585,7 +6652,8 @@ function sincronizarManutencaoKPI(){
   _ksv().rc.manutencao.gasto = gasto>0?gasto.toFixed(2):'';
   const itens=['limpeza','manutencao','setup','margem','extras'];
   const economias=itens.map(function(it){if(!_ksv().rc[it])return null;const p=parseFloat(_ksv().rc[it].previsto),g=parseFloat(_ksv().rc[it].gasto);if(!p||isNaN(p)||isNaN(g))return null;return ((p-g)/p)*100;}).filter(function(x){return x!==null;});
-  _kv().rc = economias.length>0?(economias.reduce(function(s,x){return s+x;},0)/economias.length).toFixed(2):null;
+  // '' (não null) pra realmente limpar no servidor — mesmo motivo do _recalcularRC.
+  _kv().rc = economias.length>0?(economias.reduce(function(s,x){return s+x;},0)/economias.length).toFixed(2):'';
   if(typeof saveAll==='function') saveAll();
   if(typeof renderKPIs==='function') renderKPIs();
 }
@@ -7543,14 +7611,53 @@ function renderPreferidosHospedes(){
       {l:'% preferidos',v:pct+'%',c:'gold'}
     ].map(x=>'<div class="metric-card '+x.c+'"><div class="metric-value" style="font-size:22px;">'+x.v+'</div><div class="metric-label">'+x.l+'</div></div>').join('');
   }
-  if(!total){ el.innerHTML='<div style="font-size:12.5px;color:var(--text3);padding:14px 0;">Nenhum imóvel cadastrado nas Configurações ainda.</div>'; return; }
-  el.innerHTML=imovelsCatalog.map(im=>
-    '<label style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);cursor:pointer;">'+
-    '<input type="checkbox" '+(im.preferidoHospedes?'checked':'')+' onchange="togglePreferidoHospede(\''+im.id+'\')">'+
-    '<span style="flex:1;font-size:13.5px;">'+esc(im.nome)+'</span>'+
-    (im.preferidoHospedes?'<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:var(--sage)22;color:var(--sage);font-weight:600;">⭐ Preferido</span>':'')+
-    '</label>'
-  ).join('');
+  if(!total){ el.innerHTML='<div style="font-size:12.5px;color:var(--text3);padding:14px 0;">Nenhum imóvel cadastrado nas Configurações ainda.</div>'; }
+  else{
+    el.innerHTML=imovelsCatalog.map(im=>
+      '<label style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);cursor:pointer;">'+
+      '<input type="checkbox" '+(im.preferidoHospedes?'checked':'')+' onchange="togglePreferidoHospede(\''+im.id+'\')">'+
+      '<span style="flex:1;font-size:13.5px;">'+esc(im.nome)+'</span>'+
+      (im.preferidoHospedes?'<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:var(--sage)22;color:var(--sage);font-weight:600;">⭐ Preferido</span>':'')+
+      '</label>'
+    ).join('');
+  }
+  // Campos de lançamento — pré-preenche com o mês vigente (kpiPeriodo) e a
+  // contagem ao vivo atual, só na primeira renderização (não sobrescreve o
+  // que a pessoa já estiver digitando).
+  const mesEl=document.getElementById('pref-lanc-mes');
+  if(mesEl && !mesEl.value) mesEl.value=kpiPeriodo;
+  const marcadosEl=document.getElementById('pref-lanc-marcados');
+  if(marcadosEl && marcadosEl.value==='') marcadosEl.value=marcados;
+  const totalEl=document.getElementById('pref-lanc-total');
+  if(totalEl && totalEl.value==='') totalEl.value=total;
+  // Histórico mês a mês (snapshots já lançados em kpiSubVals[mes].preferidos)
+  const histEl=document.getElementById('preferidos-historico');
+  if(histEl){
+    const periodos=Object.keys(kpiSubVals).filter(m=>kpiSubVals[m]&&kpiSubVals[m].preferidos).sort();
+    histEl.innerHTML=!periodos.length?'':
+      '<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);letter-spacing:0.5px;margin-bottom:10px;">Histórico mês a mês</div>'+
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;">'+
+      periodos.map(m=>{
+        const s=kpiSubVals[m].preferidos;
+        const p=s.total>0?Math.round((s.marcados/s.total)*100):0;
+        return '<div class="metric-card sage"><div class="metric-value" style="font-size:18px;">'+p+'%</div><div class="metric-label">'+m+'<br><span style="font-size:10px;opacity:.7;">'+s.marcados+'/'+s.total+'</span></div></div>';
+      }).join('')+'</div>';
+  }
+}
+function lancarSnapshotPreferidos(){
+  const mesEl=document.getElementById('pref-lanc-mes');
+  const mes=(mesEl&&mesEl.value)||kpiPeriodo;
+  const marcadosEl=document.getElementById('pref-lanc-marcados');
+  const totalEl=document.getElementById('pref-lanc-total');
+  const marcados=marcadosEl&&marcadosEl.value!==''?parseInt(marcadosEl.value):null;
+  const total=totalEl&&totalEl.value!==''?parseInt(totalEl.value):null;
+  if(marcados==null||total==null){ showToast('Informe a quantidade de preferidos e o total de imóveis.','peach'); return; }
+  if(!kpiSubVals[mes])kpiSubVals[mes]={};
+  kpiSubVals[mes].preferidos={marcados,total};
+  if(typeof saveAll==='function') saveAll();
+  renderPreferidosHospedes();
+  if(typeof renderPerformance==='function' && document.getElementById('performance-body')) renderPerformance();
+  showToast('Snapshot de '+mes+' salvo!','sage');
 }
 function togglePreferidoHospede(id){
   const im=imovelsCatalog.find(x=>x.id===id); if(!im) return;

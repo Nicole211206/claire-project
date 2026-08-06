@@ -4809,7 +4809,7 @@ async function sincronizarAvaliacoes(){
   if(!/^https?:\/\//i.test(url)) url='https://'+url; // adiciona https:// se faltar
   showToast('Sincronizando avaliações...','sage');
   try{
-    const resp=await fetch(url.replace(/\/$/,'')+'/reviews');
+    const resp=await fetch(url.replace(/\/$/,'')+'/reviews?token='+encodeURIComponent((window.CLAIRE_SYNC&&window.CLAIRE_SYNC.token)||''));
     const data=await resp.json();
     if(data.error){ showToast('Erro do Worker: '+data.error,'vermelha'); return; }
     // Só avaliações PUBLICADAS PELO HÓSPEDE: tipo guest-to-host COM nota ou texto.
@@ -4964,7 +4964,7 @@ async function carregarReservasPeriodo(){
   let u=url.trim(); if(!/^https?:\/\//i.test(u)) u='https://'+u;
   const per=periodoKPIAvaliacoes();
   try{
-    const resp=await fetch(u.replace(/\/$/,'')+'/reservations?from='+per.de+'&to='+per.ate);
+    const resp=await fetch(u.replace(/\/$/,'')+'/reservations?from='+per.de+'&to='+per.ate+'&token='+encodeURIComponent((window.CLAIRE_SYNC&&window.CLAIRE_SYNC.token)||''));
     const data=await resp.json();
     const el=document.getElementById('av-reservas-num');
     if(el) el.textContent = data.total!=null ? data.total : '—';
@@ -4998,7 +4998,7 @@ async function aplicarAvaliacoesNoKPI(){
   if(url){
     let u=url.trim(); if(!/^https?:\/\//i.test(u)) u='https://'+u;
     try{
-      const resp=await fetch(u.replace(/\/$/,'')+'/reservations?from='+per.de+'&to='+per.ate);
+      const resp=await fetch(u.replace(/\/$/,'')+'/reservations?from='+per.de+'&to='+per.ate+'&token='+encodeURIComponent((window.CLAIRE_SYNC&&window.CLAIRE_SYNC.token)||''));
       const data=await resp.json();
       reservas = data.total!=null ? data.total : null;
     }catch(e){}

@@ -1,6 +1,7 @@
 import httpx
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
+from ..auth import auth_dependency
 from ..config import settings
 from ..hostaway_client import (
     HOSTAWAY_BASE,
@@ -10,9 +11,12 @@ from ..hostaway_client import (
     round2,
 )
 
-# Proxy puro pra API do Hostaway — sem persistência própria e sem
-# autenticação (igual ao hostaway-worker.js original, que não checa token).
-router = APIRouter()
+# Proxy pra API do Hostaway — sem persistência própria. O worker original
+# (hostaway-worker.js) não checava token nenhum; aqui exige o mesmo token
+# compartilhado dos demais routers (mesmo dependency de root.py/records.py/
+# jarvis.py) — sem isso, qualquer site expunha dados privados de hóspede
+# (comentarioInterno) e consumia a cota paga do Hostaway sem controle nenhum.
+router = APIRouter(dependencies=[Depends(auth_dependency)])
 
 TIMEOUT = httpx.Timeout(30.0)
 

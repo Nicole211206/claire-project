@@ -1,9 +1,45 @@
+import logging
+from collections import defaultdict
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from . import crud
 from .utils import now_ms, to_number
+
+logger = logging.getLogger(__name__)
+
+# Rajada de tombstones: se um único lote (mesmo instante, ou dentro desta
+# janela) cobrir uma fração muito alta de UMA coleção de uma vez, é mais
+# provável ser um bug de cliente (ex.: variável em memória ainda vazia no
+# boot, tratando "não conheço esse id" como "usuário apagou") do que uma
+# exclusão em massa deliberada. Rede de segurança complementar ao fix no
+# app.js (_dataLoaded antes de _carimbarTsEDeletes) — não substitui, cobre o
+# caso de outro bug parecido aparecer no futuro.
+TOMBSTONE_BURST_WINDOW_MS = 5000
+TOMBSTONE_BURST_FRACTION = 0.8
+TOMBSTONE_BURST_MIN_COUNT = 5
+
+
+def _ids_em_rajada_suspeita(tomb_map: dict, would_remove_ids: set, total_na_colecao: int) -> set:
+    """Agrupa os ids que SERIAM removidos por bucket de tempo (janela de
+    TOMBSTONE_BURST_WINDOW_MS) e devolve os que pertencem a um bucket que
+    cobre uma fração alta da coleção de uma só vez — esses ficam de fora da
+    remoção (a exclusão é rejeitada só para eles, o resto do save segue
+    normal)."""
+    if total_na_colecao < TOMBSTONE_BURST_MIN_COUNT:
+        return set()
+    por_bucket = defaultdict(set)
+    for rid in would_remove_ids:
+        ts = tomb_map.get(rid, 0)
+        bucket = int(ts // TOMBSTONE_BURST_WINDOW_MS)
+        por_bucket[bucket].add(rid)
+    suspeitos = set()
+    for ids in por_bucket.values():
+        if len(ids) >= TOMBSTONE_BURST_MIN_COUNT and (len(ids) / total_na_colecao) > TOMBSTONE_BURST_FRACTION:
+            suspeitos |= ids
+    return suspeitos
+
 
 # As 12 listas com merge por registro (união por id, mantém o de _ts maior).
 MERGE_POR_ID = [
@@ -119,9 +155,23 @@ def do_merge(db: Session, prev: dict, parsed_in: dict) -> dict:
         for k in MERGE_POR_ID:
             if not isinstance(merged.get(k), list):
                 continue
+            arr = merged[k]
+            would_remove_ids = {
+                o.get("id") for o in arr
+                if o.get("id") in tomb_map and tomb_map[o.get("id")] >= _ts_num(o)
+            }
+            rajada = _ids_em_rajada_suspeita(tomb_map, would_remove_ids, len(arr))
+            if rajada:
+                logger.warning(
+                    "merge: rajada de tombstones rejeitada em %s — %d de %d ids "
+                    "(%.0f%%) num único lote; mantendo os itens no servidor.",
+                    k, len(rajada), len(arr), 100 * len(rajada) / len(arr),
+                )
             merged[k] = [
-                o for o in merged[k]
-                if o.get("id") not in tomb_map or tomb_map[o.get("id")] < _ts_num(o)
+                o for o in arr
+                if o.get("id") not in tomb_map
+                or o.get("id") in rajada
+                or tomb_map[o.get("id")] < _ts_num(o)
             ]
 
     # ── trava de encolhimento (clássica + "encolheu demais") ──

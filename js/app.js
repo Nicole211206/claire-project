@@ -3953,6 +3953,16 @@ function _carimbarTsEDeletes(){
 
 let _avisouStorageCheio=false; // evita repetir o toast de armazenamento cheio a cada 5s
 function saveAll(){
+  // TRAVA CRÍTICA (mesmo padrão do _kvFlush): nunca roda antes de loadAll()
+  // ter hidratado as variáveis em memória a partir do localStorage. Sem isso,
+  // o setInterval(saveAll,5000) — que começa a rodar assim que o script
+  // carrega, antes do DOMContentLoaded/loadAll() terminar em boots lentos —
+  // podia comparar arrays ainda vazios (valor padrão) contra o snapshot
+  // salvo da sessão anterior e, em _carimbarTsEDeletes(), interpretar TODO
+  // item como "apagado pelo usuário", gerando uma rajada de tombstones que
+  // depois apaga os registros de verdade no servidor (foi isso que zerou
+  // nx_plantao e outras coleções em 03/08).
+  if(!_dataLoaded) return;
   try{
     _carimbarTsEDeletes();
     // Grava só as chaves que realmente mudaram e só atualiza o carimbo de hora

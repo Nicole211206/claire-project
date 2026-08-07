@@ -1,0 +1,6 @@
+# Auto-deploy do ambiente de STAGING do claire-project a cada 5 minutos —
+# acompanha a branch develop, independente do cron de produção (que só
+# acompanha main). Instalar com:
+#   crontab -u jarvis -e
+# (cole a linha abaixo, sem o comentário)
+*/5 * * * * /home/jarvis/apps/claire-project-staging/deploy/auto-deploy-staging.sh

@@ -20,6 +20,13 @@ TOMBSTONE_BURST_WINDOW_MS = 5000
 TOMBSTONE_BURST_FRACTION = 0.8
 TOMBSTONE_BURST_MIN_COUNT = 5
 
+# nx_imoveis é lista pequena e curada manualmente (cadastro de imóveis nas
+# configurações) — diferente de nx_plantao/nx_tasks, que crescem sozinhas e
+# são o alvo real do bug de boot (variável em memória vazia gerando tombstone
+# em massa). Exclusão manual de vários imóveis de uma vez é uso legítimo
+# esperado e não deve ser bloqueada pela rede de segurança acima.
+TOMBSTONE_BURST_EXEMPT = {"nx_imoveis"}
+
 
 def _ids_em_rajada_suspeita(tomb_map: dict, would_remove_ids: set, total_na_colecao: int) -> set:
     """Agrupa os ids que SERIAM removidos por bucket de tempo (janela de
@@ -161,7 +168,10 @@ def do_merge(db: Session, prev: dict, parsed_in: dict) -> dict:
                 o.get("id") for o in arr
                 if o.get("id") in tomb_map and tomb_map[o.get("id")] >= _ts_num(o)
             }
-            rajada = _ids_em_rajada_suspeita(tomb_map, would_remove_ids, len(arr))
+            rajada = (
+                set() if k in TOMBSTONE_BURST_EXEMPT
+                else _ids_em_rajada_suspeita(tomb_map, would_remove_ids, len(arr))
+            )
             if rajada:
                 logger.warning(
                     "merge: rajada de tombstones rejeitada em %s — %d de %d ids "

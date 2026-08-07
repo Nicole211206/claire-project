@@ -4286,7 +4286,16 @@ function _mergeAtts(base, local, server){
       merged.demands = mergeDemands(b&&b.demands, l.demands, s.demands);
       out.push(merged);
     } else if(l){ out.push(l); }
-    else if(s){ out.push(s); }
+    else if(s){
+      // Só existe no servidor: se este aparelho já conhecia o atendente (está
+      // em `base`) e o servidor não mudou desde a última sincronização, é
+      // porque ESTE aparelho apagou de propósito — não ressuscita (mesma
+      // regra do "server apagou"/"local apagou" em _mergeById). Se nunca
+      // conheceu (b===undefined) ou o servidor mudou depois do último sync,
+      // mantém o item do servidor (pode ser atendente novo de outro aparelho).
+      if(b!==undefined && JSON.stringify(s)===JSON.stringify(b)) continue;
+      out.push(s);
+    }
   }
   return out;
 }
@@ -4345,7 +4354,16 @@ function _mergeManutencoes(base, local, server){
       _MANUT_ARRAY_FIELDS.forEach(k=>{ merged[k]=_mergePositional(b&&b[k], l[k], s[k]); });
       out.push(merged);
     } else if(l){ out.push(l); }
-    else if(s){ out.push(s); }
+    else if(s){
+      // Só existe no servidor: se este aparelho já conhecia a manutenção
+      // (está em `base`) e o servidor não mudou desde a última sincronização,
+      // é porque ESTE aparelho apagou de propósito — não ressuscita (mesma
+      // regra do "server apagou"/"local apagou" em _mergeById). Se nunca
+      // conheceu (b===undefined) ou o servidor mudou depois do último sync,
+      // mantém o item do servidor (pode ser manutenção nova de outro aparelho).
+      if(b!==undefined && JSON.stringify(s)===JSON.stringify(b)) continue;
+      out.push(s);
+    }
   }
   return out;
 }
@@ -4420,7 +4438,16 @@ function _mergeImoveis(base, local, server){
       _IMOVEL_POSITIONAL_FIELDS.forEach(k=>{ merged[k]=_mergePositional(b&&b[k], l[k], s[k]); });
       out.push(merged);
     } else if(l){ out.push(l); }
-    else if(s){ out.push(s); }
+    else if(s){
+      // Só existe no servidor: se este aparelho já conhecia o card (está em
+      // `base`) e o servidor não mudou desde a última sincronização, é porque
+      // ESTE aparelho apagou de propósito — não ressuscita (mesma regra do
+      // "server apagou"/"local apagou" em _mergeById). Se nunca conheceu
+      // (b===undefined) ou o servidor mudou depois do último sync, mantém
+      // o item do servidor (pode ser card novo de outro aparelho).
+      if(b!==undefined && JSON.stringify(s)===JSON.stringify(b)) continue;
+      out.push(s);
+    }
   }
   return out;
 }

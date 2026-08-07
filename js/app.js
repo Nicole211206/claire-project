@@ -562,6 +562,37 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   if(!(_ksv().qtdResp && Object.keys(_ksv().qtdResp).length)){
     ATTS.forEach(a=>{ if(a.qtdRespMes!=null){ if(!_ksv().qtdResp)_ksv().qtdResp={}; _ksv().qtdResp[a.id]=a.qtdRespMes; } });
   }
+  // Auto-cura de valor "órfão" em kpiVals — bug antigo setava null em vez de
+  // '' ao zerar tr/cv/av/rc, o servidor ignora null (mantém o valor anterior),
+  // então meses com os campos de lançamento já vazios na tela continuavam
+  // contando pro score (é o caso do "Tempo de Resposta" aparecer com % mesmo
+  // com "min"/"qtd." em branco). Corrige TODOS os meses já conhecidos deste
+  // aparelho, não só o mês vigente, pra não precisar reabrir cada mês antigo.
+  let _curouOrfao=false;
+  Object.keys(kpiVals).forEach(function(mes){
+    const kv=kpiVals[mes], ksv=kpiSubVals[mes]||{};
+    if(!kv) return;
+    const trSub=ksv.tr||{};
+    const trTemValor=Object.keys(trSub).some(function(k){return trSub[k]!=null&&trSub[k]!=='';});
+    if(!trTemValor && kv.tr!=null && kv.tr!==''){ kv.tr=''; _curouOrfao=true; }
+    const cvSub=ksv.cv||{};
+    const cvValido=cvSub.reviews!==undefined&&cvSub.reviews!==''&&cvSub.checkouts!==undefined&&cvSub.checkouts!==''&&+cvSub.checkouts>0;
+    if(!cvValido && kv.cv!=null && kv.cv!==''){ kv.cv=''; _curouOrfao=true; }
+    const avSub=ksv.av||{};
+    const avValido=(avSub.airbnb!==undefined&&avSub.airbnb!=='')||(avSub.booking!==undefined&&avSub.booking!=='');
+    if(!avValido && kv.av!=null && kv.av!==''){ kv.av=''; _curouOrfao=true; }
+    const rcSub=ksv.rc||{};
+    const rcValido=['limpeza','manutencao','setup','margem','extras'].some(function(it){
+      const d=rcSub[it]; if(!d) return false;
+      const p=parseFloat(d.previsto), g=parseFloat(d.gasto);
+      return p>0 && !isNaN(g);
+    });
+    if(!rcValido && kv.rc!=null && kv.rc!==''){ kv.rc=''; _curouOrfao=true; }
+  });
+  // Persiste a cura pro servidor (não só corrigir na tela a cada load) —
+  // senão outros dispositivos continuam vendo o valor preso até também
+  // abrirem com essa versão do app.
+  if(_curouOrfao && typeof saveAll==='function') saveAll();
   verificarTarefasDespesas();
   greet();
   renderOvAgenda();
@@ -2382,7 +2413,7 @@ function renderPerformance(){
         ${_mediaTotalQtd!=null?`<div style="font-size:10px;color:rgba(255,255,255,.75);margin-top:3px;">${(_mediaTotalQtd/15).toFixed(1)}/dia · ${(_mediaTotalQtd/15/12).toFixed(2)}/hora</div>`:''}
         ${(()=>{const h=_varHtml(_mediaTotalQtd,_mediaTotalQtdAnt);return h?h.replace('color:#0D9488','color:#D1FAE5').replace('color:#DC2626','color:#FEE2E2'):'';})()}
       </div>
-    </div>`;
+    </div>${_mediaTotalQtd==null?`<div style="font-size:11px;color:#9CA3AF;margin-top:8px;">Nenhuma qtd. de respostas lançada em ${kpiPeriodo} ainda — digite no KPI "Tempo de Resposta" (campo "qtd.", junto do tempo em minutos) pra ver aqui a média por dia/hora e a comparação com o mês anterior.</div>`:''}`;
   }
 
   // Cancelamentos do mês vigente (kpiPeriodo) — antes somava TODOS os
@@ -7539,7 +7570,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 104;
+const APP_VERSION = 105;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

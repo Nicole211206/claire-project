@@ -289,6 +289,20 @@ let _gcalEventosHoje=[]; // eventos do Google Calendar carregados
 let calViewMode='mes';
 let _gcalTodosEventos=[]; // todos os eventos carregados do Google
 let avaliacoes=[]; // avaliações carregadas do Hostaway
+// Controle manual de avaliações negativas — substituiu a tela de navegar
+// avaliações sincronizadas do Hostaway (aba "Avaliações" em Acompanhamento)
+// porque a sincronização é pouco confiável; sincronizarAvaliacoes()/
+// aplicarAvaliacoesNoKPI() continuam existindo e alimentando os KPIs
+// av/cv normalmente, só a lista de navegação foi trocada por este kanban.
+let avaliacoesNegativas=[];
+let _avalNegEditId=null;
+let _avalNegAnexosTmp=[];
+const AVAL_NEG_COLS=[
+  {id:'recebida', label:'Recebida', color:'#89b4d4'},
+  {id:'remocao_solicitada', label:'Remoção Solicitada', color:'#d4a843'},
+  {id:'concluido', label:'Concluído', color:'#5aab82'},
+];
+const AVAL_NEG_CANAIS=['Airbnb','Booking.com','Google','Outro'];
 let avFiltroCanal='', avFiltroMinEstrelas=0, avOrdenar='recentes', avSoWecare=false;
 let avFiltroPublicada='', avFiltroOrigem='', avBusca='', avDe='', avAte='';
 let avView='cards';
@@ -679,7 +693,7 @@ function showPanel(id,btn){
   if(id==='manutencao'){renderManutencaoKanban();}
   if(id==='focus'){renderFocusInsights();}
   if(id==='performance'){renderPerformance();}
-  if(id==='avaliacoes'){if(typeof _acompTab!=='undefined'&&_acompTab==='superhost')renderSuperhost();else if(typeof _acompTab!=='undefined'&&_acompTab==='cancelamentos')renderCancelamentos();else if(typeof _acompTab!=='undefined'&&_acompTab==='preferidos')renderPreferidosHospedes();else renderAvaliacoes();}
+  if(id==='avaliacoes'){if(typeof _acompTab!=='undefined'&&_acompTab==='superhost')renderSuperhost();else if(typeof _acompTab!=='undefined'&&_acompTab==='cancelamentos')renderCancelamentos();else if(typeof _acompTab!=='undefined'&&_acompTab==='preferidos')renderPreferidosHospedes();else renderAvaliacoesNegativas();}
   if(id==='equipe'){ setupEquipeTabs(); }
   if(id==='kpis'){renderKPIs();}
   if(id==='extras'){renderExtras();}
@@ -4075,12 +4089,13 @@ const _PERSIST_KEYS = {
   nx_relatorios_fin:()=>relatoriosFinanceiro,
   nx_validacoes_fin:()=>validacoesFinanceiro,
   nx_sla_validacao_dias:()=>slaValidacaoDias,
+  nx_avaliacoes_negativas:()=>avaliacoesNegativas,
   nx_tombstones:()=>tombstones
 };
 
 // Listas com id próprio que o servidor mescla registro a registro (id + _ts).
 // DEVE espelhar a MERGE_POR_ID do backend (backend/app/merge.py).
-const _MERGE_POR_ID_KEYS=['nx_manutencoes','nx_tasks','nx_plantao','nx_projetos','nx_compras','nx_extras','nx_conquistas','nx_despesas','nx_anotacoes_controle','nx_superhost','nx_cancelamentos','nx_imoveis','nx_pagamentos_fin','nx_relatorios_fin','nx_validacoes_fin'];
+const _MERGE_POR_ID_KEYS=['nx_manutencoes','nx_tasks','nx_plantao','nx_projetos','nx_compras','nx_extras','nx_conquistas','nx_despesas','nx_anotacoes_controle','nx_superhost','nx_cancelamentos','nx_imoveis','nx_pagamentos_fin','nx_relatorios_fin','nx_validacoes_fin','nx_avaliacoes_negativas'];
 function _semTs(o){ const c=Object.assign({},o); delete c._ts; return JSON.stringify(c); }
 // Antes de salvar: carimba _ts nos registros novos/alterados e cria tombstone
 // para os que foram apagados. Assim o servidor sabe qual versão é a mais recente
@@ -4805,6 +4820,7 @@ function loadAll(){
     v=g('nx_relatorios_fin'); if(Array.isArray(v)) relatoriosFinanceiro=v;
     v=g('nx_validacoes_fin'); if(Array.isArray(v)) validacoesFinanceiro=v;
     v=g('nx_sla_validacao_dias'); if(typeof v==='number') slaValidacaoDias=v;
+    v=g('nx_avaliacoes_negativas'); if(Array.isArray(v)) avaliacoesNegativas=v;
     v=g('nx_tombstones'); if(Array.isArray(v)) tombstones=v;
     // Migração: atendentes só veem o próprio attId (sem attsPermitidos).
     _migAtendentesSemPerms();
@@ -5110,6 +5126,172 @@ function _destacarWecare(textoEscapado){
     try{ const re=new RegExp('('+k.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'); t=t.replace(re,'<mark style="background:var(--gold);color:#3a2e00;padding:0 2px;border-radius:3px;">$1</mark>'); }catch(e){}
   });
   return t;
+}
+
+// ═══════════════════ CONTROLE DE AVALIAÇÕES NEGATIVAS (kanban manual) ═══════════════════
+function _avalNegIconCanal(canal){
+  if(canal==='Airbnb') return '<i class="fa-brands fa-airbnb" style="color:#FF5A5F;"></i>';
+  if((canal||'').indexOf('Booking')>=0) return '<i class="fa-solid fa-b" style="color:#003580;background:#fff;border-radius:3px;padding:0 3px;"></i>';
+  if(canal==='Google') return '<i class="fa-brands fa-google" style="color:#4285F4;"></i>';
+  return '<i class="fa-solid fa-globe" style="color:var(--text3);"></i>';
+}
+function _avalNegResultadoBadge(r){
+  if(r==='removido') return '<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--sage)22;color:var(--sage);"><i class="fa-solid fa-check"></i> Removido</span>';
+  if(r==='nao_removido') return '<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--vermelha)22;color:var(--vermelha);"><i class="fa-solid fa-xmark"></i> Não removido</span>';
+  return '<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--bg3);color:var(--text3);">Em aberto</span>';
+}
+// Upload múltiplo de anexos (fotos/vídeos/qualquer arquivo) — mesmo padrão
+// _enviarAnexo já usado em Projetos/Índice Financeiro, sem redimensionar
+// imagem (evidência de avaliação precisa ficar legível, não em miniatura).
+function _avalNegUploadAnexos(event){
+  const files=event.target.files; if(!files||!files.length) return;
+  let pend=files.length;
+  Array.prototype.forEach.call(files,function(file){
+    _lerArquivoBase64(file,function(dataUrl,nome){
+      _enviarAnexo(dataUrl,nome,function(url){
+        _avalNegAnexosTmp.push({nome:nome, tipo:file.type||'', dataUrl:url});
+        pend--;
+        if(pend<=0) _avalNegRenderAnexosTmp();
+      });
+    });
+  });
+  event.target.value='';
+}
+function _avalNegRenderAnexosTmp(){
+  const el=document.getElementById('avn-anexos-status'); if(!el) return;
+  el.innerHTML=_avalNegAnexosTmp.map(function(a,i){
+    const isImg=(a.tipo||'').startsWith('image/'), isVid=(a.tipo||'').startsWith('video/');
+    return '<div style="position:relative;width:70px;height:70px;border-radius:var(--r-sm);overflow:hidden;border:1px solid var(--border);display:inline-block;margin:0 6px 6px 0;vertical-align:top;">'+
+      (isImg?'<img src="'+a.dataUrl+'" style="width:100%;height:100%;object-fit:cover;cursor:pointer;" onclick="abrirAnexo(\''+a.dataUrl+'\')">'
+        :isVid?'<video src="'+a.dataUrl+'" style="width:100%;height:100%;object-fit:cover;cursor:pointer;" onclick="abrirAnexo(\''+a.dataUrl+'\')"></video>'
+        :'<div onclick="abrirAnexo(\''+a.dataUrl+'\')" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;background:var(--bg3);">'+getFileIcon(a.tipo||a.nome||'')+'</div>')+
+      '<button type="button" onclick="_avalNegAnexosTmp.splice('+i+',1);_avalNegRenderAnexosTmp()" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);border:none;color:#fff;cursor:pointer;font-size:10px;border-radius:50%;width:18px;height:18px;">&#10005;</button>'+
+    '</div>';
+  }).join('');
+}
+function abrirNovaAvalNeg(){
+  _avalNegEditId=null; _avalNegAnexosTmp=[];
+  document.getElementById('avn-modal-title').textContent='Nova Avaliação Negativa';
+  document.getElementById('avn-imovel').value='';
+  document.getElementById('avn-hospede').value='';
+  document.getElementById('avn-canal').value=AVAL_NEG_CANAIS[0];
+  document.getElementById('avn-nota').value='';
+  document.getElementById('avn-data').value=new Date().toISOString().split('T')[0];
+  document.getElementById('avn-comentario').value='';
+  document.getElementById('avn-status').value='recebida';
+  document.getElementById('avn-resultado').value='';
+  document.getElementById('avn-mes').value=kpiPeriodo;
+  document.getElementById('avn-obs').value='';
+  _avalNegRenderAnexosTmp();
+  document.getElementById('modal-avalneg').classList.add('open');
+}
+function abrirEditarAvalNeg(id){
+  const a=avaliacoesNegativas.find(x=>x.id===id); if(!a) return;
+  _avalNegEditId=id; _avalNegAnexosTmp=(a.anexos||[]).slice();
+  document.getElementById('avn-modal-title').textContent='Editar Avaliação Negativa';
+  document.getElementById('avn-imovel').value=a.imovel||'';
+  document.getElementById('avn-hospede').value=a.hospede||'';
+  document.getElementById('avn-canal').value=a.canal||AVAL_NEG_CANAIS[0];
+  document.getElementById('avn-nota').value=a.nota!=null?a.nota:'';
+  document.getElementById('avn-data').value=a.data||'';
+  document.getElementById('avn-comentario').value=a.comentario||'';
+  document.getElementById('avn-status').value=a.status||'recebida';
+  document.getElementById('avn-resultado').value=a.resultado||'';
+  document.getElementById('avn-mes').value=a.mesVigente||'';
+  document.getElementById('avn-obs').value=a.obs||'';
+  _avalNegRenderAnexosTmp();
+  document.getElementById('modal-avalneg').classList.add('open');
+}
+function salvarAvalNeg(){
+  const imovel=document.getElementById('avn-imovel').value.trim();
+  const mesVigente=document.getElementById('avn-mes').value;
+  if(!imovel){ showToast('Informe o imóvel.','peach'); return; }
+  if(!mesVigente){ showToast('Informe o mês vigente.','peach'); return; }
+  const obj={
+    id:_avalNegEditId||Date.now(),
+    imovel, mesVigente,
+    hospede:document.getElementById('avn-hospede').value.trim(),
+    canal:document.getElementById('avn-canal').value,
+    nota:document.getElementById('avn-nota').value!==''?parseFloat(document.getElementById('avn-nota').value):null,
+    data:document.getElementById('avn-data').value,
+    comentario:document.getElementById('avn-comentario').value.trim(),
+    status:document.getElementById('avn-status').value,
+    resultado:document.getElementById('avn-resultado').value,
+    obs:document.getElementById('avn-obs').value.trim(),
+    anexos:_avalNegAnexosTmp.slice(),
+  };
+  if(_avalNegEditId){ const i=avaliacoesNegativas.findIndex(x=>x.id===_avalNegEditId); if(i>=0) avaliacoesNegativas[i]=obj; } else avaliacoesNegativas.unshift(obj);
+  closeModal('modal-avalneg'); if(typeof saveAll==='function') saveAll(); renderAvaliacoesNegativas(); showToast('Avaliação salva!','sage');
+}
+function deletarAvalNeg(id){
+  if(!confirm('Apagar esta avaliação negativa?')) return;
+  avaliacoesNegativas=avaliacoesNegativas.filter(x=>x.id!==id);
+  if(typeof saveAll==='function') saveAll();
+  renderAvaliacoesNegativas();
+}
+// Move o card pro status anterior/seguinte sem precisar abrir o modal —
+// atalho rápido pro fluxo do dia a dia (recebida → remoção solicitada → concluído).
+function moverAvalNeg(id,delta){
+  const a=avaliacoesNegativas.find(x=>x.id===id); if(!a) return;
+  const idx=AVAL_NEG_COLS.findIndex(c=>c.id===a.status);
+  const novoIdx=idx+delta;
+  if(novoIdx<0||novoIdx>=AVAL_NEG_COLS.length) return;
+  a.status=AVAL_NEG_COLS[novoIdx].id;
+  if(typeof saveAll==='function') saveAll();
+  renderAvaliacoesNegativas();
+}
+function renderAvaliacoesNegativas(){
+  const kEl=document.getElementById('avalneg-kanban'); if(!kEl) return;
+  // Resumo por mês — todos os meses com pelo menos 1 avaliação lançada,
+  // mais recente primeiro.
+  const resEl=document.getElementById('avalneg-resumo-mes');
+  if(resEl){
+    const porMes={};
+    avaliacoesNegativas.forEach(a=>{ const m=a.mesVigente||'—'; if(!porMes[m]) porMes[m]={total:0,removidas:0,naoRemovidas:0}; porMes[m].total++; if(a.resultado==='removido') porMes[m].removidas++; else if(a.resultado==='nao_removido') porMes[m].naoRemovidas++; });
+    const meses=Object.keys(porMes).sort().reverse();
+    resEl.innerHTML=!meses.length?'<p style="color:var(--text3);font-size:12.5px;">Nenhuma avaliação negativa lançada ainda.</p>':
+      '<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);letter-spacing:0.5px;margin-bottom:10px;">Resumo por Mês</div>'+
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+
+      meses.map(m=>{
+        const s=porMes[m];
+        const pctRem=s.total>0?Math.round((s.removidas/s.total)*100):0;
+        return '<div class="card" style="padding:10px 14px;min-width:150px;"><div style="font-size:11px;color:var(--text3);text-transform:uppercase;margin-bottom:4px;">'+esc(m)+'</div>'+
+          '<div style="display:flex;gap:10px;align-items:baseline;">'+
+          '<span style="font-size:20px;font-weight:700;">'+s.total+'</span><span style="font-size:10.5px;color:var(--text3);">negativas</span>'+
+          '</div>'+
+          '<div style="font-size:11px;margin-top:4px;"><span style="color:var(--sage);font-weight:600;">'+s.removidas+' removidas</span> · <span style="color:var(--vermelha);font-weight:600;">'+s.naoRemovidas+' não removidas</span></div>'+
+          '<div style="font-size:10px;color:var(--text3);margin-top:2px;">'+pctRem+'% removidas</div>'+
+          '</div>';
+      }).join('')+'</div>';
+  }
+  // Kanban — 3 colunas fixas (recebida/remoção solicitada/concluído)
+  kEl.innerHTML=AVAL_NEG_COLS.map((col,colIdx)=>{
+    const itens=avaliacoesNegativas.filter(a=>(a.status||'recebida')===col.id);
+    return '<div>'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid '+col.color+';">'+
+      '<span style="font-weight:700;font-size:13px;">'+col.label+'</span>'+
+      '<span style="font-size:11px;background:var(--bg3);padding:1px 8px;border-radius:10px;color:var(--text3);">'+itens.length+'</span>'+
+      '</div>'+
+      (itens.length===0?'<div style="font-size:12px;color:var(--text3);padding:12px 0;text-align:center;">Nenhuma aqui.</div>':itens.map(a=>{
+        const anexosCount=(a.anexos||[]).length;
+        const podeVoltar=colIdx>0, podeAvancar=colIdx<AVAL_NEG_COLS.length-1;
+        return '<div class="card" style="margin-bottom:10px;cursor:pointer;" onclick="abrirEditarAvalNeg('+a.id+')"><div class="card-body" style="padding:10px 12px;">'+
+          '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:4px;">'+
+          '<span style="font-size:12.5px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(a.imovel||'—')+'</span>'+
+          _avalNegResultadoBadge(a.resultado)+
+          '</div>'+
+          '<div style="font-size:10.5px;color:var(--text3);margin-bottom:5px;">'+_avalNegIconCanal(a.canal)+' '+esc(a.canal||'—')+(a.data?' · '+new Date(a.data+'T00:00').toLocaleDateString('pt-BR'):'')+(a.nota!=null?' · '+a.nota+'★':'')+'</div>'+
+          (a.comentario?'<div style="font-size:12px;color:var(--text2);line-height:1.4;max-height:2.8em;overflow:hidden;margin-bottom:6px;">'+esc(a.comentario)+'</div>':'')+
+          (anexosCount>0?'<div style="font-size:10.5px;color:var(--text3);margin-bottom:4px;"><i class="fa-solid fa-paperclip"></i> '+anexosCount+' anexo'+(anexosCount>1?'s':'')+'</div>':'')+
+          '<div style="display:flex;justify-content:flex-end;gap:4px;" onclick="event.stopPropagation()">'+
+          (podeVoltar?'<button onclick="moverAvalNeg('+a.id+',-1)" class="btn btn-sm" title="Voltar etapa"><i class="fa-solid fa-arrow-left"></i></button>':'')+
+          (podeAvancar?'<button onclick="moverAvalNeg('+a.id+',1)" class="btn btn-sm btn-rose" title="Avançar etapa"><i class="fa-solid fa-arrow-right"></i></button>':'')+
+          '<button onclick="deletarAvalNeg('+a.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:4px 6px;"><i class="fa-solid fa-trash"></i></button>'+
+          '</div>'+
+          '</div></div>';
+      }).join(''))+
+      '</div>';
+  }).join('');
 }
 
 // Abre modal de detalhe de uma avaliação
@@ -7667,7 +7849,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 108;
+const APP_VERSION = 109;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;
@@ -7721,7 +7903,7 @@ function switchAcompTab(tab, btn) {
   if (btn) btn.classList.add('active');
   if (tab === 'superhost') renderSuperhost();
   if (tab === 'cancelamentos') renderCancelamentos();
-  if (tab === 'avaliacoes') renderAvaliacoes();
+  if (tab === 'avaliacoes') renderAvaliacoesNegativas();
   if (tab === 'preferidos') renderPreferidosHospedes();
 }
 

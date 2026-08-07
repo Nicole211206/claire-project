@@ -613,6 +613,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   // senão outros dispositivos continuam vendo o valor preso até também
   // abrirem com essa versão do app.
   if(_curouOrfao && typeof saveAll==='function') saveAll();
+  if(typeof _importarDadosFinanceiroJulho2026==='function') _importarDadosFinanceiroJulho2026();
   verificarTarefasDespesas();
   greet();
   renderOvAgenda();
@@ -8250,6 +8251,50 @@ function sincronizarFinanceiroKPI(){
   _kv().fin=vals.length>0?(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2):'';
   if(typeof saveAll==='function') saveAll();
   if(typeof renderKPIs==='function') renderKPIs();
+}
+
+// Importação única dos dados de julho/2026 já levantados na planilha manual
+// da Nicole (KPI_Gestao_Financeira_Nicole.xlsx) — pra não precisar digitar
+// tudo de novo na mão. Roda uma única vez (flag em localStorage); depois
+// disso os registros vivem como qualquer outro lançamento normal (editável/
+// apagável). Números confirmados contra a aba "Resumo KPI" da planilha:
+// Pontualidade 17/18=94,4% · Precisão 42 revisados/0 erros=100% · Eficiência
+// 3/3 dentro do SLA=100% — média 98,1%, igual ao relatório de julho/2026.
+function _importarDadosFinanceiroJulho2026(){
+  if(localStorage.getItem('nx_fin_seed_julho2026')) return;
+  try{ localStorage.setItem('nx_fin_seed_julho2026','1'); }catch(e){}
+  const mes='2026-07';
+  const salarios=[
+    ['Patrícia','2026-07-15','2026-07-15'],['Sara','2026-07-15','2026-07-15'],['Lisarb','2026-07-15','2026-07-15'],['Laís','2026-07-15','2026-07-15'],['Nicole','2026-07-15','2026-07-15'],['Gabriela','2026-07-15','2026-07-15'],['Felipe','2026-07-15','2026-07-15'],['Nilson','2026-07-15','2026-07-15'],
+    ['Patrícia','2026-07-31','2026-07-31'],['Sara','2026-07-31','2026-07-31'],['Lisarb','2026-07-31','2026-07-31'],['Laís','2026-07-31','2026-07-31'],['Nicole','2026-07-31','2026-07-31'],['Gabriela','2026-07-31','2026-07-31'],['Felipe','2026-07-31','2026-07-31'],
+    ['Nilson','2026-07-28','2026-07-28'],
+  ];
+  salarios.forEach(function(s,i){
+    pagamentosFinanceiro.push({id:Date.now()+i, descricao:'Salário Fixo — '+s[0], mesVigente:mes, dataPrevista:s[1], dataReal:s[2], obs:'', anexos:[]});
+  });
+  pagamentosFinanceiro.push({id:Date.now()+100, descricao:'Comissão — Nicole', mesVigente:mes, dataPrevista:'2026-07-10', dataReal:'2026-07-10', obs:'', anexos:[]});
+  pagamentosFinanceiro.push({id:Date.now()+101, descricao:'Comissão — Gabriela', mesVigente:mes, dataPrevista:'2026-07-10', dataReal:'2026-07-15', obs:'Atrasou porque ela não sabia o valor da comissão que iria receber.', anexos:[]});
+
+  // Erros de Relatório: zero erros em julho, mas o "total revisado" (base do
+  // cálculo de Precisão) já tinha sido levantado na planilha manual.
+  if(!kpiSubVals[mes]) kpiSubVals[mes]={};
+  if(!kpiSubVals[mes].fin) kpiSubVals[mes].fin={};
+  kpiSubVals[mes].fin.totalRevisado=42;
+
+  const validacoes=[
+    ['Planilha de Proprietários','Planilha proprietários','2026-07-06','2026-07-07'],
+    ['Limpeza','Planilha limpezas','2026-07-08','2026-07-09'],
+    ['Anfitrião','Planilha anfitriões','2026-07-13','2026-07-14'],
+  ];
+  validacoes.forEach(function(v,i){
+    validacoesFinanceiro.push({id:Date.now()+200+i, tipo:v[0], descricao:v[1], mesVigente:mes, dataRecebimento:v[2], dataDevolucao:v[3], obs:'', anexos:[]});
+  });
+
+  if(typeof sincronizarFinanceiroKPI==='function'){
+    const _periodoAtual=kpiPeriodo;
+    kpiPeriodo=mes; sincronizarFinanceiroKPI(); kpiPeriodo=_periodoAtual;
+  }
+  if(typeof saveAll==='function') saveAll();
 }
 
 // ── SUPERHOST ──

@@ -235,3 +235,108 @@ sudo systemctl restart claire-project
 - [ ] Certbot emitiu SSL e HTTPS funcionando
 - [ ] Sudoers + cron do `auto-deploy.sh` instalados e `deploy/auto-deploy.log` sendo criado
 - [ ] Domínio já definido e DNS apontado (`claire.wecarehosting.com.br`)
+- [ ] **Staging:** certbot emitiu SSL pra `dev-claire.wecarehosting.com.br` também (certificado
+      próprio, separado do de produção)
+- [ ] **Staging:** sudoers + cron do `auto-deploy-staging.sh` instalados e
+      `deploy/auto-deploy-staging.log` sendo criado (cron separado do de produção, acompanhando
+      `develop`)
+- [ ] **Staging:** serviço systemd `claire-project-staging` ativo na porta 18793 (só localhost)
+- [ ] **Staging:** `index.html` do checkout de staging apontando pro próprio domínio/token (não
+      pro de produção) — conferir depois de qualquer deploy manual, já que o patch do
+      `CLAIRE_SYNC` é reaplicado automaticamente só pelo `auto-deploy-staging.sh` (ver seção 11.3)
+
+---
+
+## 11. Ambiente de staging (branch `develop`)
+
+### 11.1 Visão geral
+
+Staging é um segundo ambiente completo, isolado de produção, rodando a partir da branch
+`develop` — pra testar mudanças antes de promover pra `main`.
+
+| | Produção | Staging |
+|---|---|---|
+| Domínio | `claire.wecarehosting.com.br` | `dev-claire.wecarehosting.com.br` |
+| Branch | `main` | `develop` |
+| Checkout | `/home/jarvis/apps/claire-project` | `/home/jarvis/apps/claire-project-staging` |
+| Backend (porta) | `18792` | `18793` |
+| Serviço systemd | `claire-project` | `claire-project-staging` |
+| Banco | `backend/claire.db` | `backend/claire-staging.db` |
+| Auto-deploy | `deploy/auto-deploy.sh` (cron próprio, a cada 5min) | `deploy/auto-deploy-staging.sh` (cron próprio, a cada 5min, independente do de produção) |
+| Sudoers | `claire-project-deploy` | `claire-project-staging-deploy` |
+| Nginx | `claire.wecarehosting.com.br.conf` | `dev-claire.wecarehosting.com.br.conf` |
+
+Mesma allowlist de segurança do nginx de produção (só `/`, `/index.html`, `/restaurar.html`,
+`/css/`, `/js/`, `/assets/` são servidos — o resto dá 404). Não repetir em staging o erro que
+foi corrigido em produção (nginx servindo `backend/`/`.git/`/`deploy/` sem autenticação).
+
+### 11.2 Fluxo de trabalho recomendado
+
+```
+código novo
+  → commit em develop
+  → auto-deploy-staging.sh puxa pra staging (até 5min)
+  → testar em https://dev-claire.wecarehosting.com.br
+  → se ok: promover develop → main (fast-forward ou merge, deliberado — nunca automático)
+  → auto-deploy.sh (produção) puxa main automaticamente (até 5min)
+```
+
+`develop` e `main` são mantidos iguais depois de cada promoção (mesmo padrão já usado nas
+últimas correções desta sessão) — staging sempre reflete o que está prestes a virar produção,
+nunca um branch à parte que diverge pra sempre.
+
+### 11.3 ⚠️ Cuidado: `CLAIRE_SYNC` do staging NUNCA é commitado
+
+O `index.html` versionado no repo tem `window.CLAIRE_SYNC` apontando pro domínio/token de
+**produção** — essa mesma linha existe tanto em `develop` quanto em `main`, porque os dois
+branches são mantidos iguais (seção 11.2). Se o staging commitasse sua própria URL/token nessa
+linha, o próximo merge `develop → main` vazaria o domínio e o token de staging pra produção,
+quebrando o app da Nicole (apontando pro backend errado, com token errado).
+
+Por isso `deploy/auto-deploy-staging.sh` faz, a cada execução:
+
+1. `git checkout -- index.html` (descarta o patch anterior, volta pro valor commitado de produção)
+2. `git pull --ff-only origin develop` (agora sem risco de conflito com o patch local)
+3. Reescreve a linha do `CLAIRE_SYNC` via `sed`, direto no arquivo do checkout — **só no disco,
+   nunca commitado** — apontando pro domínio de staging e lendo o token do próprio
+   `backend/.env` (nunca hardcoded no script)
+
+**Se for mexer em `auto-deploy-staging.sh` no futuro, não remova esse passo** achando que é
+redundante — ele existe especificamente pra essa mistura de branch/domínio não vazar. Se um dia
+staging precisar de outro token, troque só o `CLAIRE_TOKEN` no `.env` do staging — o script
+reaplica sozinho no próximo deploy.
+
+### 11.4 Banco de staging: cópia real de produção, não dado fake
+
+O `claire-staging.db` foi inicializado como uma **cópia consistente do banco de produção**
+(incluindo os usuários reais e as respectivas senhas) — não é um ambiente com dado de teste
+fictício. Trate o acesso a staging com o mesmo cuidado que produção.
+
+Pra resincronizar manualmente (staging fica cada vez mais desatualizado em relação a produção
+conforme o tempo passa, já que não há sync automático entre os dois bancos):
+
+```bash
+sudo systemctl stop claire-project-staging
+
+sudo -u jarvis python3 -c "
+import sqlite3
+src = sqlite3.connect('/home/jarvis/apps/claire-project/backend/claire.db')
+dst = sqlite3.connect('/home/jarvis/apps/claire-project-staging/backend/claire-staging.db')
+src.backup(dst)
+dst.close()
+src.close()
+"
+sudo -u jarvis rsync -a --delete \
+  /home/jarvis/apps/claire-project/backend/uploads/ \
+  /home/jarvis/apps/claire-project-staging/backend/uploads/
+
+sudo systemctl start claire-project-staging
+```
+
+`sqlite3.connect(...).backup(...)` (API do próprio módulo `sqlite3` do Python) faz uma cópia
+consistente mesmo com o banco de produção em uso — não é um `cp` bruto do arquivo, que arrisca
+copiar no meio de uma escrita.
+
+> **Atenção:** resincronizar **sobrescreve qualquer dado criado/editado em staging** desde a
+> última cópia — se estiver no meio de um teste que depende de dados que só existem em staging,
+> resincronize depois de terminar, não antes.

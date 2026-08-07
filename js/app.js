@@ -7667,7 +7667,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 107;
+const APP_VERSION = 108;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;
@@ -8104,11 +8104,14 @@ function renderPagamentosFinanceiro(){
     {l:'Pagos no Prazo',v:pontuais,c:'sage',i:'fa-check'},
     {l:'Pontualidade',v:pct!==null?pct+'%':'—',c:'teal',i:'fa-money-check-dollar'}
   ].map(x=>'<div class="metric-card '+x.c+'"><div class="metric-icon '+x.c+'"><i class="fa-solid '+x.i+'"></i></div><div class="metric-value" style="font-size:22px;">'+x.v+'</div><div class="metric-label">'+x.l+'</div></div>').join('');
-  tb.innerHTML=pagamentosFinanceiro.length===0?'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3);">Nenhum pagamento cadastrado. Clique em "+ Novo Pagamento".</td></tr>':pagamentosFinanceiro.slice().sort((a,b)=>(b.dataPrevista||'').localeCompare(a.dataPrevista||'')).map(p=>{
+  // Tabela segue o mesmo mês vigente dos cards de resumo (doMes) — antes
+  // mostrava TODOS os meses juntos com uma coluna "Mês", o que ficava confuso
+  // ao trocar o seletor (os cards mudavam mas a lista embaixo continuava igual).
+  tb.innerHTML=doMes.length===0?'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3);">Nenhum pagamento em '+kpiPeriodo+'. Clique em "+ Novo Pagamento".</td></tr>':doMes.slice().sort((a,b)=>(b.dataPrevista||'').localeCompare(a.dataPrevista||'')).map(p=>{
     const ok=_pagamentoFinPontual(p);
     const statusHTML=(!p.dataReal)?'<span style="font-size:10px;color:var(--text3);">Aguardando</span>':(ok?'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--sage)22;color:var(--sage);">No prazo</span>':'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--vermelha)22;color:var(--vermelha);">Atrasado</span>');
     const anexosHTML=(p.anexos||[]).map((a,i)=>'<button type="button" onclick="_finAbrirAnexo(\'pgf\','+JSON.stringify(p.anexos).replace(/"/g,'&quot;')+','+i+')" title="'+esc(a.nome)+'" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:1px 2px;">'+getFileIcon(a.tipo)+'</button>').join('');
-    return '<tr><td>'+esc(p.descricao)+'</td><td style="font-size:12px;">'+(p.dataPrevista||'—')+'</td><td style="font-size:12px;">'+(p.dataReal||'—')+'</td><td style="font-size:12px;">'+(p.mesVigente||'—')+'</td><td>'+statusHTML+'</td><td>'+(anexosHTML||'<span style="color:var(--text3);font-size:11px;">—</span>')+'</td><td style="white-space:nowrap;"><button onclick="abrirEditarPagamentoFin('+p.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-pen"></i></button><button onclick="deletarPagamentoFin('+p.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-trash"></i></button></td></tr>';
+    return '<tr><td>'+esc(p.descricao)+'</td><td style="font-size:12px;">'+(p.dataPrevista||'—')+'</td><td style="font-size:12px;">'+(p.dataReal||'—')+'</td><td>'+statusHTML+'</td><td>'+(anexosHTML||'<span style="color:var(--text3);font-size:11px;">—</span>')+'</td><td style="white-space:nowrap;"><button onclick="abrirEditarPagamentoFin('+p.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-pen"></i></button><button onclick="deletarPagamentoFin('+p.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-trash"></i></button></td></tr>';
   }).join('');
 }
 
@@ -8190,7 +8193,9 @@ function renderRelatoriosFinanceiro(){
     {l:'Erros no Mês',v:errosMes.length,c:'peach',i:'fa-triangle-exclamation'},
     {l:'Precisão',v:pct!==null?pct+'%':'—',c:'teal',i:'fa-money-check-dollar'}
   ].map(x=>'<div class="metric-card '+x.c+'"><div class="metric-icon '+x.c+'"><i class="fa-solid '+x.i+'"></i></div><div class="metric-value" style="font-size:22px;">'+x.v+'</div><div class="metric-label">'+x.l+'</div></div>').join('');
-  tb.innerHTML=relatoriosFinanceiro.length===0?'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3);">Nenhum erro registrado. Se o mês fechou sem erro, não precisa lançar nada aqui.</td></tr>':relatoriosFinanceiro.slice().sort((a,b)=>(b.data||'').localeCompare(a.data||'')).map(r=>{
+  // Tabela segue o mesmo mês vigente do resumo (errosMes) — mesmo motivo do
+  // ajuste em renderPagamentosFinanceiro.
+  tb.innerHTML=errosMes.length===0?'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3);">Nenhum erro registrado em '+kpiPeriodo+'. Se o mês fechou sem erro, não precisa lançar nada aqui.</td></tr>':errosMes.slice().sort((a,b)=>(b.data||'').localeCompare(a.data||'')).map(r=>{
     const anexosHTML=(r.anexos||[]).map((a,i)=>'<button type="button" onclick="_finAbrirAnexo(\'rlf\','+JSON.stringify(r.anexos).replace(/"/g,'&quot;')+','+i+')" title="'+esc(a.nome)+'" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:1px 2px;">'+getFileIcon(a.tipo)+'</button>').join('');
     return '<tr><td style="font-size:12px;">'+(r.data||'—')+'</td><td style="font-size:12px;">'+esc(r.tipo||'—')+'</td><td>'+esc(r.descricao)+(r.item?' <span style="color:var(--text3);font-size:11px;">('+esc(r.item)+')</span>':'')+'</td><td style="font-size:12px;">'+esc(r.responsavel||'—')+'</td><td>'+(r.corrigido?'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--sage)22;color:var(--sage);">Corrigido</span>':'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--amarela)22;color:var(--amarela);">Pendente</span>')+'</td><td>'+(anexosHTML||'<span style="color:var(--text3);font-size:11px;">—</span>')+'</td><td style="white-space:nowrap;"><button onclick="abrirEditarRelatorioFin('+r.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-pen"></i></button><button onclick="deletarRelatorioFin('+r.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-trash"></i></button></td></tr>';
   }).join('');
@@ -8267,12 +8272,14 @@ function renderValidacoesFinanceiro(){
     {l:'Dentro do SLA',v:noPrazo,c:'sage',i:'fa-check'},
     {l:'Eficiência',v:pct!==null?pct+'%':'—',c:'teal',i:'fa-money-check-dollar'}
   ].map(x=>'<div class="metric-card '+x.c+'"><div class="metric-icon '+x.c+'"><i class="fa-solid '+x.i+'"></i></div><div class="metric-value" style="font-size:22px;">'+x.v+'</div><div class="metric-label">'+x.l+'</div></div>').join('');
-  tb.innerHTML=validacoesFinanceiro.length===0?'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3);">Nenhuma validação cadastrada. Clique em "+ Nova Validação".</td></tr>':validacoesFinanceiro.slice().sort((a,b)=>(b.dataRecebimento||'').localeCompare(a.dataRecebimento||'')).map(v=>{
+  // Tabela segue o mesmo mês vigente do resumo (doMes) — mesmo motivo do
+  // ajuste em renderPagamentosFinanceiro.
+  tb.innerHTML=doMes.length===0?'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3);">Nenhuma validação em '+kpiPeriodo+'. Clique em "+ Nova Validação".</td></tr>':doMes.slice().sort((a,b)=>(b.dataRecebimento||'').localeCompare(a.dataRecebimento||'')).map(v=>{
     const dias=_diasEntre(v.dataRecebimento,v.dataDevolucao);
     const ok=_validacaoFinNoPrazo(v);
     const statusHTML=(!v.dataDevolucao)?'<span style="font-size:10px;color:var(--text3);">Pendente</span>':(ok?'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--sage)22;color:var(--sage);">No prazo</span>':'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--vermelha)22;color:var(--vermelha);">Atrasado</span>');
     const anexosHTML=(v.anexos||[]).map((a,i)=>'<button type="button" onclick="_finAbrirAnexo(\'vlf\','+JSON.stringify(v.anexos).replace(/"/g,'&quot;')+','+i+')" title="'+esc(a.nome)+'" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:1px 2px;">'+getFileIcon(a.tipo)+'</button>').join('');
-    return '<tr><td style="font-size:12px;">'+esc(v.tipo||'—')+'</td><td>'+esc(v.descricao)+'</td><td style="font-size:12px;">'+(v.dataRecebimento||'—')+'</td><td style="font-size:12px;">'+(v.dataDevolucao||'—')+'</td><td style="font-size:12px;">'+(dias!=null?dias+'d':'—')+'</td><td style="font-size:12px;">'+(v.mesVigente||'—')+'</td><td>'+statusHTML+'</td><td>'+(anexosHTML||'<span style="color:var(--text3);font-size:11px;">—</span>')+'</td><td style="white-space:nowrap;"><button onclick="abrirEditarValidacaoFin('+v.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-pen"></i></button><button onclick="deletarValidacaoFin('+v.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-trash"></i></button></td></tr>';
+    return '<tr><td style="font-size:12px;">'+esc(v.tipo||'—')+'</td><td>'+esc(v.descricao)+'</td><td style="font-size:12px;">'+(v.dataRecebimento||'—')+'</td><td style="font-size:12px;">'+(v.dataDevolucao||'—')+'</td><td style="font-size:12px;">'+(dias!=null?dias+'d':'—')+'</td><td>'+statusHTML+'</td><td>'+(anexosHTML||'<span style="color:var(--text3);font-size:11px;">—</span>')+'</td><td style="white-space:nowrap;"><button onclick="abrirEditarValidacaoFin('+v.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-pen"></i></button><button onclick="deletarValidacaoFin('+v.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-trash"></i></button></td></tr>';
   }).join('');
 }
 

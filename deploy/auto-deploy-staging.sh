@@ -45,7 +45,12 @@ LOCAL_REV="$(git rev-parse HEAD)"
 REMOTE_REV="$(git rev-parse "origin/$BRANCH")"
 
 if [ "$LOCAL_REV" = "$REMOTE_REV" ]; then
-  exit 0  # nada novo — sem log, senão o arquivo cresce sem parar a cada 5min
+  # Mesmo sem commit novo, garante que o CLAIRE_SYNC não tenha revertido pro
+  # valor commitado de produção por algum motivo externo a este script (ex.:
+  # um `git pull`/`git checkout` manual feito fora do auto-deploy). Idempotente
+  # e barato — roda toda vez, sem log (senão o arquivo cresce à toa a cada 5min).
+  apply_claire_sync_override
+  exit 0
 fi
 
 CHANGED_FILES="$(git diff --name-only "$LOCAL_REV" "$REMOTE_REV")"

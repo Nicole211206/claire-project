@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="css/styles.css?v=2">
+<link rel="stylesheet" href="css/styles.css?v=3">
 <script src="https://accounts.google.com/gsi/client" async></script>
 <script>
 // ════════ SINCRONIZAÇÃO (backend KV) ════════
@@ -701,10 +701,22 @@ function _validarLogin(){
         <div id="controle-actions-anotacoes" style="display:none;gap:8px;">
           <button class="btn btn-rose" onclick="abrirNovaAnotacao()"><i class="fa-solid fa-plus"></i> Nova Anotação</button>
         </div>
+        <div id="controle-actions-pagamentos" style="display:none;gap:8px;">
+          <button class="btn btn-rose" onclick="abrirNovoPagamentoFin()"><i class="fa-solid fa-plus"></i> Novo Pagamento</button>
+        </div>
+        <div id="controle-actions-relatorios" style="display:none;gap:8px;">
+          <button class="btn btn-rose" onclick="abrirNovoRelatorioFin()"><i class="fa-solid fa-plus"></i> Novo Erro</button>
+        </div>
+        <div id="controle-actions-validacoes" style="display:none;gap:8px;">
+          <button class="btn btn-rose" onclick="abrirNovaValidacaoFin()"><i class="fa-solid fa-plus"></i> Nova Validação</button>
+        </div>
       </div>
-      <div class="tab-bar" style="margin-bottom:16px;">
+      <div class="tab-bar" style="margin-bottom:16px;flex-wrap:wrap;">
         <button class="tab-btn controle-tab-btn active" onclick="switchControleTab('despesas',this)">Despesas</button>
         <button class="tab-btn controle-tab-btn" onclick="switchControleTab('anotacoes',this)">Anotações</button>
+        <button class="tab-btn controle-tab-btn" onclick="switchControleTab('pagamentos',this)">Pagamentos</button>
+        <button class="tab-btn controle-tab-btn" onclick="switchControleTab('relatorios',this)">Relatórios</button>
+        <button class="tab-btn controle-tab-btn" onclick="switchControleTab('validacoes',this)">Validações</button>
       </div>
 
       <!-- Despesas -->
@@ -716,6 +728,35 @@ function _validarLogin(){
       <!-- Anotações -->
       <div id="controle-content-anotacoes" style="display:none;">
         <div id="anotacoes-lista"></div>
+      </div>
+
+      <!-- Índice Financeiro · Pagamentos (Pontualidade) -->
+      <div id="controle-content-pagamentos" style="display:none;">
+        <p style="color:var(--text3);font-size:12.5px;margin-bottom:10px;">Compara a Data Prevista com a Data Real de Pagamento — 0 dias de atraso = pontual. Entra no cálculo do KPI "Índice Financeiro" (aba Meus KPIs).</p>
+        <div class="metrics-grid" id="pagamentos-fin-resumo" style="margin-bottom:16px;"></div>
+        <div class="card"><div style="overflow-x:auto;"><table class="data-table"><thead><tr><th>Descrição</th><th>Data Prevista</th><th>Data Real</th><th>Mês</th><th>Status</th><th>Anexos</th><th></th></tr></thead><tbody id="pagamentos-fin-tbody"></tbody></table></div></div>
+      </div>
+
+      <!-- Índice Financeiro · Relatórios / Erros (Precisão) -->
+      <div id="controle-content-relatorios" style="display:none;">
+        <p style="color:var(--text3);font-size:12.5px;margin-bottom:10px;">Registre cada erro identificado (despesa/extra/comissão lançado errado, valor incorreto etc). A % de acerto do mês usa o total de lançamentos revisados como base — informe abaixo.</p>
+        <div class="card" style="padding:12px 16px;margin-bottom:14px;">
+          <label class="form-label" style="margin-bottom:4px;display:block;">Total de lançamentos revisados em <span id="rlf-mes-label"></span></label>
+          <input type="number" min="0" class="form-input" id="rlf-total-revisado" style="width:140px;" placeholder="Ex: 20" onchange="setTotalRevisadoFin(this.value)">
+        </div>
+        <div class="metrics-grid" id="relatorios-fin-resumo" style="margin-bottom:16px;"></div>
+        <div class="card"><div style="overflow-x:auto;"><table class="data-table"><thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Responsável</th><th>Status</th><th>Anexos</th><th></th></tr></thead><tbody id="relatorios-fin-tbody"></tbody></table></div></div>
+      </div>
+
+      <!-- Índice Financeiro · Validações de Planilhas (Eficiência) -->
+      <div id="controle-content-validacoes" style="display:none;">
+        <p style="color:var(--text3);font-size:12.5px;margin-bottom:10px;">"Recebi a planilha em X, devolvi validada em Y" — dentro do prazo se os dias decorridos não passarem do SLA configurado. Entra no cálculo do KPI "Índice Financeiro".</p>
+        <div class="card" style="padding:12px 16px;margin-bottom:14px;">
+          <label class="form-label" style="margin-bottom:4px;display:block;">SLA de validação (dias)</label>
+          <input type="number" min="1" class="form-input" id="vlf-sla-dias" style="width:100px;" onchange="setSlaValidacaoDias(this.value)">
+        </div>
+        <div class="metrics-grid" id="validacoes-fin-resumo" style="margin-bottom:16px;"></div>
+        <div class="card"><div style="overflow-x:auto;"><table class="data-table"><thead><tr><th>Tipo</th><th>Descrição</th><th>Recebimento</th><th>Devolução</th><th>Dias</th><th>Mês</th><th>Status</th><th>Anexos</th><th></th></tr></thead><tbody id="validacoes-fin-tbody"></tbody></table></div></div>
       </div>
     </div>
 
@@ -1545,6 +1586,68 @@ function _validarLogin(){
     <div class="modal-footer"><button class="btn" onclick="closeModal('modal-anotacao')">Cancelar</button><button class="btn btn-rose" onclick="salvarAnotacaoControle()"><i class="fa-solid fa-check"></i> Salvar</button></div>
   </div>
 </div>
+<!-- Modal: Pagamento (Índice Financeiro · Pontualidade) -->
+<div class="modal-overlay" id="modal-pagamento-fin">
+  <div class="modal" style="width:520px;">
+    <div class="modal-title" id="pgf-modal-title">Novo Pagamento</div>
+    <div class="form-group"><label class="form-label">Descrição</label><input type="text" class="form-input" id="pgf-descricao" placeholder="Ex: Repasse proprietário Casa X"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Data Prevista</label><input type="date" class="form-input" id="pgf-prevista"></div>
+      <div class="form-group"><label class="form-label">Data Real de Pagamento</label><input type="date" class="form-input" id="pgf-real"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Mês Vigente</label><input type="month" class="form-input" id="pgf-mes"></div>
+    <div class="form-group"><label class="form-label">Anexos</label><input type="file" multiple onchange="_finUploadAnexos(event,'pgf')"><div id="pgf-anexos-status" style="margin-top:6px;"></div></div>
+    <div class="form-group"><label class="form-label">Observações</label><textarea class="form-input" id="pgf-obs" rows="2"></textarea></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-pagamento-fin')">Cancelar</button><button class="btn btn-rose" onclick="salvarPagamentoFin()"><i class="fa-solid fa-check"></i> Salvar</button></div>
+  </div>
+</div>
+<!-- Modal: Erro de Relatório (Índice Financeiro · Precisão) -->
+<div class="modal-overlay" id="modal-relatorio-fin">
+  <div class="modal" style="width:520px;">
+    <div class="modal-title" id="rlf-modal-title">Novo Erro de Relatório</div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Data do Erro</label><input type="date" class="form-input" id="rlf-data"></div>
+      <div class="form-group"><label class="form-label">Tipo de Lançamento</label>
+        <select class="form-select" id="rlf-tipo">
+          <option>Despesa</option><option>Extra</option><option>Comissão/Salário</option><option>Manutenção</option><option>Compra</option><option>Outro</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label">Imóvel/Reserva (opcional)</label><input type="text" class="form-input" id="rlf-item" placeholder="Ex: Casa do Riacho"></div>
+    <div class="form-group"><label class="form-label">Descrição do Erro</label><textarea class="form-input" id="rlf-descricao" rows="2" placeholder="Ex: Valor da comissão lançado errado"></textarea></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Responsável</label><input type="text" class="form-input" id="rlf-responsavel" placeholder="Quem identificou/cometeu"></div>
+      <div class="form-group"><label class="form-label">Mês Vigente</label><input type="month" class="form-input" id="rlf-mes"></div>
+    </div>
+    <div class="form-group"><label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox" id="rlf-corrigido"> Já foi corrigido</label></div>
+    <div class="form-group"><label class="form-label">Anexos</label><input type="file" multiple onchange="_finUploadAnexos(event,'rlf')"><div id="rlf-anexos-status" style="margin-top:6px;"></div></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-relatorio-fin')">Cancelar</button><button class="btn btn-rose" onclick="salvarRelatorioFin()"><i class="fa-solid fa-check"></i> Salvar</button></div>
+  </div>
+</div>
+<!-- Modal: Validação de Planilha (Índice Financeiro · Eficiência) -->
+<div class="modal-overlay" id="modal-validacao-fin">
+  <div class="modal" style="width:520px;">
+    <div class="modal-title" id="vlf-modal-title">Nova Validação</div>
+    <div class="form-group"><label class="form-label">Tipo</label>
+      <select class="form-select" id="vlf-tipo">
+        <option>Planilha de Proprietários</option>
+        <option>Limpeza</option>
+        <option>Anfitrião</option>
+        <option>Conciliação de Cartão</option>
+        <option>Outro</option>
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">Descrição</label><input type="text" class="form-input" id="vlf-descricao" placeholder="Ex: Planilha de proprietários — julho"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Data de Recebimento</label><input type="date" class="form-input" id="vlf-recebimento"></div>
+      <div class="form-group"><label class="form-label">Data de Devolução/Validação</label><input type="date" class="form-input" id="vlf-devolucao"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Mês Vigente</label><input type="month" class="form-input" id="vlf-mes"></div>
+    <div class="form-group"><label class="form-label">Anexos <span style="font-weight:400;color:var(--text3);">(as planilhas/arquivos usados pra calcular)</span></label><input type="file" multiple onchange="_finUploadAnexos(event,'vlf')"><div id="vlf-anexos-status" style="margin-top:6px;"></div></div>
+    <div class="form-group"><label class="form-label">Observações</label><textarea class="form-input" id="vlf-obs" rows="2"></textarea></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-validacao-fin')">Cancelar</button><button class="btn btn-rose" onclick="salvarValidacaoFin()"><i class="fa-solid fa-check"></i> Salvar</button></div>
+  </div>
+</div>
 <!-- Modal: Superhost -->
 <!-- Modal Conquistas -->
 <div class="modal-overlay" id="modal-conquista">
@@ -1678,6 +1781,6 @@ function _validarLogin(){
   </div>
 </div>
 
-<script src="js/app.js?v=105"></script>
+<script src="js/app.js?v=106"></script>
 </body>
 </html>

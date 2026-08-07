@@ -41,11 +41,12 @@ def _ids_em_rajada_suspeita(tomb_map: dict, would_remove_ids: set, total_na_cole
     return suspeitos
 
 
-# As 12 listas com merge por registro (união por id, mantém o de _ts maior).
+# As 15 listas com merge por registro (união por id, mantém o de _ts maior).
 MERGE_POR_ID = [
     "nx_manutencoes", "nx_tasks", "nx_plantao", "nx_projetos", "nx_compras",
     "nx_extras", "nx_conquistas", "nx_despesas", "nx_anotacoes_controle",
     "nx_superhost", "nx_cancelamentos", "nx_imoveis",
+    "nx_pagamentos_fin", "nx_relatorios_fin", "nx_validacoes_fin",
 ]
 
 # Listas com trava de encolhimento (não passam pelo merge por id acima).

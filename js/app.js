@@ -109,8 +109,14 @@ function setKpiPeriodo(mes){
   // duas telas (cancelamentos/extras do resumo de Performance dependem disso).
   const kpiSel=document.getElementById('kpi-periodo-sel'); if(kpiSel) kpiSel.value=mes;
   const perfSel=document.getElementById('perf-periodo-sel'); if(perfSel) perfSel.value=mes;
+  const controleSel=document.getElementById('controle-periodo-sel'); if(controleSel) controleSel.value=mes;
   renderKPIs();
   if(typeof renderPerformance==='function' && document.getElementById('performance-body')) renderPerformance();
+  // Reflete o novo mês nos 3 submódulos do Índice Financeiro se algum deles
+  // estiver aberto em Controle (mesmo princípio do renderPerformance acima).
+  if(_controleTab==='pagamentos' && typeof renderPagamentosFinanceiro==='function') renderPagamentosFinanceiro();
+  else if(_controleTab==='relatorios' && typeof renderRelatoriosFinanceiro==='function') renderRelatoriosFinanceiro();
+  else if(_controleTab==='validacoes' && typeof renderValidacoesFinanceiro==='function') renderValidacoesFinanceiro();
   if(typeof saveAll==='function')saveAll();
 }
 let imoveis=[];
@@ -7661,7 +7667,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 106;
+const APP_VERSION = 107;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;
@@ -7843,6 +7849,14 @@ function switchControleTab(tab, btn){
   });
   document.querySelectorAll('.controle-tab-btn').forEach(function(b){ b.classList.remove('active'); });
   if(btn) btn.classList.add('active');
+  // Seletor de "Mês de Vigência" só faz sentido pros 3 submódulos do Índice
+  // Financeiro (Despesas/Anotações não são mês-a-mês) — mesmo mês vigente
+  // (kpiPeriodo) usado nas abas Meus KPIs e Performance.
+  const ehFinanceiro=(tab==='pagamentos'||tab==='relatorios'||tab==='validacoes');
+  const periodoWrap=document.getElementById('controle-periodo-wrap');
+  if(periodoWrap) periodoWrap.style.display=ehFinanceiro?'block':'none';
+  const periodoSel=document.getElementById('controle-periodo-sel');
+  if(periodoSel) periodoSel.value=kpiPeriodo;
   if(tab==='anotacoes') renderAnotacoesControle();
   else if(tab==='pagamentos') renderPagamentosFinanceiro();
   else if(tab==='relatorios') renderRelatoriosFinanceiro();

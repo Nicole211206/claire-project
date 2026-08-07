@@ -695,6 +695,10 @@ function _validarLogin(){
           <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Controle</h2>
           <p style="color:var(--text3);font-size:13px;margin-top:2px;">Despesas fixas e anotações gerais</p>
         </div>
+        <div id="controle-periodo-wrap" style="display:none;">
+          <label style="font-size:10.5px;color:var(--text3);text-transform:uppercase;font-weight:700;display:block;margin-bottom:3px;">Mês de Vigência</label>
+          <input type="month" id="controle-periodo-sel" class="form-input" style="padding:5px 9px;font-size:12.5px;" onchange="setKpiPeriodo(this.value)">
+        </div>
         <div id="controle-actions-despesas" style="display:flex;gap:8px;">
           <button class="btn btn-rose" onclick="abrirNovaDespesa()"><i class="fa-solid fa-plus"></i> Nova Despesa</button>
         </div>
@@ -1781,6 +1785,6 @@ function _validarLogin(){
   </div>
 </div>
 
-<script src="js/app.js?v=106"></script>
+<script src="js/app.js?v=107"></script>
 </body>
 </html>

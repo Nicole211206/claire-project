@@ -291,9 +291,14 @@ let _gcalTodosEventos=[]; // todos os eventos carregados do Google
 let avaliacoes=[]; // avaliações carregadas do Hostaway
 // Controle manual de avaliações negativas — substituiu a tela de navegar
 // avaliações sincronizadas do Hostaway (aba "Avaliações" em Acompanhamento)
-// porque a sincronização é pouco confiável; sincronizarAvaliacoes()/
-// aplicarAvaliacoesNoKPI() continuam existindo e alimentando os KPIs
-// av/cv normalmente, só a lista de navegação foi trocada por este kanban.
+// porque a sincronização é pouco confiável. Os botões "Sincronizar"/
+// "Atualizar KPI" (chamavam sincronizarAvaliacoes()/aplicarAvaliacoesNoKPI())
+// foram removidos dessa tela por pedido — Meus KPIs e Performance leem o
+// MESMO valor (_kv().av/.cv), não há cálculo separado por tela, então
+// qualquer coisa que alimentasse KPI ali refletiria nas duas. Os KPIs av/cv
+// continuam alimentáveis manualmente pela própria aba Meus KPIs (campos de
+// Airbnb/Booking e reviews/checkouts). As duas funções continuam definidas
+// (não deletadas, só sem botão) — sem risco, nada mais as chama.
 let avaliacoesNegativas=[];
 let _avalNegEditId=null;
 let _avalNegAnexosTmp=[];
@@ -7849,7 +7854,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 109;
+const APP_VERSION = 110;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

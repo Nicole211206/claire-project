@@ -815,6 +815,36 @@ function calcGlobal(){
   return totalPeso>0?Math.round((tot/totalPeso)*100):0;
 }
 
+// "OTE Ajustado" (pedido 2026-08-10): antes de aplicar o peso, cada KPI tem
+// seu atingimento bruto (contínuo) discretizado nesta régua fixa de 5
+// faixas — diferente do Atingimento Global Ponderado, que pesa o % bruto
+// contínuo direto. Isso evita que um KPI muito acima/abaixo da meta seja
+// "diluído" pela média; ele já entra travado no valor da faixa. Faixas
+// batem com o multiplicador de bandeira (Vermelha 0/Amarela 50/Verde 100/
+// Azul 150/Elite 200) — de propósito, pra manter as duas réguas iguais.
+function _oteAjustado(p){
+  if(p===null) return null;
+  if(p<80) return 0;
+  if(p<100) return 50;
+  if(p<=120) return 100;
+  if(p<=150) return 150;
+  return 200;
+}
+// Mesma agregação ponderada do calcGlobal(), só que em cima do % OTE Ajustado
+// de cada KPI em vez do % bruto — é este total que decide a bandeira/o
+// Variável Pago a partir de agora (ver getBand). calcGlobal() continua
+// existindo só pra exibição/comparação histórica, não paga mais nada.
+function calcGlobalOTE(){
+  let tot=0, totalPeso=0;
+  KPI_DEFS.forEach(k=>{
+    const p=k.calc(_kv()[k.id]);
+    if(p===null) return;
+    const ote=_oteAjustado(p);
+    tot+=(ote/100)*k.peso; totalPeso+=k.peso;
+  });
+  return totalPeso>0?Math.round((tot/totalPeso)*100):0;
+}
+
 function getBand(pct){
   if(pct>=150)return{name:'ELITE',cls:'elite',mult:2.0};
   if(pct>=121)return{name:'AZUL',cls:'azul',mult:1.5};
@@ -865,20 +895,26 @@ function renderKPIs(){
   _syncObKpiDoOnboarding();
   _syncSetupKpiDoOnboarding();
   const periodoSel=document.getElementById('kpi-periodo-sel'); if(periodoSel&&!periodoSel.value) periodoSel.value=kpiPeriodo;
+  // Atingimento Global Ponderado (bruto, histórico) e OTE Ajustado (novo) —
+  // este último é quem decide bandeira/Variável Pago a partir de 2026-08.
   const g=calcGlobal(),band=getBand(g),nv=NIVEIS[selNivelIdx];
-  const vp=Math.round(nv.variavel*band.mult);
+  const gOte=calcGlobalOTE(),bandOte=getBand(gOte);
+  const vp=Math.round(nv.variavel*bandOte.mult);
   // global card
   document.getElementById('kpi-global').textContent=g+'%';
   document.getElementById('kpi-global-bar').style.width=Math.min(g,150)+'%';
   document.getElementById('kpi-global-band-html').innerHTML=bandHTML(band.name);
-  document.getElementById('kpi-band-pill').innerHTML=bandHTML(band.name);
+  const oteGlobalEl=document.getElementById('kpi-global-ote'); if(oteGlobalEl) oteGlobalEl.textContent=gOte+'%';
+  const oteBarEl=document.getElementById('kpi-global-ote-bar'); if(oteBarEl) oteBarEl.style.width=Math.min(gOte,150)+'%';
+  const oteBandEl=document.getElementById('kpi-global-ote-band-html'); if(oteBandEl) oteBandEl.innerHTML=bandHTML(bandOte.name);
+  document.getElementById('kpi-band-pill').innerHTML=bandHTML(bandOte.name);
   document.getElementById('kpi-var-val').textContent=brl(vp);
   document.getElementById('kpi-var-max').textContent=brl(nv.variavel*2);
   document.getElementById('kpi-fixo').textContent=brl(nv.fixo);
   document.getElementById('kpi-total-sal').textContent='Total: '+brl(nv.fixo+vp);
   // overview
-  document.getElementById('ov-kpi').textContent=g+'%';
-  document.getElementById('ov-band').innerHTML='Bandeira '+bandHTML(band.name);
+  document.getElementById('ov-kpi').textContent=gOte+'%';
+  document.getElementById('ov-band').innerHTML='Bandeira '+bandHTML(bandOte.name);
   var _elSal=document.getElementById('ov-salary'); if(_elSal) _elSal.textContent=brl(nv.fixo+vp);
   var _elNiv=document.getElementById('ov-nivel-lbl'); if(_elNiv) _elNiv.textContent=nv.n+' — OTE '+brl(nv.fixo+nv.variavel);
   var elD=document.getElementById('ov-demandas-atrasadas'); if(elD) elD.textContent=contarDemandasAtrasadas();
@@ -2345,12 +2381,14 @@ function removerNotaFiscal(id, parcela){
 function renderPerformance(){
   const el=document.getElementById('performance-body');if(!el)return;
   const perfSel=document.getElementById('perf-periodo-sel'); if(perfSel&&!perfSel.value) perfSel.value=kpiPeriodo;
-  const g=calcGlobal(), band=getBand(g);
+  // g = Atingimento Global Ponderado bruto (histórico); gOte = OTE Ajustado,
+  // é o que decide a bandeira/Variável Pago a partir de 2026-08.
+  const g=calcGlobal(), gOte=calcGlobalOTE();
   const flagStyle=
-    g>=150?{txt:'🏆 ELITE', c:'#7C3AED'}:
-    g>=121?{txt:'💎 AZUL',  c:'#1D4ED8'}:
-    g>=100?{txt:'✅ VERDE', c:'#065F46'}:
-    g>=80 ?{txt:'⚠️ AMARELA',c:'#B45309'}:
+    gOte>=150?{txt:'🏆 ELITE', c:'#7C3AED'}:
+    gOte>=121?{txt:'💎 AZUL',  c:'#1D4ED8'}:
+    gOte>=100?{txt:'✅ VERDE', c:'#065F46'}:
+    gOte>=80 ?{txt:'⚠️ AMARELA',c:'#B45309'}:
            {txt:'— sem bandeira',c:'#9CA3AF'};
 
   // Ciclo seguinte de KPI (av/cv também são lançados com antecedência —
@@ -2400,12 +2438,13 @@ function renderPerformance(){
         <p style="font-size:11px;color:#6B7280;">Acompanhamento de Performance</p>
       </div>
       <div style="position:relative;margin-bottom:20px;padding-bottom:18px;border-bottom:0.5px solid #E2E5EA;overflow:hidden;">
-        <div style="position:absolute;bottom:-12px;right:-4px;font-size:88px;font-weight:800;color:rgba(0,0,0,0.04);line-height:1;user-select:none;pointer-events:none;letter-spacing:-3px;font-family:monospace;">${g}</div>
-        <p style="font-size:10px;color:#9CA3AF;letter-spacing:.8px;text-transform:uppercase;margin-bottom:5px;">score ponderado</p>
+        <div style="position:absolute;bottom:-12px;right:-4px;font-size:88px;font-weight:800;color:rgba(0,0,0,0.04);line-height:1;user-select:none;pointer-events:none;letter-spacing:-3px;font-family:monospace;">${gOte}</div>
+        <p style="font-size:10px;color:#9CA3AF;letter-spacing:.8px;text-transform:uppercase;margin-bottom:5px;">score ponderado (OTE Ajustado)</p>
         <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:4px;">
-          <span style="font-size:44px;font-weight:700;line-height:1;font-family:'SF Mono','Fira Code',monospace;color:${g>=100?'#0D9488':g>0?'#B45309':'#D1D5DB'}">${g}%</span>
+          <span style="font-size:44px;font-weight:700;line-height:1;font-family:'SF Mono','Fira Code',monospace;color:${gOte>=100?'#0D9488':gOte>0?'#B45309':'#D1D5DB'}">${gOte}%</span>
           <span style="font-size:13px;font-weight:500;color:${flagStyle.c}">${flagStyle.txt}</span>
         </div>
+        <p style="font-size:10.5px;color:#9CA3AF;margin-top:4px;">Bruto (histórico): ${g}%</p>
       </div>
       <div style="flex:1;">
         <p style="font-size:10px;color:#9CA3AF;letter-spacing:.8px;text-transform:uppercase;margin-bottom:2px;">KPIs do ciclo</p>
@@ -2582,12 +2621,12 @@ function renderSalary(){
   }).join('');
 
   if(!ehAdmin && !isHead) return;
-  // Heads
-  const g=calcGlobal(),band=getBand(g),nv=NIVEIS[selNivelIdx],vp=Math.round(nv.variavel*band.mult);
+  // Heads — Variável Pago decidido pela bandeira do OTE Ajustado (calcGlobalOTE), não mais o bruto.
+  const nv=NIVEIS[selNivelIdx],bandOte=getBand(calcGlobalOTE()),vp=Math.round(nv.variavel*bandOte.mult);
   const allHeads=[
     {id:'nicole', name:'Nicole', cargo:'Head de Operações', av:'av-rose', ini:'N',
      fixo:nv.fixo, comissao:(nicoleComissaoOverride!==null?nicoleComissaoOverride:vp), isNicole:true,
-     note:`Bandeira ${band.name} (${Math.round(band.mult*100)}% do variável)`},
+     note:`Bandeira ${bandOte.name} (${Math.round(bandOte.mult*100)}% do variável, OTE Ajustado)`},
     {id:'gabriela',name:'Gabriela',cargo:'Head de RevOps', av:'av-sage', ini:'G', fixo:headFixo.gabriela||6000, comissao:headComissao.gabriela||0, isNicole:false},
     {id:'felipe',  name:'Felipe',  cargo:'Head de AI',     av:'av-sky',  ini:'F', fixo:headFixo.felipe||6000,   comissao:headComissao.felipe||0,   isNicole:false},
     {id:'nilson',  name:'Nilson',  cargo:'Head de Operações', av:'av-lav', ini:'N', fixo:headFixo.nilson||6000, comissao:headComissao.nilson||0, isNicole:false},
@@ -2689,7 +2728,7 @@ function removerOutroMembro(id){
 }
 
 function exportarSalariosPDF(){
-  const g=calcGlobal(),band=getBand(g),nv=NIVEIS[selNivelIdx],vp=Math.round(nv.variavel*band.mult);
+  const nv=NIVEIS[selNivelIdx],vp=Math.round(nv.variavel*getBand(calcGlobalOTE()).mult);
   const nicComissao=nicoleComissaoOverride!==null?nicoleComissaoOverride:vp;
   const [_msAno,_msMes]=_mesAtualSal().split('-').map(Number);
   const mes=new Date(_msAno,_msMes-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
@@ -2854,8 +2893,8 @@ async function sendMsg(){
     }
     const tc=tasks.filter(t=>!t.done).slice(0,5).map(t=>'- '+t.text+' ['+t.cat+', '+t.prio+']').join('\n');
     const kc=KPI_DEFS.map(k=>'- '+k.label+': '+(_kv()[k.id]||'não preenchido')+' (peso '+Math.round(k.peso*100)+'%)').join('\n');
-    const g=calcGlobal(),band=getBand(g),nv=NIVEIS[selNivelIdx],vp=Math.round(nv.variavel*band.mult);
-    const sys='Você é Claire, assistente pessoal da Nicole, gerente de operações da WeCare. Responda sempre em português brasileiro.\n\nCONTEXTO:\n- KPI Global: '+g+'% — Bandeira '+band.name+'\n- Nível: '+nv.n+' (Fixo: '+brl(nv.fixo)+', Variável meta 100%: '+brl(nv.variavel)+')\n- Salário estimado: '+brl(nv.fixo+vp)+'\n- KPIs:\n'+kc+'\n- Tarefas pendentes:\n'+tc+'\n- Equipe: Patrícia (R$17/h), Sara, Lisarb, Laís (R$14/h)\n\nPara calcular salário: Fixo + (Variável × multiplicador da bandeira). Vermelha=0%, Amarela=50%, Verde=100%, Azul=150%, Elite=200%.\nSeja concisa, use markdown.';
+    const g=calcGlobal(),gOte=calcGlobalOTE(),bandOte=getBand(gOte),nv=NIVEIS[selNivelIdx],vp=Math.round(nv.variavel*bandOte.mult);
+    const sys='Você é Claire, assistente pessoal da Nicole, gerente de operações da WeCare. Responda sempre em português brasileiro.\n\nCONTEXTO:\n- KPI Global (bruto, histórico): '+g+'%\n- KPI Global OTE Ajustado (define pagamento): '+gOte+'% — Bandeira '+bandOte.name+'\n- Nível: '+nv.n+' (Fixo: '+brl(nv.fixo)+', Variável meta 100%: '+brl(nv.variavel)+')\n- Salário estimado: '+brl(nv.fixo+vp)+'\n- KPIs:\n'+kc+'\n- Tarefas pendentes:\n'+tc+'\n- Equipe: Patrícia (R$17/h), Sara, Lisarb, Laís (R$14/h)\n\nPara calcular salário: Fixo + (Variável × multiplicador da bandeira do OTE Ajustado). O OTE Ajustado discretiza o atingimento de CADA KPI numa régua fixa (abaixo de 80%=0%, 80-99,9%=50%, 100-120%=100%, 121-150%=150%, acima de 150%=200%) antes de aplicar o peso — diferente do KPI Global bruto, que pesa o % contínuo direto. Vermelha=0%, Amarela=50%, Verde=100%, Azul=150%, Elite=200%.\nSeja concisa, use markdown.';
     const r = await callAI(sys, chatHist.slice(-12), 1000);
     removeTyping(typing);
     chatHist.push({role:'assistant',content:r});
@@ -3738,6 +3777,21 @@ function calcGlobalParaMes(mes){
   });
   return (temAlgum && totalPeso>0)?Math.round((tot/totalPeso)*100):null;
 }
+// Mesmo princípio de calcGlobalOTE(), só que pra um mês qualquer (comparação
+// histórica no relatório), igual calcGlobalParaMes() já fazia pro bruto.
+function calcGlobalOTEParaMes(mes){
+  const valores=kpiVals[mes];
+  if(!valores) return null;
+  let tot=0, totalPeso=0, temAlgum=false;
+  KPI_DEFS.forEach(k=>{
+    const p=k.calc(valores[k.id]);
+    if(p===null) return;
+    temAlgum=true;
+    const ote=_oteAjustado(p);
+    tot+=(ote/100)*k.peso; totalPeso+=k.peso;
+  });
+  return (temAlgum && totalPeso>0)?Math.round((tot/totalPeso)*100):null;
+}
 function _mesAnteriorStr(mes){
   const [y,m]=mes.split('-').map(Number);
   const d=new Date(y,m-2,1);
@@ -3762,14 +3816,21 @@ function _pillBandeiraReport(name){
 // mesma origem do app, resolve normalmente na janela do relatório).
 const WECARE_LOGO_SRC='assets/wecare-logo.png';
 function exportarKPIPDF(){
-  const g=calcGlobal(),band=getBand(g),nv=NIVEIS[selNivelIdx],vp=Math.round(nv.variavel*band.mult);
+  // g = Atingimento Global Ponderado bruto (histórico, só exibição/comparação);
+  // gOte = OTE Ajustado, é quem decide bandeira/Variável Pago a partir de 2026-08.
+  const g=calcGlobal(),nv=NIVEIS[selNivelIdx];
+  const gOte=calcGlobalOTE(),bandOte=getBand(gOte),vp=Math.round(nv.variavel*bandOte.mult);
   const [_anoM,_mesM]=kpiPeriodo.split('-').map(Number);
   const mes=new Date(_anoM,_mesM-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
   const nomeColaborador=(typeof ls==='function'?ls('nx_name'):'')||'Nicole';
   const gAnterior=calcGlobalParaMes(_mesAnteriorStr(kpiPeriodo));
   const delta=gAnterior!==null?g-gAnterior:null;
   const deltaTexto=delta===null?''
-    :' · Mês anterior: <strong>'+gAnterior+'%</strong> (<span style="color:'+(delta>0?'#5aab82':delta<0?'#d4726a':'#b0a89e')+';font-weight:600;">'+(delta>0?'▲ +':delta<0?'▼ ':'')+delta+' p.p.</span>)';
+    :' · Bruto mês anterior: <strong>'+gAnterior+'%</strong> (<span style="color:'+(delta>0?'#5aab82':delta<0?'#d4726a':'#b0a89e')+';font-weight:600;">'+(delta>0?'▲ +':delta<0?'▼ ':'')+delta+' p.p.</span>)';
+  const gOteAnterior=calcGlobalOTEParaMes(_mesAnteriorStr(kpiPeriodo));
+  const deltaOte=gOteAnterior!==null?gOte-gOteAnterior:null;
+  const deltaOteTexto=deltaOte===null?''
+    :' · OTE mês anterior: <strong>'+gOteAnterior+'%</strong> (<span style="color:'+(deltaOte>0?'#5aab82':deltaOte<0?'#d4726a':'#b0a89e')+';font-weight:600;">'+(deltaOte>0?'▲ +':deltaOte<0?'▼ ':'')+deltaOte+' p.p.</span>)';
 
   const RC_ITENS=[
     {key:'limpeza',label:'Limpeza'},
@@ -3831,22 +3892,24 @@ function exportarKPIPDF(){
     '@media print{button{display:none}}'+
     '</style></head><body>'+
     '<h1><img src="'+WECARE_LOGO_SRC+'" alt="WeCare" style="height:40px;border-radius:6px;">Relatório de KPIs — WeCare</h1>'+
-    '<p style="color:#666;font-size:13px;margin-top:8px;">Colaborador: <strong>'+esc(nomeColaborador)+'</strong> · Período: <strong>'+mes+'</strong> · Gerado em: '+new Date().toLocaleString('pt-BR')+deltaTexto+'</p>'+
-    '<div style="background:#fdfcfb;border:1px solid rgba(0,0,0,0.07);border-radius:14px;padding:20px 24px;margin:16px 0;display:grid;grid-template-columns:1fr auto;gap:20px;align-items:center;">'+
+    '<p style="color:#666;font-size:13px;margin-top:8px;">Colaborador: <strong>'+esc(nomeColaborador)+'</strong> · Período: <strong>'+mes+'</strong> · Gerado em: '+new Date().toLocaleString('pt-BR')+deltaTexto+deltaOteTexto+'</p>'+
+    '<div style="background:#fdfcfb;border:1px solid rgba(0,0,0,0.07);border-radius:14px;padding:20px 24px;margin:16px 0;display:grid;grid-template-columns:1fr 1fr auto;gap:20px;align-items:center;">'+
     '<div>'+
     '<div style="font-size:11px;color:#b0a89e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Atingimento Global Ponderado</div>'+
-    '<div style="display:flex;align-items:baseline;gap:12px;">'+
-    '<div style="font-size:44px;font-weight:700;">'+g+'%</div>'+
-    _pillBandeiraReport(band.name)+
+    '<div style="display:flex;align-items:baseline;gap:10px;">'+
+    '<div style="font-size:36px;font-weight:700;">'+g+'%</div>'+
     '</div>'+
     '<div style="margin-top:10px;height:8px;background:#e8e4de;border-radius:4px;overflow:hidden;"><div style="height:100%;width:'+Math.min(g,150)+'%;background:#e8a4b0;border-radius:4px;"></div></div>'+
-    '<div style="display:flex;gap:14px;margin-top:8px;flex-wrap:wrap;font-size:11.5px;color:#b0a89e;">'+
-    '<span>0-79% <strong style="color:#d4726a;">Vermelha 0%</strong></span>'+
-    '<span>80-99% <strong style="color:#d4a843;">Amarela 50%</strong></span>'+
-    '<span>100-120% <strong style="color:#5aab82;">Verde 100%</strong></span>'+
-    '<span>121-150% <strong style="color:#5fa8d4;">Azul 150%</strong></span>'+
-    '<span>&gt;150% <strong style="color:#b084e0;">Elite 200%</strong></span>'+
+    '<div style="font-size:10.5px;color:#b0a89e;margin-top:6px;">método bruto (histórico) — não define mais o Variável Pago</div>'+
     '</div>'+
+    '<div style="border-left:1px solid rgba(0,0,0,0.07);padding-left:20px;">'+
+    '<div style="font-size:11px;color:#b0a89e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Atingimento Global Ponderado (OTE Ajustado)</div>'+
+    '<div style="display:flex;align-items:baseline;gap:10px;">'+
+    '<div style="font-size:36px;font-weight:700;color:#4f9b90;">'+gOte+'%</div>'+
+    _pillBandeiraReport(bandOte.name)+
+    '</div>'+
+    '<div style="margin-top:10px;height:8px;background:#e8e4de;border-radius:4px;overflow:hidden;"><div style="height:100%;width:'+Math.min(gOte,150)+'%;background:#4f9b90;border-radius:4px;"></div></div>'+
+    '<div style="font-size:10.5px;color:#4f9b90;font-weight:600;margin-top:6px;">usado pra definir o Variável Pago</div>'+
     '</div>'+
     '<div style="text-align:center;padding:0 20px;border-left:1px solid rgba(0,0,0,0.07);">'+
     '<div style="font-size:11px;color:#b0a89e;text-transform:uppercase;margin-bottom:5px;">Variável Pago</div>'+
@@ -3855,6 +3918,13 @@ function exportarKPIPDF(){
     '<div style="font-size:12px;color:#b0a89e;margin-top:8px;">Fixo: <strong style="color:#2d2926;">'+brl(nv.fixo)+'</strong></div>'+
     '<div style="font-size:14px;font-weight:700;color:#82b09a;margin-top:5px;">Total: '+brl(nv.fixo+vp)+'</div>'+
     '</div>'+
+    '</div>'+
+    '<div style="display:flex;gap:14px;margin:0 0 16px;flex-wrap:wrap;font-size:11.5px;color:#b0a89e;">'+
+    '<span>Faixas (das duas réguas): 0-79% <strong style="color:#d4726a;">Vermelha 0%</strong></span>'+
+    '<span>80-99% <strong style="color:#d4a843;">Amarela 50%</strong></span>'+
+    '<span>100-120% <strong style="color:#5aab82;">Verde 100%</strong></span>'+
+    '<span>121-150% <strong style="color:#5fa8d4;">Azul 150%</strong></span>'+
+    '<span>&gt;150% <strong style="color:#b084e0;">Elite 200%</strong></span>'+
     '</div>'+
     '<h2>Detalhamento por KPI</h2>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">'+cardsKPI+'</div>'+
@@ -7854,7 +7924,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 110;
+const APP_VERSION = 111;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

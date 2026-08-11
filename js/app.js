@@ -4608,8 +4608,14 @@ async function _kvFlush(){
               local[k]=merged; try{ localStorage.setItem(k, JSON.stringify(merged)); }catch(e){} ajustou=true;
             }
           } else if(Array.isArray(sv) && Array.isArray(lv)){
-            // 1) vazio NUNCA apaga cheio (trava anti-perda preservada)
-            if(lv.length===0 && sv.length>0){
+            // 1) vazio NUNCA apaga cheio (trava anti-perda preservada) — MAS só
+            //    quando não há prova de que este aparelho já conhecia a lista.
+            //    Se a base (última sincronização confirmada) já tinha esses
+            //    itens, "vazio agora" é um apagão de propósito (ex.: apagar
+            //    todas as tarefas de uma vez) — deixa cair no merge por id
+            //    abaixo, que sabe distinguir isso de servidor com dado novo.
+            const _baseArr = baseBlob && Array.isArray(baseBlob[k]) ? baseBlob[k] : null;
+            if(lv.length===0 && sv.length>0 && !(_baseArr && _baseArr.length>0)){
               local[k]=sv; try{ localStorage.setItem(k, JSON.stringify(sv)); }catch(e){} ajustou=true;
             // 2) listas com 'id' → mesclagem por item (3-vias): preserva o que outro
             //    aparelho editou e impede este (desatualizado) de reverter.

@@ -599,7 +599,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     }
   }, 2000);
   // guarda o estado atual como "já enviado" pra não regravar à toa logo no início
-  try{ _kvLastPushed=_kvBuildBlob(); }catch(e){}
+  try{ _setKvLastPushed(_kvBuildBlob()); }catch(e){}
   ATTS.forEach(a=>{if(!a.respWeekly)a.respWeekly=[null,null,null,null];if(a.respMes===undefined)a.respMes=null;if(a.qtdRespMes===undefined)a.qtdRespMes=null;});
   // Migração única: a.qtdRespMes era solto (sem mês) — se o mês vigente ainda
   // não tem nada lançado em _ksv().qtdResp, aproveita o que já tinha sido
@@ -4247,7 +4247,16 @@ function saveAll(){
 const _SYNC_EXCLUDE = new Set(['nx_avaliacoes']);
 const SYNC_KEYS=['nx_lastSaved','nx_users','nx_name',...Object.keys(_PERSIST_KEYS).filter(k=>!_SYNC_EXCLUDE.has(k))];
 let _kvDirty=false;       // há mudança local não enviada?
-let _kvLastPushed=null;   // último blob enviado (string) — evita gravações repetidas
+// Último blob enviado (string) — é a "base" do merge de 3 vias (permite saber
+// se ESTE aparelho apagou um item de propósito, em vez de nunca ter conhecido
+// ele). Persistido no localStorage (não só em memória): sem isso, um F5 logo
+// depois de apagar algo — antes do próximo ciclo de envio (até 60s, ver
+// KV_MIN_INTERVAL_MS) — zerava a base no primeiro kvPull() da sessão nova, e
+// o merge não tinha como diferenciar "apaguei" de "nunca vi esse item",
+// ressuscitando de volta o que tinha sido apagado (imóveis do catálogo,
+// manutenções, atendentes...).
+let _kvLastPushed=(function(){ try{ return localStorage.getItem('_kvBase'); }catch(e){ return null; } })();
+function _setKvLastPushed(blob){ _kvLastPushed=blob; try{ localStorage.setItem('_kvBase', blob); }catch(e){} }
 let _kvPushing=false;
 let _dataLoaded=false;    // bloqueia flush antes de loadAll() completar
 function _kvBuildBlob(){
@@ -4649,7 +4658,7 @@ async function _kvFlush(){
     const r=await fetch(s.url.replace(/\/$/,'')+'/save?token='+encodeURIComponent(s.token||''),{
       method:'POST', headers:{'Content-Type':'application/json'}, body:body
     });
-    if(r.ok){ _kvLastPushed=body; _kvDirty=false; }
+    if(r.ok){ _setKvLastPushed(body); _kvDirty=false; }
   }catch(e){ /* offline/limite: tenta no próximo ciclo */ }
   finally{ _kvPushing=false; }
 }
@@ -4671,7 +4680,7 @@ async function kvPull(){
       // dar refresh forçado. Agora reconcilia sempre, registro por registro —
       // seguro porque as mesclagens abaixo (_mergeById/_mergeAtts/_mergeManutencoes)
       // são por id (+ _ts quando existe) e nunca perdem edição local real.
-      if(j.data.nx_lastSaved===localStorage.getItem('nx_lastSaved')){ _kvLastPushed=_kvBuildBlob(); return false; } // nada mudou, nem tenta
+      if(j.data.nx_lastSaved===localStorage.getItem('nx_lastSaved')){ _setKvLastPushed(_kvBuildBlob()); return false; } // nada mudou, nem tenta
       // baseBlob = último estado que ESTE aparelho sabe ter sincronizado — usado
       // pelas mesclagens de 3 vias abaixo (mesma lógica de _kvFlush, agora
       // também no PULL). Sem isso, um pull que chega enquanto há uma edição
@@ -4734,7 +4743,7 @@ async function kvPull(){
         }catch(e){}
       }
       if(aplicou) loadAll();
-      _kvLastPushed=_kvBuildBlob();
+      _setKvLastPushed(_kvBuildBlob());
       return aplicou;
     }
   }catch(e){}
@@ -4750,7 +4759,7 @@ async function kvForceRestore(){
     if(j&&j.data&&Object.keys(j.data).length>1){
       for(const k in j.data){ try{ localStorage.setItem(k, JSON.stringify(j.data[k])); }catch(e){} }
       loadAll();
-      _kvLastPushed=_kvBuildBlob();
+      _setKvLastPushed(_kvBuildBlob());
       _renderTudo();
       showToast('✅ Dados restaurados do servidor com sucesso!','sage');
     } else {
@@ -4794,7 +4803,7 @@ async function kvRestoreFromBackup(date){
     if(j&&j.data&&Object.keys(j.data).length>1){
       for(const k in j.data){ try{ localStorage.setItem(k, JSON.stringify(j.data[k])); }catch(e){} }
       loadAll();
-      _kvLastPushed=_kvBuildBlob();
+      _setKvLastPushed(_kvBuildBlob());
       _renderTudo();
       showToast('✅ Backup de '+date+' restaurado com sucesso!','sage');
     } else {

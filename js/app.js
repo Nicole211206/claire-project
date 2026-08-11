@@ -12,12 +12,13 @@ const NIVEIS=[
 // interpola linearmente entre esses pontos pra chegar no % de atingimento.
 // Configurável pela tela "Configurar KPIs" — por isso é `let`, não `const`.
 let KPI_DEFS=[
-  {id:'av',   label:'Avaliação dos Hóspedes', peso:0.25, unit:'estrelas', meta:4.8, limVermelha:4.7, limAzul:4.9, limElite:5.0, menorMelhor:false, color:'rose',  icon:'fa-star',        hint:'Média Airbnb + Booking'},
+  {id:'av',   label:'Avaliação dos Hóspedes', peso:0.20, unit:'estrelas', meta:4.8, limVermelha:4.7, limAzul:4.9, limElite:5.0, menorMelhor:false, color:'rose',  icon:'fa-star',        hint:'Média Airbnb + Booking'},
   {id:'tr',   label:'Tempo de Resposta',      peso:0.15, unit:'min',      meta:5,   limVermelha:6,   limAzul:4,   limElite:3,   menorMelhor:true,  color:'lav',   icon:'fa-clock',       hint:'Média da equipe (Conduit)'},
-  {id:'ob',   label:'Tempo de Onboarding',    peso:0.20, unit:'dias',     meta:10,  limVermelha:12,  limAzul:9,   limElite:8,   menorMelhor:true,  color:'sage',  icon:'fa-house-flag',  hint:'Assinatura → Anúncio ativo'},
-  {id:'cv',   label:'Conversão de Avaliações',peso:0.15, unit:'%',        meta:60,  limVermelha:50,  limAzul:70,  limElite:80,  menorMelhor:false, color:'peach', icon:'fa-comments',    hint:'% reviews/checkouts (Hostaway)'},
+  {id:'ob',   label:'Tempo de Onboarding',    peso:0.15, unit:'dias',     meta:10,  limVermelha:12,  limAzul:9,   limElite:8,   menorMelhor:true,  color:'sage',  icon:'fa-house-flag',  hint:'Assinatura → Anúncio ativo'},
+  {id:'cv',   label:'Conversão de Avaliações',peso:0.10, unit:'%',        meta:60,  limVermelha:50,  limAzul:70,  limElite:80,  menorMelhor:false, color:'peach', icon:'fa-comments',    hint:'% reviews/checkouts (Hostaway)'},
   {id:'rc',   label:'Redução de Custos',      peso:0.15, unit:'%',        meta:10,  limVermelha:0,   limAzul:20,  limElite:30,  menorMelhor:false, color:'sky',   icon:'fa-piggy-bank',  hint:'% economia gerada'},
   {id:'av360',label:'Avaliação 360',          peso:0.10, unit:'estrelas', meta:4.8, limVermelha:4.7, limAzul:4.9, limElite:4.9, menorMelhor:false, color:'gold',  icon:'fa-user-check',  hint:'Formulário de desempenho'},
+  {id:'fin',  label:'Índice Financeiro',      peso:0.15, unit:'%',        meta:95,  limVermelha:85,  limAzul:98,  limElite:100, menorMelhor:false, color:'teal',  icon:'fa-money-check-dollar', hint:'Pontualidade + Precisão + Eficiência'},
 ];
 function kpiScoreGeneric(v,k){
   if(v==null||v==='')return null;
@@ -38,6 +39,23 @@ function kpiScoreGeneric(v,k){
 }
 function _wireKpiCalc(arr){ arr.forEach(k=>{ k.calc=function(v){return kpiScoreGeneric(v,k);}; }); return arr; }
 _wireKpiCalc(KPI_DEFS);
+
+// Migração 1x: quem já tinha KPI_DEFS salvo (nx_kpidefs) antes do KPI "Índice
+// Financeiro" existir fica travado nos 6 KPIs antigos — o array default daqui
+// do código só vale pra instalação nova, sem nada em storage ainda. Roda uma
+// única vez (idempotente: se 'fin' já existe — inclusive se foi adicionado
+// manualmente pela tela "Configurar KPIs" — não faz nada) e aplica o reajuste
+// de pesos combinado com a criação do novo KPI (25/20/15 → 20/15/10, mantendo
+// a soma em 100%).
+function _migrarKpiIndiceFinanceiro(){
+  if(KPI_DEFS.some(k=>k.id==='fin')) return;
+  const av=KPI_DEFS.find(k=>k.id==='av'); if(av) av.peso=0.20;
+  const ob=KPI_DEFS.find(k=>k.id==='ob'); if(ob) ob.peso=0.15;
+  const cv=KPI_DEFS.find(k=>k.id==='cv'); if(cv) cv.peso=0.10;
+  KPI_DEFS.push({id:'fin', label:'Índice Financeiro', peso:0.15, unit:'%', meta:95, limVermelha:85, limAzul:98, limElite:100, menorMelhor:false, color:'teal', icon:'fa-money-check-dollar', hint:'Pontualidade + Precisão + Eficiência'});
+  _wireKpiCalc(KPI_DEFS);
+  if(typeof saveAll==='function') saveAll();
+}
 
 // Itens da tabela de "Redução de Custos" (Limpeza, Manutenção, ...). Cada um
 // tem seu próprio limiar de verde/vermelho pra colorir a % de economia,
@@ -67,6 +85,7 @@ const KPI_TAG_OPTIONS=[
   {id:'cv',   label:'Conversão de Avaliações', color:'#e0a882'},
   {id:'rc',   label:'Redução de Custos',       color:'#89b4d4'},
   {id:'av360',label:'Avaliação 360',           color:'#c9a84c'},
+  {id:'fin',  label:'Índice Financeiro',       color:'#4f9b90'},
   {id:'nao_relacionado', label:'NÃO RELACIONADO', color:'#d4726a'},
 ];
 function getKpiTagInfo(id){ return KPI_TAG_OPTIONS.find(o=>o.id===id) || KPI_TAG_OPTIONS[KPI_TAG_OPTIONS.length-1]; }
@@ -84,13 +103,20 @@ function _ksv(){if(!kpiSubVals[kpiPeriodo])kpiSubVals[kpiPeriodo]={};return kpiS
 function setKpiPeriodo(mes){
   kpiPeriodo=mes;
   _syncObKpiDoOnboarding();_syncSetupKpiDoOnboarding();
+  if(typeof sincronizarFinanceiroKPI==='function') sincronizarFinanceiroKPI();
   // KPIs e Performance compartilham o mesmo mês de referência — mudar em
   // qualquer um dos dois seletores tem que refletir no outro e recalcular as
   // duas telas (cancelamentos/extras do resumo de Performance dependem disso).
   const kpiSel=document.getElementById('kpi-periodo-sel'); if(kpiSel) kpiSel.value=mes;
   const perfSel=document.getElementById('perf-periodo-sel'); if(perfSel) perfSel.value=mes;
+  const controleSel=document.getElementById('controle-periodo-sel'); if(controleSel) controleSel.value=mes;
   renderKPIs();
   if(typeof renderPerformance==='function' && document.getElementById('performance-body')) renderPerformance();
+  // Reflete o novo mês nos 3 submódulos do Índice Financeiro se algum deles
+  // estiver aberto em Controle (mesmo princípio do renderPerformance acima).
+  if(_controleTab==='pagamentos' && typeof renderPagamentosFinanceiro==='function') renderPagamentosFinanceiro();
+  else if(_controleTab==='relatorios' && typeof renderRelatoriosFinanceiro==='function') renderRelatoriosFinanceiro();
+  else if(_controleTab==='validacoes' && typeof renderValidacoesFinanceiro==='function') renderValidacoesFinanceiro();
   if(typeof saveAll==='function')saveAll();
 }
 let imoveis=[];
@@ -116,7 +142,9 @@ function _renderObList(){
 function _syncObKpiDoOnboarding(){
   if(!_obKpiPorMes)return; // ainda não buscou do onboarding — mantém o valor já salvo
   const m=_obKpiPorMes[kpiPeriodo];
-  _kv().ob=(m&&m.mediaOnboardingDias!=null)?String(m.mediaOnboardingDias):null;
+  // '' (não null) pra realmente limpar no servidor quando o mês não tem
+  // imóvel marcado no onboarding — null é ignorado no merge de nx_kpivals.
+  _kv().ob=(m&&m.mediaOnboardingDias!=null)?String(m.mediaOnboardingDias):'';
 }
 let _obSetupPorMes=null; // {"2026-07":{previsto,gasto,count}, ...} — só imóveis marcados "Colocar o Setup na Claire?"
 function _syncSetupKpiDoOnboarding(){
@@ -261,6 +289,25 @@ let _gcalEventosHoje=[]; // eventos do Google Calendar carregados
 let calViewMode='mes';
 let _gcalTodosEventos=[]; // todos os eventos carregados do Google
 let avaliacoes=[]; // avaliações carregadas do Hostaway
+// Controle manual de avaliações negativas — substituiu a tela de navegar
+// avaliações sincronizadas do Hostaway (aba "Avaliações" em Acompanhamento)
+// porque a sincronização é pouco confiável. Os botões "Sincronizar"/
+// "Atualizar KPI" (chamavam sincronizarAvaliacoes()/aplicarAvaliacoesNoKPI())
+// foram removidos dessa tela por pedido — Meus KPIs e Performance leem o
+// MESMO valor (_kv().av/.cv), não há cálculo separado por tela, então
+// qualquer coisa que alimentasse KPI ali refletiria nas duas. Os KPIs av/cv
+// continuam alimentáveis manualmente pela própria aba Meus KPIs (campos de
+// Airbnb/Booking e reviews/checkouts). As duas funções continuam definidas
+// (não deletadas, só sem botão) — sem risco, nada mais as chama.
+let avaliacoesNegativas=[];
+let _avalNegEditId=null;
+let _avalNegAnexosTmp=[];
+const AVAL_NEG_COLS=[
+  {id:'recebida', label:'Recebida', color:'#89b4d4'},
+  {id:'remocao_solicitada', label:'Remoção Solicitada', color:'#d4a843'},
+  {id:'concluido', label:'Concluído', color:'#5aab82'},
+];
+const AVAL_NEG_CANAIS=['Airbnb','Booking.com','Google','Outro'];
 let avFiltroCanal='', avFiltroMinEstrelas=0, avOrdenar='recentes', avSoWecare=false;
 let avFiltroPublicada='', avFiltroOrigem='', avBusca='', avDe='', avAte='';
 let avView='cards';
@@ -554,6 +601,44 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   // guarda o estado atual como "já enviado" pra não regravar à toa logo no início
   try{ _kvLastPushed=_kvBuildBlob(); }catch(e){}
   ATTS.forEach(a=>{if(!a.respWeekly)a.respWeekly=[null,null,null,null];if(a.respMes===undefined)a.respMes=null;if(a.qtdRespMes===undefined)a.qtdRespMes=null;});
+  // Migração única: a.qtdRespMes era solto (sem mês) — se o mês vigente ainda
+  // não tem nada lançado em _ksv().qtdResp, aproveita o que já tinha sido
+  // digitado (presume que era "do mês atual", pra não perder o que já existia).
+  if(!(_ksv().qtdResp && Object.keys(_ksv().qtdResp).length)){
+    ATTS.forEach(a=>{ if(a.qtdRespMes!=null){ if(!_ksv().qtdResp)_ksv().qtdResp={}; _ksv().qtdResp[a.id]=a.qtdRespMes; } });
+  }
+  // Auto-cura de valor "órfão" em kpiVals — bug antigo setava null em vez de
+  // '' ao zerar tr/cv/av/rc, o servidor ignora null (mantém o valor anterior),
+  // então meses com os campos de lançamento já vazios na tela continuavam
+  // contando pro score (é o caso do "Tempo de Resposta" aparecer com % mesmo
+  // com "min"/"qtd." em branco). Corrige TODOS os meses já conhecidos deste
+  // aparelho, não só o mês vigente, pra não precisar reabrir cada mês antigo.
+  let _curouOrfao=false;
+  Object.keys(kpiVals).forEach(function(mes){
+    const kv=kpiVals[mes], ksv=kpiSubVals[mes]||{};
+    if(!kv) return;
+    const trSub=ksv.tr||{};
+    const trTemValor=Object.keys(trSub).some(function(k){return trSub[k]!=null&&trSub[k]!=='';});
+    if(!trTemValor && kv.tr!=null && kv.tr!==''){ kv.tr=''; _curouOrfao=true; }
+    const cvSub=ksv.cv||{};
+    const cvValido=cvSub.reviews!==undefined&&cvSub.reviews!==''&&cvSub.checkouts!==undefined&&cvSub.checkouts!==''&&+cvSub.checkouts>0;
+    if(!cvValido && kv.cv!=null && kv.cv!==''){ kv.cv=''; _curouOrfao=true; }
+    const avSub=ksv.av||{};
+    const avValido=(avSub.airbnb!==undefined&&avSub.airbnb!=='')||(avSub.booking!==undefined&&avSub.booking!=='');
+    if(!avValido && kv.av!=null && kv.av!==''){ kv.av=''; _curouOrfao=true; }
+    const rcSub=ksv.rc||{};
+    const rcValido=['limpeza','manutencao','setup','margem','extras'].some(function(it){
+      const d=rcSub[it]; if(!d) return false;
+      const p=parseFloat(d.previsto), g=parseFloat(d.gasto);
+      return p>0 && !isNaN(g);
+    });
+    if(!rcValido && kv.rc!=null && kv.rc!==''){ kv.rc=''; _curouOrfao=true; }
+  });
+  // Persiste a cura pro servidor (não só corrigir na tela a cada load) —
+  // senão outros dispositivos continuam vendo o valor preso até também
+  // abrirem com essa versão do app.
+  if(_curouOrfao && typeof saveAll==='function') saveAll();
+  if(typeof _importarDadosFinanceiroJulho2026==='function') _importarDadosFinanceiroJulho2026();
   verificarTarefasDespesas();
   greet();
   renderOvAgenda();
@@ -583,6 +668,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   sincronizarExtrasKPI();
   renderManutencaoKanban();
   sincronizarManutencaoKPI();
+  sincronizarFinanceiroKPI();
   const recEl=document.getElementById('d-recorrente');
   if(recEl)recEl.addEventListener('change',function(){document.getElementById('d-recorrencia').style.display=this.checked?'':'none';});
   carregarUsuarios();
@@ -612,11 +698,19 @@ function showPanel(id,btn){
   if(id==='manutencao'){renderManutencaoKanban();}
   if(id==='focus'){renderFocusInsights();}
   if(id==='performance'){renderPerformance();}
-  if(id==='avaliacoes'){if(typeof _acompTab!=='undefined'&&_acompTab==='superhost')renderSuperhost();else if(typeof _acompTab!=='undefined'&&_acompTab==='cancelamentos')renderCancelamentos();else if(typeof _acompTab!=='undefined'&&_acompTab==='preferidos')renderPreferidosHospedes();else renderAvaliacoes();}
+  if(id==='avaliacoes'){if(typeof _acompTab!=='undefined'&&_acompTab==='superhost')renderSuperhost();else if(typeof _acompTab!=='undefined'&&_acompTab==='cancelamentos')renderCancelamentos();else if(typeof _acompTab!=='undefined'&&_acompTab==='preferidos')renderPreferidosHospedes();else renderAvaliacoesNegativas();}
   if(id==='equipe'){ setupEquipeTabs(); }
   if(id==='kpis'){renderKPIs();}
   if(id==='extras'){renderExtras();}
-  if(id==='controle'){ verificarTarefasDespesas(); if(typeof _controleTab!=='undefined'&&_controleTab==='anotacoes') renderAnotacoesControle(); else renderDespesasFixas(); }
+  if(id==='controle'){
+    verificarTarefasDespesas();
+    if(typeof _controleTab==='undefined'||_controleTab==='despesas') renderDespesasFixas();
+    else if(_controleTab==='anotacoes') renderAnotacoesControle();
+    else if(_controleTab==='pagamentos') renderPagamentosFinanceiro();
+    else if(_controleTab==='relatorios') renderRelatoriosFinanceiro();
+    else if(_controleTab==='validacoes') renderValidacoesFinanceiro();
+    else renderDespesasFixas();
+  }
   if(id==='legado'){ if(typeof renderLegado==='function') renderLegado(); }
   if(id==='manual'){renderManual();}
 }
@@ -721,6 +815,36 @@ function calcGlobal(){
   return totalPeso>0?Math.round((tot/totalPeso)*100):0;
 }
 
+// "OTE Ajustado" (pedido 2026-08-10): antes de aplicar o peso, cada KPI tem
+// seu atingimento bruto (contínuo) discretizado nesta régua fixa de 5
+// faixas — diferente do Atingimento Global Ponderado, que pesa o % bruto
+// contínuo direto. Isso evita que um KPI muito acima/abaixo da meta seja
+// "diluído" pela média; ele já entra travado no valor da faixa. Faixas
+// batem com o multiplicador de bandeira (Vermelha 0/Amarela 50/Verde 100/
+// Azul 150/Elite 200) — de propósito, pra manter as duas réguas iguais.
+function _oteAjustado(p){
+  if(p===null) return null;
+  if(p<80) return 0;
+  if(p<100) return 50;
+  if(p<=120) return 100;
+  if(p<=150) return 150;
+  return 200;
+}
+// Mesma agregação ponderada do calcGlobal(), só que em cima do % OTE Ajustado
+// de cada KPI em vez do % bruto — é este total que decide a bandeira/o
+// Variável Pago a partir de agora (ver getBand). calcGlobal() continua
+// existindo só pra exibição/comparação histórica, não paga mais nada.
+function calcGlobalOTE(){
+  let tot=0, totalPeso=0;
+  KPI_DEFS.forEach(k=>{
+    const p=k.calc(_kv()[k.id]);
+    if(p===null) return;
+    const ote=_oteAjustado(p);
+    tot+=(ote/100)*k.peso; totalPeso+=k.peso;
+  });
+  return totalPeso>0?Math.round((tot/totalPeso)*100):0;
+}
+
 function getBand(pct){
   if(pct>=150)return{name:'ELITE',cls:'elite',mult:2.0};
   if(pct>=121)return{name:'AZUL',cls:'azul',mult:1.5};
@@ -771,20 +895,25 @@ function renderKPIs(){
   _syncObKpiDoOnboarding();
   _syncSetupKpiDoOnboarding();
   const periodoSel=document.getElementById('kpi-periodo-sel'); if(periodoSel&&!periodoSel.value) periodoSel.value=kpiPeriodo;
-  const g=calcGlobal(),band=getBand(g),nv=NIVEIS[selNivelIdx];
-  const vp=Math.round(nv.variavel*band.mult);
+  // O card mostra só o OTE Ajustado (calcGlobalOTE) — é o que decide bandeira/
+  // Variável Pago desde 2026-08. calcGlobal() (bruto) continua existindo no
+  // código (usado no Relatório PDF/Performance como comparação histórica),
+  // só não aparece mais aqui pra não duplicar número e confundir a tela.
+  const nv=NIVEIS[selNivelIdx];
+  const gOte=calcGlobalOTE(),bandOte=getBand(gOte);
+  const vp=Math.round(nv.variavel*bandOte.mult);
   // global card
-  document.getElementById('kpi-global').textContent=g+'%';
-  document.getElementById('kpi-global-bar').style.width=Math.min(g,150)+'%';
-  document.getElementById('kpi-global-band-html').innerHTML=bandHTML(band.name);
-  document.getElementById('kpi-band-pill').innerHTML=bandHTML(band.name);
+  document.getElementById('kpi-global').textContent=gOte+'%';
+  document.getElementById('kpi-global-bar').style.width=Math.min(gOte,150)+'%';
+  document.getElementById('kpi-global-band-html').innerHTML=bandHTML(bandOte.name);
+  document.getElementById('kpi-band-pill').innerHTML=bandHTML(bandOte.name);
   document.getElementById('kpi-var-val').textContent=brl(vp);
   document.getElementById('kpi-var-max').textContent=brl(nv.variavel*2);
   document.getElementById('kpi-fixo').textContent=brl(nv.fixo);
   document.getElementById('kpi-total-sal').textContent='Total: '+brl(nv.fixo+vp);
   // overview
-  document.getElementById('ov-kpi').textContent=g+'%';
-  document.getElementById('ov-band').innerHTML='Bandeira '+bandHTML(band.name);
+  document.getElementById('ov-kpi').textContent=gOte+'%';
+  document.getElementById('ov-band').innerHTML='Bandeira '+bandHTML(bandOte.name);
   var _elSal=document.getElementById('ov-salary'); if(_elSal) _elSal.textContent=brl(nv.fixo+vp);
   var _elNiv=document.getElementById('ov-nivel-lbl'); if(_elNiv) _elNiv.textContent=nv.n+' — OTE '+brl(nv.fixo+nv.variavel);
   var elD=document.getElementById('ov-demandas-atrasadas'); if(elD) elD.textContent=contarDemandasAtrasadas();
@@ -830,10 +959,14 @@ function renderKPIs(){
       // Qtd. de respostas por atendente vive aqui só por conveniência de
       // lançamento (junto do Tempo de Resposta, no dia a dia) — não entra
       // no cálculo do KPI/score, é só informativo (ver renderPerformance).
-      const qtdVals=ATTS.map(a=>a.qtdRespMes!=null?+a.qtdRespMes:null).filter(v=>v!==null);
+      // Guardado por mês em _ksv().qtdResp (igual ao próprio tr) — antes vivia
+      // solto em a.qtdRespMes (direto no atendente, sem quebra por mês), por
+      // isso não zerava/trocava ao mudar o seletor de mês.
+      const qtdSub=_ksv().qtdResp||{};
+      const qtdVals=ATTS.map(a=>qtdSub[a.id]!=null&&qtdSub[a.id]!==''?+qtdSub[a.id]:null).filter(v=>v!==null);
       const qtdAvg=qtdVals.length>0?(qtdVals.reduce((a,b)=>a+b,0)/qtdVals.length).toFixed(1):null;
       inputHTML='<div style="display:grid;gap:6px;">'+
-        ATTS.map(a=>'<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:80px;">'+a.name+':</label><input type="number" step="0.1" min="0" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub[a.id]||'')+'" placeholder="min" onchange="setKPISub(\'tr\',\''+a.id+'\',this.value)"><span style="font-size:10px;color:var(--text3);">min</span><input type="number" step="1" min="0" class="form-input" style="width:80px;padding:5px 8px;margin-left:10px;" value="'+(a.qtdRespMes!=null?a.qtdRespMes:'')+'" placeholder="qtd." onchange="setQtdRespMes(\''+a.id+'\',this.value)"><span style="font-size:10px;color:var(--text3);">respostas</span></div>').join('')+
+        ATTS.map(a=>'<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:80px;">'+a.name+':</label><input type="number" step="0.1" min="0" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub[a.id]||'')+'" placeholder="min" onchange="setKPISub(\'tr\',\''+a.id+'\',this.value)"><span style="font-size:10px;color:var(--text3);">min</span><input type="number" step="1" min="0" class="form-input" style="width:80px;padding:5px 8px;margin-left:10px;" value="'+(qtdSub[a.id]!=null?qtdSub[a.id]:'')+'" placeholder="qtd." onchange="setQtdRespMes(\''+a.id+'\',this.value)"><span style="font-size:10px;color:var(--text3);">respostas</span></div>').join('')+
         (avg2!==null?'<div style="font-size:12px;font-weight:700;color:var(--sage);margin-top:2px;">Média de tempo: '+avg2+' min</div>':'')+
         (qtdAvg!==null?'<div style="font-size:12px;font-weight:700;color:var(--sky);margin-top:2px;">Média de respostas: '+qtdAvg+' <span style="font-weight:400;color:var(--text3);">(informativo, não entra no cálculo do KPI)</span></div>':'')+'</div>';
     } else if(k.id==='ob'){
@@ -897,6 +1030,31 @@ function renderKPIs(){
         '<div style="text-align:center;font-size:14px;font-weight:700;color:'+(med?parseFloat(med)>=10?'var(--sage)':'var(--amarela)':'var(--text3)')+';">'+(med?med+'%':'—')+'</div>'+
         '</div>'+
         '</div>';
+    } else if(k.id==='fin'){
+      const mesF=kpiPeriodo;
+      const pagMes=pagamentosFinanceiro.filter(p=>p.mesVigente===mesF);
+      const pctPag=pagMes.length>0?((pagMes.filter(_pagamentoFinPontual).length/pagMes.length)*100).toFixed(1):null;
+      const totalRev=(_ksv().fin&&+_ksv().fin.totalRevisado)||0;
+      const errosMes=relatoriosFinanceiro.filter(r=>r.mesVigente===mesF);
+      const pctRel=totalRev>0?Math.max(0,((totalRev-errosMes.length)/totalRev)*100).toFixed(1):null;
+      const valMes=validacoesFinanceiro.filter(v=>v.mesVigente===mesF);
+      const pctVal=valMes.length>0?((valMes.filter(_validacaoFinNoPrazo).length/valMes.length)*100).toFixed(1):null;
+      const miniItens=[
+        {label:'Pontualidade', pct:pctPag, hint:'Pagamentos'},
+        {label:'Precisão',     pct:pctRel, hint:'Relatórios'},
+        {label:'Eficiência',   pct:pctVal, hint:'Validações'},
+      ];
+      inputHTML='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px;">'+
+        miniItens.map(it=>{
+          const cor=it.pct===null?'var(--text3)':(+it.pct>=95?'var(--sage)':+it.pct>=85?'var(--amarela)':'var(--vermelha)');
+          return '<div style="text-align:center;background:var(--teal-light);border-radius:10px;padding:8px 4px;">'+
+            '<div style="font-size:16px;font-weight:700;color:'+cor+';">'+(it.pct!==null?it.pct+'%':'—')+'</div>'+
+            '<div style="font-size:10.5px;font-weight:600;color:var(--text2);">'+it.label+'</div>'+
+            '<div style="font-size:9.5px;color:var(--text3);">'+it.hint+'</div></div>';
+        }).join('')+
+        '</div>'+
+        (totalRev===0?'<div style="font-size:11px;color:var(--amarela);margin-top:8px;">Falta lançar o "Total de lançamentos revisados" em Controle → Relatórios pra calcular a Precisão deste mês.</div>':'')+
+        '<div style="font-size:11px;color:var(--text3);margin-top:8px;">Gerencie os registros na aba <b>Controle → Pagamentos / Relatórios / Validações</b>.</div>';
     } else {
       inputHTML='<div style="display:flex;align-items:center;gap:8px;">'+
         '<label style="font-size:12px;color:var(--text2);white-space:nowrap;">Valor ('+k.unit+'):</label>'+
@@ -1015,7 +1173,9 @@ function _recalcularAV(){
   let soma=0, pesoTotal=0;
   if(hasA){ const w=(+s.qtdAirbnb||0)>0?(+s.qtdAirbnb):1; soma+=(+s.airbnb||0)*w; pesoTotal+=w; }
   if(hasB){ const w=(+s.qtdBooking||0)>0?(+s.qtdBooking):1; soma+=(+s.booking||0)*w; pesoTotal+=w; }
-  _kv().av=pesoTotal>0?(soma/pesoTotal).toFixed(2):null;
+  // '' em vez de null pra realmente limpar no servidor (null é ignorado no
+  // merge de nx_kpivals e o valor antigo continua contando pro score).
+  _kv().av=pesoTotal>0?(soma/pesoTotal).toFixed(2):'';
 }
 // Redução de Custos: soma TODO o previsto e TODO o gasto dos itens
 // preenchidos e tira a % em cima dos totais — pedido do gestor, em vez de
@@ -1030,7 +1190,8 @@ function _recalcularRC(){
     const prev=parseFloat(d.previsto), gasto=parseFloat(d.gasto);
     if(prev>0 && !isNaN(gasto)){ somaPrevisto+=prev; somaGasto+=gasto; temAlgum=true; }
   });
-  _kv().rc=temAlgum?(((somaPrevisto-somaGasto)/somaPrevisto)*100).toFixed(2):null;
+  // '' em vez de null pra realmente limpar no servidor (mesmo motivo do _recalcularAV acima).
+  _kv().rc=temAlgum?(((somaPrevisto-somaGasto)/somaPrevisto)*100).toFixed(2):'';
 }
 function setKPISub(id,subKey,value){
   if(!_ksv()[id])_ksv()[id]={};
@@ -1039,22 +1200,32 @@ function setKPISub(id,subKey,value){
     _recalcularAV();
   } else if(id==='cv'){
     const s=_ksv().cv;
+    // '' (não null) no else pra realmente limpar no servidor — antes, esvaziar
+    // reviews/checkouts não fazia nada aqui e o % antigo continuava contando.
     if(s.reviews!==undefined&&s.reviews!==''&&s.checkouts!==undefined&&s.checkouts!==''&&+s.checkouts>0){
       _kv().cv=(((+s.reviews||0)/(+s.checkouts||1))*100).toFixed(1);
+    } else {
+      _kv().cv='';
     }
   } else if(id==='tr'){
     const s=_ksv().tr||{};
     const vals=['patricia','sara','lisarb','lais'].map(a=>s[a]!==undefined&&s[a]!==''?+s[a]:null).filter(v=>v!==null);
-    if(vals.length>0){_kv().tr=(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1);}
+    // '' (não null) pra realmente limpar no servidor quando esvazia todos os
+    // campos — null é tratado como "sem informação" no merge e o valor antigo
+    // "cola" (mês aparece zerado na tela mas o score continua contando).
+    _kv().tr=vals.length>0?(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1):'';
   }
   renderKPIs();if(typeof saveAll==='function')saveAll();
 }
 
 // Quantidade de respostas por atendente — só informativo (Performance), não
 // participa do cálculo do KPI "Tempo de Resposta" nem do score global.
+// Guardado por mês em _ksv().qtdResp (era a.qtdRespMes, solto no atendente —
+// por isso não dividia por mês, ficava "fixo" trocando o seletor de período).
 function setQtdRespMes(attId,value){
   const a=ATTS.find(x=>x.id===attId); if(!a) return;
-  a.qtdRespMes=value===''?null:parseFloat(value);
+  if(!_ksv().qtdResp)_ksv().qtdResp={};
+  _ksv().qtdResp[attId]=value===''?'':parseFloat(value);
   renderKPIs();
   if(typeof renderPerformance==='function' && document.getElementById('performance-body')) renderPerformance();
   if(typeof saveAll==='function')saveAll();
@@ -1970,7 +2141,9 @@ function salvarPerfilAtt() {
   if (!_ksv().tr) _ksv().tr = {};
   _ksv().tr[a.id] = a.respMes !== null ? a.respMes.toFixed(1) : '';
   const trVals = ATTS.map(att => _ksv().tr && _ksv().tr[att.id] ? parseFloat(_ksv().tr[att.id]) : null).filter(x => x !== null);
-  _kv().tr = trVals.length > 0 ? (trVals.reduce((s,x) => s+x, 0) / trVals.length).toFixed(2) : null;
+  // '' (não null) pra realmente limpar no servidor — null é ignorado no merge
+  // de nx_kpivals e o valor antigo "cola" mesmo com o mês zerado na tela.
+  _kv().tr = trVals.length > 0 ? (trVals.reduce((s,x) => s+x, 0) / trVals.length).toFixed(2) : '';
   closeModal('modal-editar-att-perfil');
   renderTeam(); renderTeamOv(); renderSalary(); renderKPIs();
   if (typeof renderPerformance === 'function' && document.getElementById('performance-body')) renderPerformance();
@@ -2207,12 +2380,14 @@ function removerNotaFiscal(id, parcela){
 function renderPerformance(){
   const el=document.getElementById('performance-body');if(!el)return;
   const perfSel=document.getElementById('perf-periodo-sel'); if(perfSel&&!perfSel.value) perfSel.value=kpiPeriodo;
-  const g=calcGlobal(), band=getBand(g);
+  // Mostra só o OTE Ajustado (calcGlobalOTE) — é quem decide bandeira/Variável
+  // Pago desde 2026-08. calcGlobal() (bruto) não aparece mais aqui.
+  const gOte=calcGlobalOTE();
   const flagStyle=
-    g>=150?{txt:'🏆 ELITE', c:'#7C3AED'}:
-    g>=121?{txt:'💎 AZUL',  c:'#1D4ED8'}:
-    g>=100?{txt:'✅ VERDE', c:'#065F46'}:
-    g>=80 ?{txt:'⚠️ AMARELA',c:'#B45309'}:
+    gOte>=150?{txt:'🏆 ELITE', c:'#7C3AED'}:
+    gOte>=121?{txt:'💎 AZUL',  c:'#1D4ED8'}:
+    gOte>=100?{txt:'✅ VERDE', c:'#065F46'}:
+    gOte>=80 ?{txt:'⚠️ AMARELA',c:'#B45309'}:
            {txt:'— sem bandeira',c:'#9CA3AF'};
 
   // Ciclo seguinte de KPI (av/cv também são lançados com antecedência —
@@ -2262,10 +2437,10 @@ function renderPerformance(){
         <p style="font-size:11px;color:#6B7280;">Acompanhamento de Performance</p>
       </div>
       <div style="position:relative;margin-bottom:20px;padding-bottom:18px;border-bottom:0.5px solid #E2E5EA;overflow:hidden;">
-        <div style="position:absolute;bottom:-12px;right:-4px;font-size:88px;font-weight:800;color:rgba(0,0,0,0.04);line-height:1;user-select:none;pointer-events:none;letter-spacing:-3px;font-family:monospace;">${g}</div>
+        <div style="position:absolute;bottom:-12px;right:-4px;font-size:88px;font-weight:800;color:rgba(0,0,0,0.04);line-height:1;user-select:none;pointer-events:none;letter-spacing:-3px;font-family:monospace;">${gOte}</div>
         <p style="font-size:10px;color:#9CA3AF;letter-spacing:.8px;text-transform:uppercase;margin-bottom:5px;">score ponderado</p>
         <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:4px;">
-          <span style="font-size:44px;font-weight:700;line-height:1;font-family:'SF Mono','Fira Code',monospace;color:${g>=100?'#0D9488':g>0?'#B45309':'#D1D5DB'}">${g}%</span>
+          <span style="font-size:44px;font-weight:700;line-height:1;font-family:'SF Mono','Fira Code',monospace;color:${gOte>=100?'#0D9488':gOte>0?'#B45309':'#D1D5DB'}">${gOte}%</span>
           <span style="font-size:13px;font-weight:500;color:${flagStyle.c}">${flagStyle.txt}</span>
         </div>
       </div>
@@ -2318,21 +2493,44 @@ function renderPerformance(){
     shEl.innerHTML=`<div style="background:#F4F6F9;border-radius:10px;padding:14px;color:#9CA3AF;font-size:13px;">Nenhum período Superhost registrado.</div>`;
   }
 
-  // Quantidade de Respostas por atendente — média semanal (editável no Perfil do Membro, aba Equipe)
+  // Quantidade de Respostas por atendente — mês vigente (kpiPeriodo), com
+  // média por dia (÷15 dias trabalhados no mês, escala 12×36) e por hora
+  // (÷12h do plantão), + variação vs. mês anterior.
   const _qtdEl=document.getElementById('perf-qtdresp-inner');
   if(_qtdEl){
-    const _attsComQtd=ATTS.filter(a=>a.qtdRespMes!=null);
-    const _mediaTotalQtd=_attsComQtd.length>0?(_attsComQtd.reduce((s,a)=>s+a.qtdRespMes,0)/_attsComQtd.length):null;
-    _qtdEl.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;">
-      ${ATTS.map(a=>`<div style="background:#F4F6F9;border-radius:10px;padding:12px;text-align:center;">
+    const _qtdSub=_ksv().qtdResp||{};
+    const _mesAntQtd=_mesAnteriorStr(kpiPeriodo);
+    const _qtdSubAnt=(kpiSubVals[_mesAntQtd]&&kpiSubVals[_mesAntQtd].qtdResp)||{};
+    const _valAtt=a=>_qtdSub[a.id]!=null&&_qtdSub[a.id]!==''?+_qtdSub[a.id]:null;
+    const _valAttAnt=a=>_qtdSubAnt[a.id]!=null&&_qtdSubAnt[a.id]!==''?+_qtdSubAnt[a.id]:null;
+    const _varHtml=(atual,anterior)=>{
+      if(atual==null||anterior==null||anterior===0) return '';
+      const variacao=((atual-anterior)/anterior)*100;
+      const cor=variacao>=0?'#0D9488':'#DC2626';
+      return `<div style="font-size:10px;color:${cor};margin-top:3px;">${variacao>=0?'+':''}${variacao.toFixed(0)}% vs ${_mesAntQtd}</div>`;
+    };
+    const _attsComQtd=ATTS.map(_valAtt).filter(v=>v!=null);
+    const _mediaTotalQtd=_attsComQtd.length>0?(_attsComQtd.reduce((s,v)=>s+v,0)/_attsComQtd.length):null;
+    const _attsComQtdAnt=ATTS.map(_valAttAnt).filter(v=>v!=null);
+    const _mediaTotalQtdAnt=_attsComQtdAnt.length>0?(_attsComQtdAnt.reduce((s,v)=>s+v,0)/_attsComQtdAnt.length):null;
+    _qtdEl.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;">
+      ${ATTS.map(a=>{
+        const v=_valAtt(a);
+        const porDia=v!=null?v/15:null;
+        const porHora=porDia!=null?porDia/12:null;
+        return `<div style="background:#F4F6F9;border-radius:10px;padding:12px;text-align:center;">
         <div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(a.name)}</div>
-        <div style="font-size:18px;font-weight:700;color:#1D4ED8;font-family:'SF Mono','Fira Code',monospace;">${a.qtdRespMes!=null?a.qtdRespMes.toFixed(1):'—'}</div>
-      </div>`).join('')}
+        <div style="font-size:18px;font-weight:700;color:#1D4ED8;font-family:'SF Mono','Fira Code',monospace;">${v!=null?v.toFixed(1):'—'}</div>
+        ${porDia!=null?`<div style="font-size:10px;color:#6B7280;margin-top:3px;">${porDia.toFixed(1)}/dia · ${porHora.toFixed(2)}/hora</div>`:''}
+        ${_varHtml(v,_valAttAnt(a))}
+      </div>`;}).join('')}
       <div style="background:#0D9488;border-radius:10px;padding:12px;text-align:center;">
         <div style="font-size:10px;color:rgba(255,255,255,.8);text-transform:uppercase;margin-bottom:4px;">Média da equipe</div>
         <div style="font-size:18px;font-weight:700;color:#fff;font-family:'SF Mono','Fira Code',monospace;">${_mediaTotalQtd!=null?_mediaTotalQtd.toFixed(1):'—'}</div>
+        ${_mediaTotalQtd!=null?`<div style="font-size:10px;color:rgba(255,255,255,.75);margin-top:3px;">${(_mediaTotalQtd/15).toFixed(1)}/dia · ${(_mediaTotalQtd/15/12).toFixed(2)}/hora</div>`:''}
+        ${(()=>{const h=_varHtml(_mediaTotalQtd,_mediaTotalQtdAnt);return h?h.replace('color:#0D9488','color:#D1FAE5').replace('color:#DC2626','color:#FEE2E2'):'';})()}
       </div>
-    </div>`;
+    </div>${_mediaTotalQtd==null?`<div style="font-size:11px;color:#9CA3AF;margin-top:8px;">Nenhuma qtd. de respostas lançada em ${kpiPeriodo} ainda — digite no KPI "Tempo de Resposta" (campo "qtd.", junto do tempo em minutos) pra ver aqui a média por dia/hora e a comparação com o mês anterior.</div>`:''}`;
   }
 
   // Cancelamentos do mês vigente (kpiPeriodo) — antes somava TODOS os
@@ -2350,10 +2548,17 @@ function renderPerformance(){
     </div>`).join('')}
   </div>`;
 
-  // Preferido dos Hóspedes
-  const _totalImv=imovelsCatalog.length;
-  const _prefImv=imovelsCatalog.filter(im=>im.preferidoHospedes).length;
+  // Preferido dos Hóspedes — usa o snapshot lançado do mês vigente (Acompanhamento
+  // → Preferido dos Hóspedes → "Lançar snapshot do mês"); sem snapshot pro mês,
+  // cai pro total ao vivo (compatibilidade com quem ainda não lançou nada).
+  const _prefSnap=_ksv().preferidos;
+  const _totalImv=_prefSnap?_prefSnap.total:imovelsCatalog.length;
+  const _prefImv=_prefSnap?_prefSnap.marcados:imovelsCatalog.filter(im=>im.preferidoHospedes).length;
   const _pctPrefImv=_totalImv>0?Math.round((_prefImv/_totalImv)*100):0;
+  const _mesAntPref=_mesAnteriorStr(kpiPeriodo);
+  const _prefSnapAnt=kpiSubVals[_mesAntPref]&&kpiSubVals[_mesAntPref].preferidos;
+  const _pctPrefAnt=(_prefSnapAnt&&_prefSnapAnt.total>0)?Math.round((_prefSnapAnt.marcados/_prefSnapAnt.total)*100):null;
+  const _varPref=_pctPrefAnt!=null?(_pctPrefImv-_pctPrefAnt):null;
   const _elPref=document.getElementById('perf-preferidos-inner');
   if(_elPref) _elPref.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;">
     ${[{l:'Total de imóveis',v:_totalImv,c:'#1D4ED8'},{l:'Preferido dos hóspedes',v:_prefImv,c:'#0D9488'},{l:'% preferidos',v:_pctPrefImv+'%',c:'#D97706'}]
@@ -2361,7 +2566,7 @@ function renderPerformance(){
       <div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;margin-bottom:4px;">${x.l}</div>
       <div style="font-size:18px;font-weight:700;color:${x.c};font-family:'SF Mono','Fira Code',monospace;">${x.v}</div>
     </div>`).join('')}
-  </div>`;
+  </div>${_varPref!=null?`<div style="font-size:11px;color:${_varPref>=0?'#0D9488':'#DC2626'};margin-top:8px;">${_varPref>=0?'+':''}${_varPref} p.p. vs ${_mesAntPref} (${_pctPrefAnt}%)</div>`:(_prefSnap?`<div style="font-size:11px;color:#9CA3AF;margin-top:8px;">Sem snapshot de ${_mesAntPref} pra comparar.</div>`:'')}`;
 
   // Saldo Manutenção — mesmo cálculo do módulo Manutenção (renderManutSaldoGeral):
   // saldo inicial + economia (pago - gasto) de toda manutenção concluída, de
@@ -2414,12 +2619,12 @@ function renderSalary(){
   }).join('');
 
   if(!ehAdmin && !isHead) return;
-  // Heads
-  const g=calcGlobal(),band=getBand(g),nv=NIVEIS[selNivelIdx],vp=Math.round(nv.variavel*band.mult);
+  // Heads — Variável Pago decidido pela bandeira do OTE Ajustado (calcGlobalOTE), não mais o bruto.
+  const nv=NIVEIS[selNivelIdx],bandOte=getBand(calcGlobalOTE()),vp=Math.round(nv.variavel*bandOte.mult);
   const allHeads=[
     {id:'nicole', name:'Nicole', cargo:'Head de Operações', av:'av-rose', ini:'N',
      fixo:nv.fixo, comissao:(nicoleComissaoOverride!==null?nicoleComissaoOverride:vp), isNicole:true,
-     note:`Bandeira ${band.name} (${Math.round(band.mult*100)}% do variável)`},
+     note:`Bandeira ${bandOte.name} (${Math.round(bandOte.mult*100)}% do variável)`},
     {id:'gabriela',name:'Gabriela',cargo:'Head de RevOps', av:'av-sage', ini:'G', fixo:headFixo.gabriela||6000, comissao:headComissao.gabriela||0, isNicole:false},
     {id:'felipe',  name:'Felipe',  cargo:'Head de AI',     av:'av-sky',  ini:'F', fixo:headFixo.felipe||6000,   comissao:headComissao.felipe||0,   isNicole:false},
     {id:'nilson',  name:'Nilson',  cargo:'Head de Operações', av:'av-lav', ini:'N', fixo:headFixo.nilson||6000, comissao:headComissao.nilson||0, isNicole:false},
@@ -2521,7 +2726,7 @@ function removerOutroMembro(id){
 }
 
 function exportarSalariosPDF(){
-  const g=calcGlobal(),band=getBand(g),nv=NIVEIS[selNivelIdx],vp=Math.round(nv.variavel*band.mult);
+  const nv=NIVEIS[selNivelIdx],vp=Math.round(nv.variavel*getBand(calcGlobalOTE()).mult);
   const nicComissao=nicoleComissaoOverride!==null?nicoleComissaoOverride:vp;
   const [_msAno,_msMes]=_mesAtualSal().split('-').map(Number);
   const mes=new Date(_msAno,_msMes-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
@@ -2686,8 +2891,8 @@ async function sendMsg(){
     }
     const tc=tasks.filter(t=>!t.done).slice(0,5).map(t=>'- '+t.text+' ['+t.cat+', '+t.prio+']').join('\n');
     const kc=KPI_DEFS.map(k=>'- '+k.label+': '+(_kv()[k.id]||'não preenchido')+' (peso '+Math.round(k.peso*100)+'%)').join('\n');
-    const g=calcGlobal(),band=getBand(g),nv=NIVEIS[selNivelIdx],vp=Math.round(nv.variavel*band.mult);
-    const sys='Você é Claire, assistente pessoal da Nicole, gerente de operações da WeCare. Responda sempre em português brasileiro.\n\nCONTEXTO:\n- KPI Global: '+g+'% — Bandeira '+band.name+'\n- Nível: '+nv.n+' (Fixo: '+brl(nv.fixo)+', Variável meta 100%: '+brl(nv.variavel)+')\n- Salário estimado: '+brl(nv.fixo+vp)+'\n- KPIs:\n'+kc+'\n- Tarefas pendentes:\n'+tc+'\n- Equipe: Patrícia (R$17/h), Sara, Lisarb, Laís (R$14/h)\n\nPara calcular salário: Fixo + (Variável × multiplicador da bandeira). Vermelha=0%, Amarela=50%, Verde=100%, Azul=150%, Elite=200%.\nSeja concisa, use markdown.';
+    const gOte=calcGlobalOTE(),bandOte=getBand(gOte),nv=NIVEIS[selNivelIdx],vp=Math.round(nv.variavel*bandOte.mult);
+    const sys='Você é Claire, assistente pessoal da Nicole, gerente de operações da WeCare. Responda sempre em português brasileiro.\n\nCONTEXTO:\n- KPI Global: '+gOte+'% — Bandeira '+bandOte.name+'\n- Nível: '+nv.n+' (Fixo: '+brl(nv.fixo)+', Variável meta 100%: '+brl(nv.variavel)+')\n- Salário estimado: '+brl(nv.fixo+vp)+'\n- KPIs:\n'+kc+'\n- Tarefas pendentes:\n'+tc+'\n- Equipe: Patrícia (R$17/h), Sara, Lisarb, Laís (R$14/h)\n\nPara calcular salário: Fixo + (Variável × multiplicador da bandeira). Vermelha=0%, Amarela=50%, Verde=100%, Azul=150%, Elite=200%.\nSeja concisa, use markdown.';
     const r = await callAI(sys, chatHist.slice(-12), 1000);
     removeTyping(typing);
     chatHist.push({role:'assistant',content:r});
@@ -3535,7 +3740,8 @@ function setRespWeek(id,week,v){
   if(!_ksv().tr)_ksv().tr={};
   _ksv().tr[id]=a.respMes!==null?a.respMes.toFixed(1):'';
   const trVals=ATTS.map(att=>_ksv().tr&&_ksv().tr[att.id]?parseFloat(_ksv().tr[att.id]):null).filter(x=>x!==null);
-  _kv().tr=trVals.length>0?(trVals.reduce((s,x)=>s+x,0)/trVals.length).toFixed(2):null;
+  // '' (não null) pra realmente limpar no servidor (mesmo motivo do salvarPerfilAtt acima).
+  _kv().tr=trVals.length>0?(trVals.reduce((s,x)=>s+x,0)/trVals.length).toFixed(2):'';
   if(typeof saveAll==='function')saveAll();
   renderTeam();renderKPIs();
 }
@@ -3545,7 +3751,10 @@ function zerarRespMes(id){
   a.respWeekly=[null,null,null,null];a.respMes=null;
   if(_ksv().tr)delete _ksv().tr[id];
   const trVals=ATTS.map(att=>_ksv().tr&&_ksv().tr[att.id]?parseFloat(_ksv().tr[att.id]):null).filter(x=>x!==null);
-  _kv().tr=trVals.length>0?(trVals.reduce((s,x)=>s+x,0)/trVals.length).toFixed(2):null;
+  // '' (não null) pra realmente limpar no servidor — era o bug documentado:
+  // zerar via este botão setava null, o backend ignorava (trata null como
+  // "sem info") e o valor antigo "colava" no servidor mesmo com a tela zerada.
+  _kv().tr=trVals.length>0?(trVals.reduce((s,x)=>s+x,0)/trVals.length).toFixed(2):'';
   if(typeof saveAll==='function')saveAll();
   renderTeam();renderKPIs();
   showToast('Tempo de resposta zerado para '+a.name,'sage');
@@ -3563,6 +3772,21 @@ function calcGlobalParaMes(mes){
     if(p===null) return;
     temAlgum=true;
     tot+=(p/100)*k.peso; totalPeso+=k.peso;
+  });
+  return (temAlgum && totalPeso>0)?Math.round((tot/totalPeso)*100):null;
+}
+// Mesmo princípio de calcGlobalOTE(), só que pra um mês qualquer (comparação
+// histórica no relatório), igual calcGlobalParaMes() já fazia pro bruto.
+function calcGlobalOTEParaMes(mes){
+  const valores=kpiVals[mes];
+  if(!valores) return null;
+  let tot=0, totalPeso=0, temAlgum=false;
+  KPI_DEFS.forEach(k=>{
+    const p=k.calc(valores[k.id]);
+    if(p===null) return;
+    temAlgum=true;
+    const ote=_oteAjustado(p);
+    tot+=(ote/100)*k.peso; totalPeso+=k.peso;
   });
   return (temAlgum && totalPeso>0)?Math.round((tot/totalPeso)*100):null;
 }
@@ -3590,14 +3814,17 @@ function _pillBandeiraReport(name){
 // mesma origem do app, resolve normalmente na janela do relatório).
 const WECARE_LOGO_SRC='assets/wecare-logo.png';
 function exportarKPIPDF(){
-  const g=calcGlobal(),band=getBand(g),nv=NIVEIS[selNivelIdx],vp=Math.round(nv.variavel*band.mult);
+  // Mostra só o OTE Ajustado (calcGlobalOTE) — é quem decide bandeira/Variável
+  // Pago desde 2026-08. calcGlobal() (bruto) não aparece mais no relatório.
+  const nv=NIVEIS[selNivelIdx];
+  const gOte=calcGlobalOTE(),bandOte=getBand(gOte),vp=Math.round(nv.variavel*bandOte.mult);
   const [_anoM,_mesM]=kpiPeriodo.split('-').map(Number);
   const mes=new Date(_anoM,_mesM-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
   const nomeColaborador=(typeof ls==='function'?ls('nx_name'):'')||'Nicole';
-  const gAnterior=calcGlobalParaMes(_mesAnteriorStr(kpiPeriodo));
-  const delta=gAnterior!==null?g-gAnterior:null;
-  const deltaTexto=delta===null?''
-    :' · Mês anterior: <strong>'+gAnterior+'%</strong> (<span style="color:'+(delta>0?'#5aab82':delta<0?'#d4726a':'#b0a89e')+';font-weight:600;">'+(delta>0?'▲ +':delta<0?'▼ ':'')+delta+' p.p.</span>)';
+  const gOteAnterior=calcGlobalOTEParaMes(_mesAnteriorStr(kpiPeriodo));
+  const deltaOte=gOteAnterior!==null?gOte-gOteAnterior:null;
+  const deltaTexto=deltaOte===null?''
+    :' · Mês anterior: <strong>'+gOteAnterior+'%</strong> (<span style="color:'+(deltaOte>0?'#5aab82':deltaOte<0?'#d4726a':'#b0a89e')+';font-weight:600;">'+(deltaOte>0?'▲ +':deltaOte<0?'▼ ':'')+deltaOte+' p.p.</span>)';
 
   const RC_ITENS=[
     {key:'limpeza',label:'Limpeza'},
@@ -3664,10 +3891,10 @@ function exportarKPIPDF(){
     '<div>'+
     '<div style="font-size:11px;color:#b0a89e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Atingimento Global Ponderado</div>'+
     '<div style="display:flex;align-items:baseline;gap:12px;">'+
-    '<div style="font-size:44px;font-weight:700;">'+g+'%</div>'+
-    _pillBandeiraReport(band.name)+
+    '<div style="font-size:44px;font-weight:700;">'+gOte+'%</div>'+
+    _pillBandeiraReport(bandOte.name)+
     '</div>'+
-    '<div style="margin-top:10px;height:8px;background:#e8e4de;border-radius:4px;overflow:hidden;"><div style="height:100%;width:'+Math.min(g,150)+'%;background:#e8a4b0;border-radius:4px;"></div></div>'+
+    '<div style="margin-top:10px;height:8px;background:#e8e4de;border-radius:4px;overflow:hidden;"><div style="height:100%;width:'+Math.min(gOte,150)+'%;background:#e8a4b0;border-radius:4px;"></div></div>'+
     '<div style="display:flex;gap:14px;margin-top:8px;flex-wrap:wrap;font-size:11.5px;color:#b0a89e;">'+
     '<span>0-79% <strong style="color:#d4726a;">Vermelha 0%</strong></span>'+
     '<span>80-99% <strong style="color:#d4a843;">Amarela 50%</strong></span>'+
@@ -3918,12 +4145,17 @@ const _PERSIST_KEYS = {
   nx_conquistas:()=>conquistas,
   nx_despesas:()=>despesasFixas,
   nx_anotacoes_controle:()=>anotacoesControle,
+  nx_pagamentos_fin:()=>pagamentosFinanceiro,
+  nx_relatorios_fin:()=>relatoriosFinanceiro,
+  nx_validacoes_fin:()=>validacoesFinanceiro,
+  nx_sla_validacao_dias:()=>slaValidacaoDias,
+  nx_avaliacoes_negativas:()=>avaliacoesNegativas,
   nx_tombstones:()=>tombstones
 };
 
 // Listas com id próprio que o servidor mescla registro a registro (id + _ts).
-// DEVE espelhar a MERGE_POR_ID do worker.
-const _MERGE_POR_ID_KEYS=['nx_manutencoes','nx_tasks','nx_plantao','nx_projetos','nx_compras','nx_extras','nx_conquistas','nx_despesas','nx_anotacoes_controle','nx_superhost','nx_cancelamentos','nx_imoveis'];
+// DEVE espelhar a MERGE_POR_ID do backend (backend/app/merge.py).
+const _MERGE_POR_ID_KEYS=['nx_manutencoes','nx_tasks','nx_plantao','nx_projetos','nx_compras','nx_extras','nx_conquistas','nx_despesas','nx_anotacoes_controle','nx_superhost','nx_cancelamentos','nx_imoveis','nx_pagamentos_fin','nx_relatorios_fin','nx_validacoes_fin','nx_avaliacoes_negativas'];
 function _semTs(o){ const c=Object.assign({},o); delete c._ts; return JSON.stringify(c); }
 // Antes de salvar: carimba _ts nos registros novos/alterados e cria tombstone
 // para os que foram apagados. Assim o servidor sabe qual versão é a mais recente
@@ -4620,6 +4852,7 @@ function loadAll(){
       else kpiSubVals=v;
     }
     v=g('nx_kpidefs');    if(Array.isArray(v)&&v.length) KPI_DEFS=_wireKpiCalc(v);
+    _migrarKpiIndiceFinanceiro();
     v=g('nx_taskcats');   if(Array.isArray(v)&&v.length) taskCats=v;
     v=g('nx_catalog');    if(Array.isArray(v)&&v.length) imovelsCatalog=v;
     v=g('nx_precos');     if(v&&typeof v==='object') PRECOS_ITENS=v;
@@ -4643,6 +4876,11 @@ function loadAll(){
     v=g('nx_conquistas'); if(Array.isArray(v)) conquistas=v;
     v=g('nx_despesas'); if(Array.isArray(v)) despesasFixas=v;
     v=g('nx_anotacoes_controle'); if(Array.isArray(v)) anotacoesControle=v;
+    v=g('nx_pagamentos_fin'); if(Array.isArray(v)) pagamentosFinanceiro=v;
+    v=g('nx_relatorios_fin'); if(Array.isArray(v)) relatoriosFinanceiro=v;
+    v=g('nx_validacoes_fin'); if(Array.isArray(v)) validacoesFinanceiro=v;
+    v=g('nx_sla_validacao_dias'); if(typeof v==='number') slaValidacaoDias=v;
+    v=g('nx_avaliacoes_negativas'); if(Array.isArray(v)) avaliacoesNegativas=v;
     v=g('nx_tombstones'); if(Array.isArray(v)) tombstones=v;
     // Migração: atendentes só veem o próprio attId (sem attsPermitidos).
     _migAtendentesSemPerms();
@@ -4950,6 +5188,172 @@ function _destacarWecare(textoEscapado){
   return t;
 }
 
+// ═══════════════════ CONTROLE DE AVALIAÇÕES NEGATIVAS (kanban manual) ═══════════════════
+function _avalNegIconCanal(canal){
+  if(canal==='Airbnb') return '<i class="fa-brands fa-airbnb" style="color:#FF5A5F;"></i>';
+  if((canal||'').indexOf('Booking')>=0) return '<i class="fa-solid fa-b" style="color:#003580;background:#fff;border-radius:3px;padding:0 3px;"></i>';
+  if(canal==='Google') return '<i class="fa-brands fa-google" style="color:#4285F4;"></i>';
+  return '<i class="fa-solid fa-globe" style="color:var(--text3);"></i>';
+}
+function _avalNegResultadoBadge(r){
+  if(r==='removido') return '<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--sage)22;color:var(--sage);"><i class="fa-solid fa-check"></i> Removido</span>';
+  if(r==='nao_removido') return '<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--vermelha)22;color:var(--vermelha);"><i class="fa-solid fa-xmark"></i> Não removido</span>';
+  return '<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--bg3);color:var(--text3);">Em aberto</span>';
+}
+// Upload múltiplo de anexos (fotos/vídeos/qualquer arquivo) — mesmo padrão
+// _enviarAnexo já usado em Projetos/Índice Financeiro, sem redimensionar
+// imagem (evidência de avaliação precisa ficar legível, não em miniatura).
+function _avalNegUploadAnexos(event){
+  const files=event.target.files; if(!files||!files.length) return;
+  let pend=files.length;
+  Array.prototype.forEach.call(files,function(file){
+    _lerArquivoBase64(file,function(dataUrl,nome){
+      _enviarAnexo(dataUrl,nome,function(url){
+        _avalNegAnexosTmp.push({nome:nome, tipo:file.type||'', dataUrl:url});
+        pend--;
+        if(pend<=0) _avalNegRenderAnexosTmp();
+      });
+    });
+  });
+  event.target.value='';
+}
+function _avalNegRenderAnexosTmp(){
+  const el=document.getElementById('avn-anexos-status'); if(!el) return;
+  el.innerHTML=_avalNegAnexosTmp.map(function(a,i){
+    const isImg=(a.tipo||'').startsWith('image/'), isVid=(a.tipo||'').startsWith('video/');
+    return '<div style="position:relative;width:70px;height:70px;border-radius:var(--r-sm);overflow:hidden;border:1px solid var(--border);display:inline-block;margin:0 6px 6px 0;vertical-align:top;">'+
+      (isImg?'<img src="'+a.dataUrl+'" style="width:100%;height:100%;object-fit:cover;cursor:pointer;" onclick="abrirAnexo(\''+a.dataUrl+'\')">'
+        :isVid?'<video src="'+a.dataUrl+'" style="width:100%;height:100%;object-fit:cover;cursor:pointer;" onclick="abrirAnexo(\''+a.dataUrl+'\')"></video>'
+        :'<div onclick="abrirAnexo(\''+a.dataUrl+'\')" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;background:var(--bg3);">'+getFileIcon(a.tipo||a.nome||'')+'</div>')+
+      '<button type="button" onclick="_avalNegAnexosTmp.splice('+i+',1);_avalNegRenderAnexosTmp()" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);border:none;color:#fff;cursor:pointer;font-size:10px;border-radius:50%;width:18px;height:18px;">&#10005;</button>'+
+    '</div>';
+  }).join('');
+}
+function abrirNovaAvalNeg(){
+  _avalNegEditId=null; _avalNegAnexosTmp=[];
+  document.getElementById('avn-modal-title').textContent='Nova Avaliação Negativa';
+  document.getElementById('avn-imovel').value='';
+  document.getElementById('avn-hospede').value='';
+  document.getElementById('avn-canal').value=AVAL_NEG_CANAIS[0];
+  document.getElementById('avn-nota').value='';
+  document.getElementById('avn-data').value=new Date().toISOString().split('T')[0];
+  document.getElementById('avn-comentario').value='';
+  document.getElementById('avn-status').value='recebida';
+  document.getElementById('avn-resultado').value='';
+  document.getElementById('avn-mes').value=kpiPeriodo;
+  document.getElementById('avn-obs').value='';
+  _avalNegRenderAnexosTmp();
+  document.getElementById('modal-avalneg').classList.add('open');
+}
+function abrirEditarAvalNeg(id){
+  const a=avaliacoesNegativas.find(x=>x.id===id); if(!a) return;
+  _avalNegEditId=id; _avalNegAnexosTmp=(a.anexos||[]).slice();
+  document.getElementById('avn-modal-title').textContent='Editar Avaliação Negativa';
+  document.getElementById('avn-imovel').value=a.imovel||'';
+  document.getElementById('avn-hospede').value=a.hospede||'';
+  document.getElementById('avn-canal').value=a.canal||AVAL_NEG_CANAIS[0];
+  document.getElementById('avn-nota').value=a.nota!=null?a.nota:'';
+  document.getElementById('avn-data').value=a.data||'';
+  document.getElementById('avn-comentario').value=a.comentario||'';
+  document.getElementById('avn-status').value=a.status||'recebida';
+  document.getElementById('avn-resultado').value=a.resultado||'';
+  document.getElementById('avn-mes').value=a.mesVigente||'';
+  document.getElementById('avn-obs').value=a.obs||'';
+  _avalNegRenderAnexosTmp();
+  document.getElementById('modal-avalneg').classList.add('open');
+}
+function salvarAvalNeg(){
+  const imovel=document.getElementById('avn-imovel').value.trim();
+  const mesVigente=document.getElementById('avn-mes').value;
+  if(!imovel){ showToast('Informe o imóvel.','peach'); return; }
+  if(!mesVigente){ showToast('Informe o mês vigente.','peach'); return; }
+  const obj={
+    id:_avalNegEditId||Date.now(),
+    imovel, mesVigente,
+    hospede:document.getElementById('avn-hospede').value.trim(),
+    canal:document.getElementById('avn-canal').value,
+    nota:document.getElementById('avn-nota').value!==''?parseFloat(document.getElementById('avn-nota').value):null,
+    data:document.getElementById('avn-data').value,
+    comentario:document.getElementById('avn-comentario').value.trim(),
+    status:document.getElementById('avn-status').value,
+    resultado:document.getElementById('avn-resultado').value,
+    obs:document.getElementById('avn-obs').value.trim(),
+    anexos:_avalNegAnexosTmp.slice(),
+  };
+  if(_avalNegEditId){ const i=avaliacoesNegativas.findIndex(x=>x.id===_avalNegEditId); if(i>=0) avaliacoesNegativas[i]=obj; } else avaliacoesNegativas.unshift(obj);
+  closeModal('modal-avalneg'); if(typeof saveAll==='function') saveAll(); renderAvaliacoesNegativas(); showToast('Avaliação salva!','sage');
+}
+function deletarAvalNeg(id){
+  if(!confirm('Apagar esta avaliação negativa?')) return;
+  avaliacoesNegativas=avaliacoesNegativas.filter(x=>x.id!==id);
+  if(typeof saveAll==='function') saveAll();
+  renderAvaliacoesNegativas();
+}
+// Move o card pro status anterior/seguinte sem precisar abrir o modal —
+// atalho rápido pro fluxo do dia a dia (recebida → remoção solicitada → concluído).
+function moverAvalNeg(id,delta){
+  const a=avaliacoesNegativas.find(x=>x.id===id); if(!a) return;
+  const idx=AVAL_NEG_COLS.findIndex(c=>c.id===a.status);
+  const novoIdx=idx+delta;
+  if(novoIdx<0||novoIdx>=AVAL_NEG_COLS.length) return;
+  a.status=AVAL_NEG_COLS[novoIdx].id;
+  if(typeof saveAll==='function') saveAll();
+  renderAvaliacoesNegativas();
+}
+function renderAvaliacoesNegativas(){
+  const kEl=document.getElementById('avalneg-kanban'); if(!kEl) return;
+  // Resumo por mês — todos os meses com pelo menos 1 avaliação lançada,
+  // mais recente primeiro.
+  const resEl=document.getElementById('avalneg-resumo-mes');
+  if(resEl){
+    const porMes={};
+    avaliacoesNegativas.forEach(a=>{ const m=a.mesVigente||'—'; if(!porMes[m]) porMes[m]={total:0,removidas:0,naoRemovidas:0}; porMes[m].total++; if(a.resultado==='removido') porMes[m].removidas++; else if(a.resultado==='nao_removido') porMes[m].naoRemovidas++; });
+    const meses=Object.keys(porMes).sort().reverse();
+    resEl.innerHTML=!meses.length?'<p style="color:var(--text3);font-size:12.5px;">Nenhuma avaliação negativa lançada ainda.</p>':
+      '<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);letter-spacing:0.5px;margin-bottom:10px;">Resumo por Mês</div>'+
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+
+      meses.map(m=>{
+        const s=porMes[m];
+        const pctRem=s.total>0?Math.round((s.removidas/s.total)*100):0;
+        return '<div class="card" style="padding:10px 14px;min-width:150px;"><div style="font-size:11px;color:var(--text3);text-transform:uppercase;margin-bottom:4px;">'+esc(m)+'</div>'+
+          '<div style="display:flex;gap:10px;align-items:baseline;">'+
+          '<span style="font-size:20px;font-weight:700;">'+s.total+'</span><span style="font-size:10.5px;color:var(--text3);">negativas</span>'+
+          '</div>'+
+          '<div style="font-size:11px;margin-top:4px;"><span style="color:var(--sage);font-weight:600;">'+s.removidas+' removidas</span> · <span style="color:var(--vermelha);font-weight:600;">'+s.naoRemovidas+' não removidas</span></div>'+
+          '<div style="font-size:10px;color:var(--text3);margin-top:2px;">'+pctRem+'% removidas</div>'+
+          '</div>';
+      }).join('')+'</div>';
+  }
+  // Kanban — 3 colunas fixas (recebida/remoção solicitada/concluído)
+  kEl.innerHTML=AVAL_NEG_COLS.map((col,colIdx)=>{
+    const itens=avaliacoesNegativas.filter(a=>(a.status||'recebida')===col.id);
+    return '<div>'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid '+col.color+';">'+
+      '<span style="font-weight:700;font-size:13px;">'+col.label+'</span>'+
+      '<span style="font-size:11px;background:var(--bg3);padding:1px 8px;border-radius:10px;color:var(--text3);">'+itens.length+'</span>'+
+      '</div>'+
+      (itens.length===0?'<div style="font-size:12px;color:var(--text3);padding:12px 0;text-align:center;">Nenhuma aqui.</div>':itens.map(a=>{
+        const anexosCount=(a.anexos||[]).length;
+        const podeVoltar=colIdx>0, podeAvancar=colIdx<AVAL_NEG_COLS.length-1;
+        return '<div class="card" style="margin-bottom:10px;cursor:pointer;" onclick="abrirEditarAvalNeg('+a.id+')"><div class="card-body" style="padding:10px 12px;">'+
+          '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:4px;">'+
+          '<span style="font-size:12.5px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(a.imovel||'—')+'</span>'+
+          _avalNegResultadoBadge(a.resultado)+
+          '</div>'+
+          '<div style="font-size:10.5px;color:var(--text3);margin-bottom:5px;">'+_avalNegIconCanal(a.canal)+' '+esc(a.canal||'—')+(a.data?' · '+new Date(a.data+'T00:00').toLocaleDateString('pt-BR'):'')+(a.nota!=null?' · '+a.nota+'★':'')+'</div>'+
+          (a.comentario?'<div style="font-size:12px;color:var(--text2);line-height:1.4;max-height:2.8em;overflow:hidden;margin-bottom:6px;">'+esc(a.comentario)+'</div>':'')+
+          (anexosCount>0?'<div style="font-size:10.5px;color:var(--text3);margin-bottom:4px;"><i class="fa-solid fa-paperclip"></i> '+anexosCount+' anexo'+(anexosCount>1?'s':'')+'</div>':'')+
+          '<div style="display:flex;justify-content:flex-end;gap:4px;" onclick="event.stopPropagation()">'+
+          (podeVoltar?'<button onclick="moverAvalNeg('+a.id+',-1)" class="btn btn-sm" title="Voltar etapa"><i class="fa-solid fa-arrow-left"></i></button>':'')+
+          (podeAvancar?'<button onclick="moverAvalNeg('+a.id+',1)" class="btn btn-sm btn-rose" title="Avançar etapa"><i class="fa-solid fa-arrow-right"></i></button>':'')+
+          '<button onclick="deletarAvalNeg('+a.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:4px 6px;"><i class="fa-solid fa-trash"></i></button>'+
+          '</div>'+
+          '</div></div>';
+      }).join(''))+
+      '</div>';
+  }).join('');
+}
+
 // Abre modal de detalhe de uma avaliação
 function abrirAvaliacaoModal(id){
   const a=avaliacoes.find(x=>String(x.id)===String(id));if(!a)return;
@@ -5001,7 +5405,12 @@ async function carregarReservasPeriodo(){
 // Calcula média por canal (período KPI, escalas corretas) e joga nos KPIs de avaliações (av) e conversão (cv)
 async function aplicarAvaliacoesNoKPI(){
   if(avaliacoes.length===0){ showToast('Sincronize as avaliações primeiro.','peach'); return; }
-  const per=periodoKPIAvaliacoes();
+  // periodoKPIAvaliacoes() sem argumento usa a data real de HOJE, não o mês
+  // selecionado (kpiPeriodo) — isso fazia o botão gravar o período do mês
+  // corrente de verdade em cima de qualquer mês que estivesse sendo visto
+  // (ex.: olhando um mês vazio/futuro, ele aparecia com dado "do nada").
+  const [_anoRef,_mesRef]=kpiPeriodo.split('-').map(Number);
+  const per=periodoKPIAvaliacoes(new Date(_anoRef,_mesRef-1,1));
   const refData=a=>(a.checkout||a.submittedAt||a.data||'').substring(0,10);
   const noPeriodo=avaliacoes.filter(a=>a.tipo==='guest-to-host'&&a.rating!=null&&refData(a)>=per.de&&refData(a)<=per.ate);
   // IMPORTANTE: o Hostaway entrega TODAS as notas na escala 0-10 (Airbnb e Booking).
@@ -5016,7 +5425,8 @@ async function aplicarAvaliacoesNoKPI(){
   const partes=[];
   if(mAir10!=null) partes.push(mAir10/2);
   if(mBook10!=null) partes.push(mBook10/2);
-  _kv().av = partes.length ? (partes.reduce((a,b)=>a+b,0)/partes.length).toFixed(2) : null;
+  // '' (não null) pra realmente limpar no servidor — mesmo motivo do _recalcularAV.
+  _kv().av = partes.length ? (partes.reduce((a,b)=>a+b,0)/partes.length).toFixed(2) : '';
 
   // ── KPI de Conversão (cv) = avaliações ÷ reservas (check-outs) no período ──
   const avNoPeriodo=avaliacoes.filter(a=>a.tipo==='guest-to-host'&&refData(a)>=per.de&&refData(a)<=per.ate).length;
@@ -6612,7 +7022,8 @@ function sincronizarManutencaoKPI(){
   _ksv().rc.manutencao.gasto = gasto>0?gasto.toFixed(2):'';
   const itens=['limpeza','manutencao','setup','margem','extras'];
   const economias=itens.map(function(it){if(!_ksv().rc[it])return null;const p=parseFloat(_ksv().rc[it].previsto),g=parseFloat(_ksv().rc[it].gasto);if(!p||isNaN(p)||isNaN(g))return null;return ((p-g)/p)*100;}).filter(function(x){return x!==null;});
-  _kv().rc = economias.length>0?(economias.reduce(function(s,x){return s+x;},0)/economias.length).toFixed(2):null;
+  // '' (não null) pra realmente limpar no servidor — mesmo motivo do _recalcularRC.
+  _kv().rc = economias.length>0?(economias.reduce(function(s,x){return s+x;},0)/economias.length).toFixed(2):'';
   if(typeof saveAll==='function') saveAll();
   if(typeof renderKPIs==='function') renderKPIs();
 }
@@ -7498,7 +7909,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 104;
+const APP_VERSION = 112;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;
@@ -7552,7 +7963,7 @@ function switchAcompTab(tab, btn) {
   if (btn) btn.classList.add('active');
   if (tab === 'superhost') renderSuperhost();
   if (tab === 'cancelamentos') renderCancelamentos();
-  if (tab === 'avaliacoes') renderAvaliacoes();
+  if (tab === 'avaliacoes') renderAvaliacoesNegativas();
   if (tab === 'preferidos') renderPreferidosHospedes();
 }
 
@@ -7570,14 +7981,53 @@ function renderPreferidosHospedes(){
       {l:'% preferidos',v:pct+'%',c:'gold'}
     ].map(x=>'<div class="metric-card '+x.c+'"><div class="metric-value" style="font-size:22px;">'+x.v+'</div><div class="metric-label">'+x.l+'</div></div>').join('');
   }
-  if(!total){ el.innerHTML='<div style="font-size:12.5px;color:var(--text3);padding:14px 0;">Nenhum imóvel cadastrado nas Configurações ainda.</div>'; return; }
-  el.innerHTML=imovelsCatalog.map(im=>
-    '<label style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);cursor:pointer;">'+
-    '<input type="checkbox" '+(im.preferidoHospedes?'checked':'')+' onchange="togglePreferidoHospede(\''+im.id+'\')">'+
-    '<span style="flex:1;font-size:13.5px;">'+esc(im.nome)+'</span>'+
-    (im.preferidoHospedes?'<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:var(--sage)22;color:var(--sage);font-weight:600;">⭐ Preferido</span>':'')+
-    '</label>'
-  ).join('');
+  if(!total){ el.innerHTML='<div style="font-size:12.5px;color:var(--text3);padding:14px 0;">Nenhum imóvel cadastrado nas Configurações ainda.</div>'; }
+  else{
+    el.innerHTML=imovelsCatalog.map(im=>
+      '<label style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);cursor:pointer;">'+
+      '<input type="checkbox" '+(im.preferidoHospedes?'checked':'')+' onchange="togglePreferidoHospede(\''+im.id+'\')">'+
+      '<span style="flex:1;font-size:13.5px;">'+esc(im.nome)+'</span>'+
+      (im.preferidoHospedes?'<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:var(--sage)22;color:var(--sage);font-weight:600;">⭐ Preferido</span>':'')+
+      '</label>'
+    ).join('');
+  }
+  // Campos de lançamento — pré-preenche com o mês vigente (kpiPeriodo) e a
+  // contagem ao vivo atual, só na primeira renderização (não sobrescreve o
+  // que a pessoa já estiver digitando).
+  const mesEl=document.getElementById('pref-lanc-mes');
+  if(mesEl && !mesEl.value) mesEl.value=kpiPeriodo;
+  const marcadosEl=document.getElementById('pref-lanc-marcados');
+  if(marcadosEl && marcadosEl.value==='') marcadosEl.value=marcados;
+  const totalEl=document.getElementById('pref-lanc-total');
+  if(totalEl && totalEl.value==='') totalEl.value=total;
+  // Histórico mês a mês (snapshots já lançados em kpiSubVals[mes].preferidos)
+  const histEl=document.getElementById('preferidos-historico');
+  if(histEl){
+    const periodos=Object.keys(kpiSubVals).filter(m=>kpiSubVals[m]&&kpiSubVals[m].preferidos).sort();
+    histEl.innerHTML=!periodos.length?'':
+      '<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);letter-spacing:0.5px;margin-bottom:10px;">Histórico mês a mês</div>'+
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;">'+
+      periodos.map(m=>{
+        const s=kpiSubVals[m].preferidos;
+        const p=s.total>0?Math.round((s.marcados/s.total)*100):0;
+        return '<div class="metric-card sage"><div class="metric-value" style="font-size:18px;">'+p+'%</div><div class="metric-label">'+m+'<br><span style="font-size:10px;opacity:.7;">'+s.marcados+'/'+s.total+'</span></div></div>';
+      }).join('')+'</div>';
+  }
+}
+function lancarSnapshotPreferidos(){
+  const mesEl=document.getElementById('pref-lanc-mes');
+  const mes=(mesEl&&mesEl.value)||kpiPeriodo;
+  const marcadosEl=document.getElementById('pref-lanc-marcados');
+  const totalEl=document.getElementById('pref-lanc-total');
+  const marcados=marcadosEl&&marcadosEl.value!==''?parseInt(marcadosEl.value):null;
+  const total=totalEl&&totalEl.value!==''?parseInt(totalEl.value):null;
+  if(marcados==null||total==null){ showToast('Informe a quantidade de preferidos e o total de imóveis.','peach'); return; }
+  if(!kpiSubVals[mes])kpiSubVals[mes]={};
+  kpiSubVals[mes].preferidos={marcados,total};
+  if(typeof saveAll==='function') saveAll();
+  renderPreferidosHospedes();
+  if(typeof renderPerformance==='function' && document.getElementById('performance-body')) renderPerformance();
+  showToast('Snapshot de '+mes+' salvo!','sage');
 }
 function togglePreferidoHospede(id){
   const im=imovelsCatalog.find(x=>x.id===id); if(!im) return;
@@ -7622,19 +8072,37 @@ function setupEquipeTabs(){
 // ═══════════════════ CONTROLE (Despesas · Anotações) ═══════════════════
 let despesasFixas = [];
 let anotacoesControle = [];
+let pagamentosFinanceiro = [];
+let relatoriosFinanceiro = [];
+let validacoesFinanceiro = [];
+let slaValidacaoDias = 2; // SLA padrão (dias) pra validação de planilhas ser considerada "no prazo"
 let _controleTab = 'despesas';
 let _despesaEditId = null;
 let _anotacaoEditId = null;
+let _pagamentoFinEditId = null;
+let _relatorioFinEditId = null;
+let _validacaoFinEditId = null;
 
 function switchControleTab(tab, btn){
   _controleTab = tab;
-  ['despesas','anotacoes'].forEach(function(t){
+  ['despesas','anotacoes','pagamentos','relatorios','validacoes'].forEach(function(t){
     const el=document.getElementById('controle-content-'+t); if(el) el.style.display=t===tab?'':'none';
     const act=document.getElementById('controle-actions-'+t); if(act) act.style.display=t===tab?'flex':'none';
   });
   document.querySelectorAll('.controle-tab-btn').forEach(function(b){ b.classList.remove('active'); });
   if(btn) btn.classList.add('active');
+  // Seletor de "Mês de Vigência" só faz sentido pros 3 submódulos do Índice
+  // Financeiro (Despesas/Anotações não são mês-a-mês) — mesmo mês vigente
+  // (kpiPeriodo) usado nas abas Meus KPIs e Performance.
+  const ehFinanceiro=(tab==='pagamentos'||tab==='relatorios'||tab==='validacoes');
+  const periodoWrap=document.getElementById('controle-periodo-wrap');
+  if(periodoWrap) periodoWrap.style.display=ehFinanceiro?'block':'none';
+  const periodoSel=document.getElementById('controle-periodo-sel');
+  if(periodoSel) periodoSel.value=kpiPeriodo;
   if(tab==='anotacoes') renderAnotacoesControle();
+  else if(tab==='pagamentos') renderPagamentosFinanceiro();
+  else if(tab==='relatorios') renderRelatoriosFinanceiro();
+  else if(tab==='validacoes') renderValidacoesFinanceiro();
   else renderDespesasFixas();
 }
 
@@ -7787,6 +8255,336 @@ function renderAnotacoesControle(){
       (data?'<div style="font-size:10.5px;color:var(--text3);margin-top:8px;">Atualizado em '+data+'</div>':'')+
       '</div></div>';
   }).join('');
+}
+
+// ── Índice Financeiro: anexos múltiplos (helper compartilhado pelos 3 submódulos) ──
+// Mesmo padrão dos anexos de Projetos (_enviarAnexo por fora do documento
+// sincronizado) — só reaproveitado aqui em vez de reescrever 3 vezes.
+let _finAnexosTmp={pgf:[], rlf:[], vlf:[]};
+function _finUploadAnexos(event, ns){
+  const files=event.target.files; if(!files||!files.length) return;
+  const arr=_finAnexosTmp[ns];
+  let pend=files.length;
+  Array.prototype.forEach.call(files,function(file){
+    _lerArquivoBase64(file,function(dataUrl,nome){
+      _enviarAnexo(dataUrl,nome,function(url){
+        arr.push({nome:nome, tipo:file.type||'', dataUrl:url});
+        pend--;
+        if(pend<=0) _finRenderAnexosTmp(ns);
+      });
+    });
+  });
+  event.target.value='';
+}
+function _finRenderAnexosTmp(ns){
+  const el=document.getElementById(ns+'-anexos-status'); if(!el) return;
+  const arr=_finAnexosTmp[ns]||[];
+  el.innerHTML=!arr.length?'':arr.map(function(a,i){
+    return '<span style="display:inline-flex;align-items:center;gap:4px;background:var(--bg3);border-radius:12px;padding:2px 8px 2px 6px;margin:2px 4px 2px 0;font-size:11px;">'+
+      getFileIcon(a.tipo||a.nome||'')+' '+esc(a.nome)+
+      ' <button type="button" onclick="_finRemoverAnexoTmp(\''+ns+'\','+i+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0;line-height:1;">×</button></span>';
+  }).join('');
+}
+function _finRemoverAnexoTmp(ns,i){ _finAnexosTmp[ns].splice(i,1); _finRenderAnexosTmp(ns); }
+function _finAbrirAnexo(ns,arr,i){ const a=(arr||[])[i]; if(a) abrirAnexo(a.dataUrl); }
+
+// ── Índice Financeiro — Submódulo A: Pagamentos (Pontualidade) ──
+// 0 dias de atraso = pontual; qualquer atraso = não pontual (comparação de datas YYYY-MM-DD).
+function abrirNovoPagamentoFin(){
+  _pagamentoFinEditId=null; _finAnexosTmp.pgf=[];
+  document.getElementById('pgf-modal-title').textContent='Novo Pagamento';
+  document.getElementById('pgf-descricao').value='';
+  document.getElementById('pgf-prevista').value='';
+  document.getElementById('pgf-real').value='';
+  document.getElementById('pgf-mes').value=kpiPeriodo;
+  document.getElementById('pgf-obs').value='';
+  _finRenderAnexosTmp('pgf');
+  document.getElementById('modal-pagamento-fin').classList.add('open');
+}
+function abrirEditarPagamentoFin(id){
+  const p=pagamentosFinanceiro.find(x=>x.id===id); if(!p) return;
+  _pagamentoFinEditId=id; _finAnexosTmp.pgf=(p.anexos||[]).slice();
+  document.getElementById('pgf-modal-title').textContent='Editar Pagamento';
+  document.getElementById('pgf-descricao').value=p.descricao||'';
+  document.getElementById('pgf-prevista').value=p.dataPrevista||'';
+  document.getElementById('pgf-real').value=p.dataReal||'';
+  document.getElementById('pgf-mes').value=p.mesVigente||'';
+  document.getElementById('pgf-obs').value=p.obs||'';
+  _finRenderAnexosTmp('pgf');
+  document.getElementById('modal-pagamento-fin').classList.add('open');
+}
+function salvarPagamentoFin(){
+  const descricao=document.getElementById('pgf-descricao').value.trim();
+  const mesVigente=document.getElementById('pgf-mes').value;
+  if(!descricao){ showToast('Informe a descrição do pagamento.','peach'); return; }
+  if(!mesVigente){ showToast('Informe o mês vigente.','peach'); return; }
+  const obj={
+    id:_pagamentoFinEditId||Date.now(),
+    descricao, mesVigente,
+    dataPrevista:document.getElementById('pgf-prevista').value,
+    dataReal:document.getElementById('pgf-real').value,
+    obs:document.getElementById('pgf-obs').value.trim(),
+    anexos:_finAnexosTmp.pgf.slice(),
+  };
+  if(_pagamentoFinEditId){ const i=pagamentosFinanceiro.findIndex(x=>x.id===_pagamentoFinEditId); if(i>=0) pagamentosFinanceiro[i]=obj; } else pagamentosFinanceiro.unshift(obj);
+  closeModal('modal-pagamento-fin'); sincronizarFinanceiroKPI(); renderPagamentosFinanceiro(); showToast('Pagamento salvo!','sage');
+}
+function deletarPagamentoFin(id){
+  if(!confirm('Apagar este pagamento?')) return;
+  pagamentosFinanceiro=pagamentosFinanceiro.filter(x=>x.id!==id);
+  sincronizarFinanceiroKPI(); renderPagamentosFinanceiro();
+}
+function _pagamentoFinPontual(p){ return !!(p.dataPrevista && p.dataReal) && p.dataReal<=p.dataPrevista; }
+function renderPagamentosFinanceiro(){
+  const tb=document.getElementById('pagamentos-fin-tbody'); if(!tb) return;
+  const doMes=pagamentosFinanceiro.filter(p=>p.mesVigente===kpiPeriodo);
+  const pontuais=doMes.filter(_pagamentoFinPontual).length;
+  const pct=doMes.length>0?((pontuais/doMes.length)*100).toFixed(1):null;
+  const res=document.getElementById('pagamentos-fin-resumo');
+  if(res) res.innerHTML=[
+    {l:'Pagamentos em '+kpiPeriodo,v:doMes.length,c:'sky',i:'fa-list'},
+    {l:'Pagos no Prazo',v:pontuais,c:'sage',i:'fa-check'},
+    {l:'Pontualidade',v:pct!==null?pct+'%':'—',c:'teal',i:'fa-money-check-dollar'}
+  ].map(x=>'<div class="metric-card '+x.c+'"><div class="metric-icon '+x.c+'"><i class="fa-solid '+x.i+'"></i></div><div class="metric-value" style="font-size:22px;">'+x.v+'</div><div class="metric-label">'+x.l+'</div></div>').join('');
+  // Tabela segue o mesmo mês vigente dos cards de resumo (doMes) — antes
+  // mostrava TODOS os meses juntos com uma coluna "Mês", o que ficava confuso
+  // ao trocar o seletor (os cards mudavam mas a lista embaixo continuava igual).
+  tb.innerHTML=doMes.length===0?'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3);">Nenhum pagamento em '+kpiPeriodo+'. Clique em "+ Novo Pagamento".</td></tr>':doMes.slice().sort((a,b)=>(b.dataPrevista||'').localeCompare(a.dataPrevista||'')).map(p=>{
+    const ok=_pagamentoFinPontual(p);
+    const statusHTML=(!p.dataReal)?'<span style="font-size:10px;color:var(--text3);">Aguardando</span>':(ok?'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--sage)22;color:var(--sage);">No prazo</span>':'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--vermelha)22;color:var(--vermelha);">Atrasado</span>');
+    const anexosHTML=(p.anexos||[]).map((a,i)=>'<button type="button" onclick="_finAbrirAnexo(\'pgf\','+JSON.stringify(p.anexos).replace(/"/g,'&quot;')+','+i+')" title="'+esc(a.nome)+'" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:1px 2px;">'+getFileIcon(a.tipo)+'</button>').join('');
+    return '<tr><td>'+esc(p.descricao)+'</td><td style="font-size:12px;">'+(p.dataPrevista||'—')+'</td><td style="font-size:12px;">'+(p.dataReal||'—')+'</td><td>'+statusHTML+'</td><td>'+(anexosHTML||'<span style="color:var(--text3);font-size:11px;">—</span>')+'</td><td style="white-space:nowrap;"><button onclick="abrirEditarPagamentoFin('+p.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-pen"></i></button><button onclick="deletarPagamentoFin('+p.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-trash"></i></button></td></tr>';
+  }).join('');
+}
+
+// ── Índice Financeiro — Submódulo B: Relatórios / Erros de Lançamento (Precisão) ──
+// Cada registro é UM erro identificado (igual à planilha manual da Nicole) —
+// a % de acerto do mês precisa do "Total de lançamentos revisados" (contador
+// manual mensal, guardado em _ksv().fin.totalRevisado) como denominador; sem
+// ele, o app não tem como saber sobre quantos lançamentos os erros ocorreram.
+const RELATORIO_FIN_TIPOS=['Despesa','Extra','Comissão/Salário','Manutenção','Compra','Outro'];
+function abrirNovoRelatorioFin(){
+  _relatorioFinEditId=null; _finAnexosTmp.rlf=[];
+  document.getElementById('rlf-modal-title').textContent='Novo Erro de Relatório';
+  document.getElementById('rlf-data').value=new Date().toISOString().split('T')[0];
+  document.getElementById('rlf-tipo').value=RELATORIO_FIN_TIPOS[0];
+  document.getElementById('rlf-item').value='';
+  document.getElementById('rlf-descricao').value='';
+  document.getElementById('rlf-responsavel').value='';
+  document.getElementById('rlf-corrigido').checked=false;
+  document.getElementById('rlf-mes').value=kpiPeriodo;
+  _finRenderAnexosTmp('rlf');
+  document.getElementById('modal-relatorio-fin').classList.add('open');
+}
+function abrirEditarRelatorioFin(id){
+  const r=relatoriosFinanceiro.find(x=>x.id===id); if(!r) return;
+  _relatorioFinEditId=id; _finAnexosTmp.rlf=(r.anexos||[]).slice();
+  document.getElementById('rlf-modal-title').textContent='Editar Erro de Relatório';
+  document.getElementById('rlf-data').value=r.data||'';
+  document.getElementById('rlf-tipo').value=r.tipo||RELATORIO_FIN_TIPOS[0];
+  document.getElementById('rlf-item').value=r.item||'';
+  document.getElementById('rlf-descricao').value=r.descricao||'';
+  document.getElementById('rlf-responsavel').value=r.responsavel||'';
+  document.getElementById('rlf-corrigido').checked=!!r.corrigido;
+  document.getElementById('rlf-mes').value=r.mesVigente||'';
+  _finRenderAnexosTmp('rlf');
+  document.getElementById('modal-relatorio-fin').classList.add('open');
+}
+function salvarRelatorioFin(){
+  const descricao=document.getElementById('rlf-descricao').value.trim();
+  const mesVigente=document.getElementById('rlf-mes').value;
+  if(!descricao){ showToast('Descreva o erro identificado.','peach'); return; }
+  if(!mesVigente){ showToast('Informe o mês vigente.','peach'); return; }
+  const obj={
+    id:_relatorioFinEditId||Date.now(),
+    data:document.getElementById('rlf-data').value,
+    tipo:document.getElementById('rlf-tipo').value,
+    item:document.getElementById('rlf-item').value.trim(),
+    descricao, mesVigente,
+    responsavel:document.getElementById('rlf-responsavel').value.trim(),
+    corrigido:document.getElementById('rlf-corrigido').checked,
+    anexos:_finAnexosTmp.rlf.slice(),
+  };
+  if(_relatorioFinEditId){ const i=relatoriosFinanceiro.findIndex(x=>x.id===_relatorioFinEditId); if(i>=0) relatoriosFinanceiro[i]=obj; } else relatoriosFinanceiro.unshift(obj);
+  closeModal('modal-relatorio-fin'); sincronizarFinanceiroKPI(); renderRelatoriosFinanceiro(); showToast('Erro registrado!','sage');
+}
+function deletarRelatorioFin(id){
+  if(!confirm('Apagar este registro?')) return;
+  relatoriosFinanceiro=relatoriosFinanceiro.filter(x=>x.id!==id);
+  sincronizarFinanceiroKPI(); renderRelatoriosFinanceiro();
+}
+function setTotalRevisadoFin(valor){
+  if(!_ksv().fin) _ksv().fin={};
+  _ksv().fin.totalRevisado=valor===''?'':(parseInt(valor,10)||0);
+  sincronizarFinanceiroKPI(); renderRelatoriosFinanceiro();
+}
+function renderRelatoriosFinanceiro(){
+  const tb=document.getElementById('relatorios-fin-tbody'); if(!tb) return;
+  const mesLabelEl=document.getElementById('rlf-mes-label'); if(mesLabelEl) mesLabelEl.textContent=kpiPeriodo;
+  const totalRevEl=document.getElementById('rlf-total-revisado');
+  if(totalRevEl && document.activeElement!==totalRevEl){
+    const tr=_ksv().fin&&_ksv().fin.totalRevisado;
+    totalRevEl.value=(tr!=null&&tr!=='')?tr:'';
+  }
+  const errosMes=relatoriosFinanceiro.filter(r=>r.mesVigente===kpiPeriodo);
+  const totalRev=(_ksv().fin&&+_ksv().fin.totalRevisado)||0;
+  const pct=totalRev>0?Math.max(0,((totalRev-errosMes.length)/totalRev)*100).toFixed(1):null;
+  const res=document.getElementById('relatorios-fin-resumo');
+  if(res) res.innerHTML=[
+    {l:'Revisados em '+kpiPeriodo,v:totalRev>0?totalRev:'—',c:'sky',i:'fa-file-lines'},
+    {l:'Erros no Mês',v:errosMes.length,c:'peach',i:'fa-triangle-exclamation'},
+    {l:'Precisão',v:pct!==null?pct+'%':'—',c:'teal',i:'fa-money-check-dollar'}
+  ].map(x=>'<div class="metric-card '+x.c+'"><div class="metric-icon '+x.c+'"><i class="fa-solid '+x.i+'"></i></div><div class="metric-value" style="font-size:22px;">'+x.v+'</div><div class="metric-label">'+x.l+'</div></div>').join('');
+  // Tabela segue o mesmo mês vigente do resumo (errosMes) — mesmo motivo do
+  // ajuste em renderPagamentosFinanceiro.
+  tb.innerHTML=errosMes.length===0?'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3);">Nenhum erro registrado em '+kpiPeriodo+'. Se o mês fechou sem erro, não precisa lançar nada aqui.</td></tr>':errosMes.slice().sort((a,b)=>(b.data||'').localeCompare(a.data||'')).map(r=>{
+    const anexosHTML=(r.anexos||[]).map((a,i)=>'<button type="button" onclick="_finAbrirAnexo(\'rlf\','+JSON.stringify(r.anexos).replace(/"/g,'&quot;')+','+i+')" title="'+esc(a.nome)+'" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:1px 2px;">'+getFileIcon(a.tipo)+'</button>').join('');
+    return '<tr><td style="font-size:12px;">'+(r.data||'—')+'</td><td style="font-size:12px;">'+esc(r.tipo||'—')+'</td><td>'+esc(r.descricao)+(r.item?' <span style="color:var(--text3);font-size:11px;">('+esc(r.item)+')</span>':'')+'</td><td style="font-size:12px;">'+esc(r.responsavel||'—')+'</td><td>'+(r.corrigido?'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--sage)22;color:var(--sage);">Corrigido</span>':'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--amarela)22;color:var(--amarela);">Pendente</span>')+'</td><td>'+(anexosHTML||'<span style="color:var(--text3);font-size:11px;">—</span>')+'</td><td style="white-space:nowrap;"><button onclick="abrirEditarRelatorioFin('+r.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-pen"></i></button><button onclick="deletarRelatorioFin('+r.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-trash"></i></button></td></tr>';
+  }).join('');
+}
+
+// ── Índice Financeiro — Submódulo C: Validações de Planilhas (Eficiência) ──
+// "Recebi a planilha em X, devolvi validada em Y" — dentro do prazo se os
+// dias decorridos entre as duas datas não passarem do SLA configurado.
+const VALIDACAO_FIN_TIPOS=['Planilha de Proprietários','Limpeza','Anfitrião','Conciliação de Cartão','Outro'];
+function setSlaValidacaoDias(valor){
+  slaValidacaoDias=parseInt(valor,10)||2;
+  if(typeof saveAll==='function') saveAll();
+  renderValidacoesFinanceiro();
+}
+function _diasEntre(a,b){ if(!a||!b) return null; return Math.round((new Date(b)-new Date(a))/86400000); }
+function abrirNovaValidacaoFin(){
+  _validacaoFinEditId=null; _finAnexosTmp.vlf=[];
+  document.getElementById('vlf-modal-title').textContent='Nova Validação';
+  document.getElementById('vlf-tipo').value=VALIDACAO_FIN_TIPOS[0];
+  document.getElementById('vlf-descricao').value='';
+  document.getElementById('vlf-recebimento').value='';
+  document.getElementById('vlf-devolucao').value='';
+  document.getElementById('vlf-mes').value=kpiPeriodo;
+  document.getElementById('vlf-obs').value='';
+  _finRenderAnexosTmp('vlf');
+  document.getElementById('modal-validacao-fin').classList.add('open');
+}
+function abrirEditarValidacaoFin(id){
+  const v=validacoesFinanceiro.find(x=>x.id===id); if(!v) return;
+  _validacaoFinEditId=id; _finAnexosTmp.vlf=(v.anexos||[]).slice();
+  document.getElementById('vlf-modal-title').textContent='Editar Validação';
+  document.getElementById('vlf-tipo').value=v.tipo||VALIDACAO_FIN_TIPOS[0];
+  document.getElementById('vlf-descricao').value=v.descricao||'';
+  document.getElementById('vlf-recebimento').value=v.dataRecebimento||'';
+  document.getElementById('vlf-devolucao').value=v.dataDevolucao||'';
+  document.getElementById('vlf-mes').value=v.mesVigente||'';
+  document.getElementById('vlf-obs').value=v.obs||'';
+  _finRenderAnexosTmp('vlf');
+  document.getElementById('modal-validacao-fin').classList.add('open');
+}
+function salvarValidacaoFin(){
+  const descricao=document.getElementById('vlf-descricao').value.trim();
+  const mesVigente=document.getElementById('vlf-mes').value;
+  if(!descricao){ showToast('Informe a descrição da validação.','peach'); return; }
+  if(!mesVigente){ showToast('Informe o mês vigente.','peach'); return; }
+  const obj={
+    id:_validacaoFinEditId||Date.now(),
+    tipo:document.getElementById('vlf-tipo').value,
+    descricao, mesVigente,
+    dataRecebimento:document.getElementById('vlf-recebimento').value,
+    dataDevolucao:document.getElementById('vlf-devolucao').value,
+    obs:document.getElementById('vlf-obs').value.trim(),
+    anexos:_finAnexosTmp.vlf.slice(),
+  };
+  if(_validacaoFinEditId){ const i=validacoesFinanceiro.findIndex(x=>x.id===_validacaoFinEditId); if(i>=0) validacoesFinanceiro[i]=obj; } else validacoesFinanceiro.unshift(obj);
+  closeModal('modal-validacao-fin'); sincronizarFinanceiroKPI(); renderValidacoesFinanceiro(); showToast('Validação salva!','sage');
+}
+function deletarValidacaoFin(id){
+  if(!confirm('Apagar esta validação?')) return;
+  validacoesFinanceiro=validacoesFinanceiro.filter(x=>x.id!==id);
+  sincronizarFinanceiroKPI(); renderValidacoesFinanceiro();
+}
+function _validacaoFinNoPrazo(v){ const d=_diasEntre(v.dataRecebimento,v.dataDevolucao); return d!==null && d<=slaValidacaoDias; }
+function renderValidacoesFinanceiro(){
+  const tb=document.getElementById('validacoes-fin-tbody'); if(!tb) return;
+  const slaEl=document.getElementById('vlf-sla-dias');
+  if(slaEl && document.activeElement!==slaEl) slaEl.value=slaValidacaoDias;
+  const doMes=validacoesFinanceiro.filter(v=>v.mesVigente===kpiPeriodo);
+  const noPrazo=doMes.filter(_validacaoFinNoPrazo).length;
+  const pct=doMes.length>0?((noPrazo/doMes.length)*100).toFixed(1):null;
+  const res=document.getElementById('validacoes-fin-resumo');
+  if(res) res.innerHTML=[
+    {l:'Validações em '+kpiPeriodo,v:doMes.length,c:'sky',i:'fa-list'},
+    {l:'Dentro do SLA',v:noPrazo,c:'sage',i:'fa-check'},
+    {l:'Eficiência',v:pct!==null?pct+'%':'—',c:'teal',i:'fa-money-check-dollar'}
+  ].map(x=>'<div class="metric-card '+x.c+'"><div class="metric-icon '+x.c+'"><i class="fa-solid '+x.i+'"></i></div><div class="metric-value" style="font-size:22px;">'+x.v+'</div><div class="metric-label">'+x.l+'</div></div>').join('');
+  // Tabela segue o mesmo mês vigente do resumo (doMes) — mesmo motivo do
+  // ajuste em renderPagamentosFinanceiro.
+  tb.innerHTML=doMes.length===0?'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3);">Nenhuma validação em '+kpiPeriodo+'. Clique em "+ Nova Validação".</td></tr>':doMes.slice().sort((a,b)=>(b.dataRecebimento||'').localeCompare(a.dataRecebimento||'')).map(v=>{
+    const dias=_diasEntre(v.dataRecebimento,v.dataDevolucao);
+    const ok=_validacaoFinNoPrazo(v);
+    const statusHTML=(!v.dataDevolucao)?'<span style="font-size:10px;color:var(--text3);">Pendente</span>':(ok?'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--sage)22;color:var(--sage);">No prazo</span>':'<span style="font-size:10px;padding:1px 8px;border-radius:20px;font-weight:600;background:var(--vermelha)22;color:var(--vermelha);">Atrasado</span>');
+    const anexosHTML=(v.anexos||[]).map((a,i)=>'<button type="button" onclick="_finAbrirAnexo(\'vlf\','+JSON.stringify(v.anexos).replace(/"/g,'&quot;')+','+i+')" title="'+esc(a.nome)+'" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:1px 2px;">'+getFileIcon(a.tipo)+'</button>').join('');
+    return '<tr><td style="font-size:12px;">'+esc(v.tipo||'—')+'</td><td>'+esc(v.descricao)+'</td><td style="font-size:12px;">'+(v.dataRecebimento||'—')+'</td><td style="font-size:12px;">'+(v.dataDevolucao||'—')+'</td><td style="font-size:12px;">'+(dias!=null?dias+'d':'—')+'</td><td>'+statusHTML+'</td><td>'+(anexosHTML||'<span style="color:var(--text3);font-size:11px;">—</span>')+'</td><td style="white-space:nowrap;"><button onclick="abrirEditarValidacaoFin('+v.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-pen"></i></button><button onclick="deletarValidacaoFin('+v.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 5px;"><i class="fa-solid fa-trash"></i></button></td></tr>';
+  }).join('');
+}
+
+// ── Índice Financeiro: média simples dos 3 submódulos, pro mês vigente do KPI ──
+function sincronizarFinanceiroKPI(){
+  const mes=kpiPeriodo;
+  const pagMes=pagamentosFinanceiro.filter(p=>p.mesVigente===mes);
+  const pctPag=pagMes.length>0?(pagMes.filter(_pagamentoFinPontual).length/pagMes.length)*100:null;
+  const totalRev=(_ksv().fin&&+_ksv().fin.totalRevisado)||0;
+  const errosMes=relatoriosFinanceiro.filter(r=>r.mesVigente===mes);
+  const pctRel=totalRev>0?Math.max(0,((totalRev-errosMes.length)/totalRev)*100):null;
+  const valMes=validacoesFinanceiro.filter(v=>v.mesVigente===mes);
+  const pctVal=valMes.length>0?(valMes.filter(_validacaoFinNoPrazo).length/valMes.length)*100:null;
+  const vals=[pctPag,pctRel,pctVal].filter(x=>x!==null);
+  // '' (não null) pra realmente limpar no servidor quando não há dados no mês
+  // — mesmo motivo do bug já corrigido nos outros KPIs (tr/cv/av/rc).
+  _kv().fin=vals.length>0?(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2):'';
+  if(typeof saveAll==='function') saveAll();
+  if(typeof renderKPIs==='function') renderKPIs();
+}
+
+// Importação única dos dados de julho/2026 já levantados na planilha manual
+// da Nicole (KPI_Gestao_Financeira_Nicole.xlsx) — pra não precisar digitar
+// tudo de novo na mão. Roda uma única vez (flag em localStorage); depois
+// disso os registros vivem como qualquer outro lançamento normal (editável/
+// apagável). Números confirmados contra a aba "Resumo KPI" da planilha:
+// Pontualidade 17/18=94,4% · Precisão 42 revisados/0 erros=100% · Eficiência
+// 3/3 dentro do SLA=100% — média 98,1%, igual ao relatório de julho/2026.
+function _importarDadosFinanceiroJulho2026(){
+  if(localStorage.getItem('nx_fin_seed_julho2026')) return;
+  try{ localStorage.setItem('nx_fin_seed_julho2026','1'); }catch(e){}
+  const mes='2026-07';
+  const salarios=[
+    ['Patrícia','2026-07-15','2026-07-15'],['Sara','2026-07-15','2026-07-15'],['Lisarb','2026-07-15','2026-07-15'],['Laís','2026-07-15','2026-07-15'],['Nicole','2026-07-15','2026-07-15'],['Gabriela','2026-07-15','2026-07-15'],['Felipe','2026-07-15','2026-07-15'],['Nilson','2026-07-15','2026-07-15'],
+    ['Patrícia','2026-07-31','2026-07-31'],['Sara','2026-07-31','2026-07-31'],['Lisarb','2026-07-31','2026-07-31'],['Laís','2026-07-31','2026-07-31'],['Nicole','2026-07-31','2026-07-31'],['Gabriela','2026-07-31','2026-07-31'],['Felipe','2026-07-31','2026-07-31'],
+    ['Nilson','2026-07-28','2026-07-28'],
+  ];
+  salarios.forEach(function(s,i){
+    pagamentosFinanceiro.push({id:Date.now()+i, descricao:'Salário Fixo — '+s[0], mesVigente:mes, dataPrevista:s[1], dataReal:s[2], obs:'', anexos:[]});
+  });
+  pagamentosFinanceiro.push({id:Date.now()+100, descricao:'Comissão — Nicole', mesVigente:mes, dataPrevista:'2026-07-10', dataReal:'2026-07-10', obs:'', anexos:[]});
+  pagamentosFinanceiro.push({id:Date.now()+101, descricao:'Comissão — Gabriela', mesVigente:mes, dataPrevista:'2026-07-10', dataReal:'2026-07-15', obs:'Atrasou porque ela não sabia o valor da comissão que iria receber.', anexos:[]});
+
+  // Erros de Relatório: zero erros em julho, mas o "total revisado" (base do
+  // cálculo de Precisão) já tinha sido levantado na planilha manual.
+  if(!kpiSubVals[mes]) kpiSubVals[mes]={};
+  if(!kpiSubVals[mes].fin) kpiSubVals[mes].fin={};
+  kpiSubVals[mes].fin.totalRevisado=42;
+
+  const validacoes=[
+    ['Planilha de Proprietários','Planilha proprietários','2026-07-06','2026-07-07'],
+    ['Limpeza','Planilha limpezas','2026-07-08','2026-07-09'],
+    ['Anfitrião','Planilha anfitriões','2026-07-13','2026-07-14'],
+  ];
+  validacoes.forEach(function(v,i){
+    validacoesFinanceiro.push({id:Date.now()+200+i, tipo:v[0], descricao:v[1], mesVigente:mes, dataRecebimento:v[2], dataDevolucao:v[3], obs:'', anexos:[]});
+  });
+
+  if(typeof sincronizarFinanceiroKPI==='function'){
+    const _periodoAtual=kpiPeriodo;
+    kpiPeriodo=mes; sincronizarFinanceiroKPI(); kpiPeriodo=_periodoAtual;
+  }
+  if(typeof saveAll==='function') saveAll();
 }
 
 // ── SUPERHOST ──

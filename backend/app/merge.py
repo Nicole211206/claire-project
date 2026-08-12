@@ -48,13 +48,21 @@ def _ids_em_rajada_suspeita(tomb_map: dict, would_remove_ids: set, total_na_cole
     return suspeitos
 
 
-# As 16 listas com merge por registro (união por id, mantém o de _ts maior).
+# As 22 listas com merge por registro (união por id, mantém o de _ts maior).
 MERGE_POR_ID = [
     "nx_manutencoes", "nx_tasks", "nx_plantao", "nx_projetos", "nx_compras",
     "nx_extras", "nx_conquistas", "nx_despesas", "nx_anotacoes_controle",
     "nx_superhost", "nx_cancelamentos", "nx_imoveis",
     "nx_pagamentos_fin", "nx_relatorios_fin", "nx_validacoes_fin",
     "nx_avaliacoes_negativas",
+    # Estas 6 não tinham NENHUMA proteção no backend (nem merge por id, nem
+    # trava de encolhimento do PROT) — um spread simples deixava o client mais
+    # desatualizado apagar por completo o que outro tivesse acabado de gravar
+    # em edição quase simultânea. O client já mescla antes de enviar, então na
+    # prática o risco só aparecia numa corrida rara entre dois aparelhos; aqui
+    # é a rede de segurança do lado do servidor pra esse mesmo caso.
+    "nx_taskcats", "nx_kpidefs", "nx_transcricoes", "nx_outros",
+    "nx_fornecedores_cad", "nx_manual",
 ]
 
 # Listas com trava de encolhimento (não passam pelo merge por id acima).

@@ -4555,6 +4555,27 @@ function _mergeKpiObj(a, b){
   }
   return out;
 }
+// Mescla dicionários "chave→valor" (headFixo, headComissao, headFotos, salPagos,
+// notasFiscais, PRECOS_ITENS, PRECOS_ENXOVAL, workDaysP1/P2...) por 3 vias, no
+// nível de cada chave de topo — mesma ideia do _mergeById, só que pra objeto em
+// vez de lista. Sem isso, a proteção antiga só contava "quantos valores não-nulos
+// tem cada lado" e adotava quem tinha mais, sem olhar a base: apagar UM campo
+// (ex.: desmarcar um pagamento em salPagos) e recarregar antes do próximo envio
+// trazia o campo de volta, porque o servidor "tinha mais coisa preenchida" —
+// mesma classe do bug dos imóveis/tarefas, só que em objeto em vez de array.
+function _mergeObjByKey(base, local, server){
+  local  = (local  && typeof local ==='object' && !Array.isArray(local )) ? local  : {};
+  server = (server && typeof server==='object' && !Array.isArray(server)) ? server : {};
+  base   = (base   && typeof base  ==='object' && !Array.isArray(base  )) ? base   : {};
+  const out={};
+  new Set([...Object.keys(server), ...Object.keys(local)]).forEach(k=>{
+    if(Object.prototype.hasOwnProperty.call(local,k)){ out[k]=local[k]; return; } // local tem a chave (editou ou manteve) → vence
+    const inB=Object.prototype.hasOwnProperty.call(base,k);
+    if(!inB || JSON.stringify(server[k])!==JSON.stringify(base[k])) out[k]=server[k]; // nunca conheceu OU servidor mudou depois → adota
+    // senão: este aparelho apagou essa chave de propósito → não volta
+  });
+  return out;
+}
 // Envia ao KV SOMENTE se houver mudança real (deduplicado). Chamado por um intervalo espaçado.
 async function _kvFlush(){
   const s=window.CLAIRE_SYNC||{};
@@ -4640,13 +4661,12 @@ async function _kvFlush(){
             if(JSON.stringify(merged)!==JSON.stringify(lv)){
               local[k]=merged; try{ localStorage.setItem(k, JSON.stringify(merged)); }catch(e){} ajustou=true;
             }
-          // objeto (demais chaves, ex.: headFixo): conta valores não-nulos — servidor tem mais → local está incompleto
+          // objeto (demais chaves, ex.: headFixo/salPagos/notasFiscais): mescla
+          // por chave de topo em 3 vias — ver _mergeObjByKey.
           } else if(sv && typeof sv==='object' && !Array.isArray(sv) && lv && typeof lv==='object' && !Array.isArray(lv)){
-            const _cnt=o=>Object.values(o).flatMap(x=>typeof x==='object'&&x?Object.values(x):[x]).filter(v=>v!==null&&v!==undefined&&v!=='').length;
-            if(_cnt(sv) > _cnt(lv)){
-              local[k]=sv;
-              try{ localStorage.setItem(k, JSON.stringify(sv)); }catch(e){}
-              ajustou=true;
+            const merged=_mergeObjByKey(baseBlob?baseBlob[k]:null, lv, sv);
+            if(JSON.stringify(merged)!==JSON.stringify(lv)){
+              local[k]=merged; try{ localStorage.setItem(k, JSON.stringify(merged)); }catch(e){} ajustou=true;
             }
           }
         }
@@ -4735,14 +4755,21 @@ async function kvPull(){
             if(JSON.stringify(lv)!==novo){ localStorage.setItem(k, novo); aplicou=true; }
             continue;
           }
+          // objeto (demais chaves, ex.: headFixo/salPagos/notasFiscais): mescla
+          // por chave de topo em 3 vias — mesmo motivo do _kvFlush acima (a
+          // proteção antiga só contava valores preenchidos, sem olhar a base, e
+          // trazia de volta um campo apagado de propósito).
+          if(sv && typeof sv==='object' && !Array.isArray(sv) && lv && typeof lv==='object' && !Array.isArray(lv)){
+            const merged=_mergeObjByKey(baseBlob?baseBlob[k]:null, lv, sv);
+            const novo=JSON.stringify(merged);
+            if(localStorage.getItem(k)!==novo){ localStorage.setItem(k, novo); aplicou=true; }
+            continue;
+          }
           // Proteção genérica (demais chaves): servidor com menos dados não apaga
-          // lista/objeto local mais completo.
+          // lista local mais completa (arrays sem id — os com id já foram
+          // tratados acima via _mergeById).
           if(lv!==null){
             if(Array.isArray(sv)&&Array.isArray(lv)&&sv.length<lv.length) continue;
-            if(sv&&typeof sv==='object'&&!Array.isArray(sv)&&lv&&typeof lv==='object'&&!Array.isArray(lv)){
-              const _cnt=o=>Object.values(o).flatMap(x=>typeof x==='object'&&x?Object.values(x):[x]).filter(v=>v!==null&&v!==undefined&&v!=='').length;
-              if(_cnt(sv)<_cnt(lv)) continue;
-            }
           }
           const novo=JSON.stringify(sv);
           if(localStorage.getItem(k)!==novo){ localStorage.setItem(k, novo); aplicou=true; }

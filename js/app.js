@@ -321,6 +321,7 @@ function setAvView(modo,btn){
 // ═══════════════════ LOGIN MULTIUSUÁRIO ═══════════════════
 let conquistas=[];
 let tombstones=[]; // exclusões { id, ts } — para o delete propagar sem ressuscitar
+let updateTombstones=[]; // exclusões { id, ts } de itens dentro de arrays "updates" (comentários de tarefa/demanda/plantão) — mesma ideia de tombstones, mas para o sub-item aninhado, que não tem proteção de merge por id própria
 let _legadoFiltro='';
 let _conquistaEditId=null;
 let usuarios=[]; // gerenciados pelo admin (espelha localStorage nx_users)
@@ -1748,7 +1749,7 @@ function adicionarUpdate(){
   const texto=document.getElementById('td-nova-update').value.trim();
   if(!texto)return;
   if(!t.updates)t.updates=[];
-  t.updates.push({texto,data:new Date().toISOString(),autor:_autorAtual()});
+  t.updates.push({id:Date.now()+Math.floor(Math.random()*1000),texto,data:new Date().toISOString(),autor:_autorAtual()});
   document.getElementById('td-nova-update').value='';
   renderTaskUpdates();
   renderTasks();
@@ -1758,7 +1759,8 @@ function adicionarUpdate(){
 
 function removerUpdate(idx){
   const t=tasks.find(x=>x.id===taskDetalheAtivo);if(!t||!t.updates)return;
-  t.updates.splice(idx,1);
+  const [rem]=t.updates.splice(idx,1);
+  if(rem&&rem.id!=null)updateTombstones.push({id:rem.id,ts:Date.now()});
   renderTaskUpdates();
   renderTasks();
   if(typeof saveAll==='function')saveAll();
@@ -2318,7 +2320,7 @@ function adicionarUpdateDemanda(){
   const d=a.demands[_demandaAtiva.idx]; if(!d) return;
   const txt=document.getElementById('dd-nova-update').value.trim(); if(!txt) return;
   if(!d.updates) d.updates=[];
-  d.updates.push({texto:txt, data:new Date().toISOString(), autor:_autorAtual()});
+  d.updates.push({id:Date.now()+Math.floor(Math.random()*1000), texto:txt, data:new Date().toISOString(), autor:_autorAtual()});
   document.getElementById('dd-nova-update').value='';
   renderDemandaUpdates();
   if(typeof saveAll==='function') saveAll();
@@ -2326,7 +2328,9 @@ function adicionarUpdateDemanda(){
 function removerUpdateDemanda(i){
   const a=ATTS.find(x=>x.id===_demandaAtiva.attId); if(!a) return;
   const d=a.demands[_demandaAtiva.idx]; if(!d||!d.updates) return;
-  d.updates.splice(i,1); renderDemandaUpdates(); if(typeof saveAll==='function') saveAll();
+  const [rem]=d.updates.splice(i,1);
+  if(rem&&rem.id!=null)updateTombstones.push({id:rem.id,ts:Date.now()});
+  renderDemandaUpdates(); if(typeof saveAll==='function') saveAll();
 }
 function _mesAtualSal(){ return salarioMesSel || new Date().toISOString().substring(0,7); }
 // Plantões (dias trabalhados) do mês selecionado na aba Salário — cria o
@@ -4150,24 +4154,40 @@ const _PERSIST_KEYS = {
   nx_validacoes_fin:()=>validacoesFinanceiro,
   nx_sla_validacao_dias:()=>slaValidacaoDias,
   nx_avaliacoes_negativas:()=>avaliacoesNegativas,
-  nx_tombstones:()=>tombstones
+  nx_tombstones:()=>tombstones,
+  nx_update_tombstones:()=>updateTombstones
 };
 
 // Listas com id próprio que o servidor mescla registro a registro (id + _ts).
 // DEVE espelhar a MERGE_POR_ID do backend (backend/app/merge.py).
 // Mantido em sincronia com MERGE_POR_ID em backend/app/merge.py.
-const _MERGE_POR_ID_KEYS=['nx_manutencoes','nx_tasks','nx_plantao','nx_projetos','nx_compras','nx_extras','nx_conquistas','nx_despesas','nx_anotacoes_controle','nx_superhost','nx_cancelamentos','nx_imoveis','nx_pagamentos_fin','nx_relatorios_fin','nx_validacoes_fin','nx_avaliacoes_negativas','nx_taskcats','nx_kpidefs','nx_transcricoes','nx_outros','nx_fornecedores_cad','nx_manual'];
+const _MERGE_POR_ID_KEYS=['nx_manutencoes','nx_tasks','nx_plantao','nx_projetos','nx_compras','nx_extras','nx_conquistas','nx_despesas','nx_anotacoes_controle','nx_superhost','nx_cancelamentos','nx_imoveis','nx_pagamentos_fin','nx_relatorios_fin','nx_validacoes_fin','nx_avaliacoes_negativas','nx_taskcats','nx_kpidefs','nx_transcricoes','nx_outros','nx_fornecedores_cad','nx_manual','nx_update_tombstones'];
 function _semTs(o){ const c=Object.assign({},o); delete c._ts; return JSON.stringify(c); }
 // Antes de salvar: carimba _ts nos registros novos/alterados e cria tombstone
 // para os que foram apagados. Assim o servidor sabe qual versão é a mais recente
 // (um aparelho com app antigo, sem _ts, não reverte mais) e os deletes se
 // propagam de verdade (sem "ressuscitar"). Centralizado — não precisa mexer em
 // cada função de excluir.
+// Dá um id estável a cada comentário de "updates" (tarefa/demanda/plantão/manutenção)
+// que ainda não tenha um — dados criados antes deste fix. Sem id não dá pra criar
+// tombstone de exclusão pro item, então ele fica vulnerável a ressuscitar mais uma
+// vez até ganhar o id aqui (a partir daí a exclusão passa a colar de verdade).
+function _migrarIdsUpdates(live){
+  let mudou=false;
+  for(const o of live){
+    if(!o || !Array.isArray(o.updates)) continue;
+    for(const u of o.updates){
+      if(u && u.id==null){ u.id=Date.now()+Math.floor(Math.random()*1000); mudou=true; }
+    }
+  }
+  return mudou;
+}
 function _carimbarTsEDeletes(){
   const agora=Date.now();
   for(const k of _MERGE_POR_ID_KEYS){
     const live=_PERSIST_KEYS[k]?_PERSIST_KEYS[k]():null;
     if(!Array.isArray(live)) continue;
+    _migrarIdsUpdates(live);
     let prev=[]; try{ const raw=localStorage.getItem(k); if(raw) prev=JSON.parse(raw); }catch(e){}
     if(!Array.isArray(prev)) prev=[];
     const prevMap=new Map(prev.filter(o=>o&&o.id!=null).map(o=>[o.id,o]));
@@ -4182,6 +4202,7 @@ function _carimbarTsEDeletes(){
   // poda tombstones muito antigos (>120 dias) para não crescer sem limite
   const corte=agora-120*864e5;
   if(tombstones.length>500) tombstones=tombstones.filter(t=>(t.ts||0)>=corte);
+  if(updateTombstones.length>500) updateTombstones=updateTombstones.filter(t=>(t.ts||0)>=corte);
 }
 
 let _avisouStorageCheio=false; // evita repetir o toast de armazenamento cheio a cada 5s
@@ -4273,10 +4294,19 @@ function _ehListaComId(arr){ return Array.isArray(arr) && arr.every(o=>o && type
 // Une arrays de "updates" (comentários/atualizações), que são só-adição: junta os
 // dois lados e remove duplicados exatos, preservando a ordem. Assim, se duas
 // pessoas comentam na MESMA tarefa/demanda ao mesmo tempo, nenhum comentário some.
+// Exceção: um comentário cujo id está em updateTombstones foi apagado de propósito
+// (removerUpdate/removerUpdateDemanda/removerUpdatePlantao) — a união NÃO pode
+// trazê-lo de volta só porque o outro lado (servidor, ainda sem saber do delete)
+// continua com ele. Comentários são imutáveis (nunca reeditados no mesmo id), então
+// não precisa comparar timestamp: id na lista de tombstones = fica de fora, ponto.
 function _unionUpdates(a, b){
   a=Array.isArray(a)?a:[]; b=Array.isArray(b)?b:[];
+  const tombIds=new Set(updateTombstones.map(t=>t.id));
   const out=[], visto=new Set();
-  for(const u of [...a, ...b]){ const k=JSON.stringify(u); if(!visto.has(k)){ visto.add(k); out.push(u); } }
+  for(const u of [...a, ...b]){
+    if(u && u.id!=null && tombIds.has(u.id)) continue;
+    const k=JSON.stringify(u); if(!visto.has(k)){ visto.add(k); out.push(u); }
+  }
   return out;
 }
 // Se ambos os lados têm o mesmo item e ambos têm updates, devolve uma cópia do
@@ -4925,6 +4955,7 @@ function loadAll(){
     v=g('nx_sla_validacao_dias'); if(typeof v==='number') slaValidacaoDias=v;
     v=g('nx_avaliacoes_negativas'); if(Array.isArray(v)) avaliacoesNegativas=v;
     v=g('nx_tombstones'); if(Array.isArray(v)) tombstones=v;
+    v=g('nx_update_tombstones'); if(Array.isArray(v)) updateTombstones=v;
     // Migração: atendentes só veem o próprio attId (sem attsPermitidos).
     _migAtendentesSemPerms();
   }catch(e){ console.warn('loadAll falhou', e); }
@@ -6914,7 +6945,7 @@ function manutAdicionarUpdateTarefa(id,i){
   const inp=document.getElementById('manut-upd-'+id+'-'+i); if(!inp) return;
   const txt=inp.value.trim(); if(!txt) return;
   if(!m.tarefasManut[i].updates) m.tarefasManut[i].updates=[];
-  m.tarefasManut[i].updates.push({texto:txt,data:new Date().toISOString(),autor:_autorAtual()});
+  m.tarefasManut[i].updates.push({id:Date.now()+Math.floor(Math.random()*1000),texto:txt,data:new Date().toISOString(),autor:_autorAtual()});
   if(typeof saveAll==='function') saveAll();
   manutRenderAba(m);
 }
@@ -7516,7 +7547,7 @@ function adicionarUpdatePlantao(){
   const r=plantaoItems.find(x=>x.id===plantaoAtivo);if(!r)return;
   const txt=document.getElementById('pt-nova-update').value.trim();if(!txt)return;
   if(!r.updates)r.updates=[];
-  r.updates.push({texto:txt,data:new Date().toISOString(),autor:_autorAtual()});
+  r.updates.push({id:Date.now()+Math.floor(Math.random()*1000),texto:txt,data:new Date().toISOString(),autor:_autorAtual()});
   document.getElementById('pt-nova-update').value='';
   renderPlantaoUpdates();saveAll();
 }
@@ -7533,7 +7564,9 @@ function renderPlantaoUpdates(){
 function removerUpdatePlantao(idx){
   if(!plantaoAtivo)return;
   const r=plantaoItems.find(x=>x.id===plantaoAtivo);if(!r||!r.updates)return;
-  r.updates.splice(idx,1);renderPlantaoUpdates();saveAll();
+  const [rem]=r.updates.splice(idx,1);
+  if(rem&&rem.id!=null)updateTombstones.push({id:rem.id,ts:Date.now()});
+  renderPlantaoUpdates();saveAll();
 }
 
 function togglePlantaoConcluidas(){
@@ -7952,7 +7985,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 114;
+const APP_VERSION = 115;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

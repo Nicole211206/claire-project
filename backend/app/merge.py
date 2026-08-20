@@ -63,6 +63,11 @@ MERGE_POR_ID = [
     # é a rede de segurança do lado do servidor pra esse mesmo caso.
     "nx_taskcats", "nx_kpidefs", "nx_transcricoes", "nx_outros",
     "nx_fornecedores_cad", "nx_manual",
+    # Tombstones de comentários individuais dentro de arrays "updates" aninhados
+    # (tarefa/demanda/plantão) — cada entrada {id, ts} é um registro só-adição
+    # com id próprio (id do comentário apagado), então o merge por id de cima
+    # já funciona como união entre aparelhos, igual ao nx_tombstones de topo.
+    "nx_update_tombstones",
 ]
 
 # Listas com trava de encolhimento (não passam pelo merge por id acima).

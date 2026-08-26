@@ -4168,18 +4168,45 @@ function _semTs(o){ const c=Object.assign({},o); delete c._ts; return JSON.strin
 // (um aparelho com app antigo, sem _ts, não reverte mais) e os deletes se
 // propagam de verdade (sem "ressuscitar"). Centralizado — não precisa mexer em
 // cada função de excluir.
-// Dá um id estável a cada comentário de "updates" (tarefa/demanda/plantão/manutenção)
-// que ainda não tenha um — dados criados antes deste fix. Sem id não dá pra criar
-// tombstone de exclusão pro item, então ele fica vulnerável a ressuscitar mais uma
-// vez até ganhar o id aqui (a partir daí a exclusão passa a colar de verdade).
+// Hash simples (djb2) de string → inteiro positivo. Usado só para gerar um id
+// DETERMINÍSTICO a partir do conteúdo de um comentário legado sem id (ver
+// _idEstavelUpdate abaixo) — não precisa ser criptográfico, só estável.
+function _hashStr(s){
+  s=String(s||''); let h=5381;
+  for(let i=0;i<s.length;i++){ h=((h*33)^s.charCodeAt(i))>>>0; }
+  return h>>>0;
+}
+// Id determinístico a partir do conteúdo (texto+data+autor): a MESMA entrada
+// sempre gera o MESMO id, não importa em qual aparelho ou quantas vezes a
+// migração abaixo rodar. Isso é o oposto do bug antigo: id=Date.now()+random()
+// sorteava um id NOVO a cada passada para o mesmo comentário sem id, e como o
+// merge só une por id, cada passada virava um duplicado permanente (chegou a
+// 1793 cópias de 11 comentários numa única tarefa em produção). Comentários
+// "de verdade" continuam usando Date.now()+random na criação (adicionarUpdate
+// etc.) — isso aqui é só para o resgate retroativo dos sem id.
+function _idEstavelUpdate(u){ return _hashStr((u&&u.texto||'')+'|'+(u&&u.data||'')+'|'+(u&&u.autor||'')); }
+// Normaliza um item com array "updates" (tarefa/demanda/plantão/manutenção):
+// 1) dá id determinístico a comentário sem id (dados de antes do fix de id);
+// 2) colapsa duplicatas de conteúdo idêntico (mesmo texto+data+autor) que
+//    sobraram da versão anterior do bug (cada uma com um id aleatório
+//    diferente) — mantém só a primeira ocorrência. Devolve true se mexeu.
+function _normalizarUpdates(o){
+  if(!o || !Array.isArray(o.updates)) return false;
+  let mudou=false;
+  for(const u of o.updates){ if(u && u.id==null){ u.id=_idEstavelUpdate(u); mudou=true; } }
+  const vistos=new Set(), nova=[];
+  for(const u of o.updates){
+    if(!u) continue;
+    const chave=(u.texto||'')+'|'+(u.data||'')+'|'+(u.autor||'');
+    if(vistos.has(chave)){ mudou=true; continue; }
+    vistos.add(chave); nova.push(u);
+  }
+  if(nova.length!==o.updates.length) o.updates=nova;
+  return mudou;
+}
 function _migrarIdsUpdates(live){
   let mudou=false;
-  for(const o of live){
-    if(!o || !Array.isArray(o.updates)) continue;
-    for(const u of o.updates){
-      if(u && u.id==null){ u.id=Date.now()+Math.floor(Math.random()*1000); mudou=true; }
-    }
-  }
+  for(const o of live){ if(_normalizarUpdates(o)) mudou=true; }
   return mudou;
 }
 function _carimbarTsEDeletes(){
@@ -4198,6 +4225,13 @@ function _carimbarTsEDeletes(){
     }
     const liveIds=new Set(live.filter(o=>o&&o.id!=null).map(o=>o.id));
     for(const p of prev){ if(p&&p.id!=null && !liveIds.has(p.id)){ if(!tombstones.some(t=>t.id===p.id)) tombstones.push({id:p.id,ts:agora}); } }
+  }
+  // Demandas dentro de nx_atts têm "updates" um nível mais fundo (att.demands[i].updates)
+  // e nx_atts NÃO está em _MERGE_POR_ID_KEYS (é mesclado à parte, por _mergeAtts) — por
+  // isso ficaram de fora do _migrarIdsUpdates acima e vulneráveis ao mesmo bug de
+  // duplicação. Mesma normalização, aplicada diretamente nas demandas.
+  if(Array.isArray(ATTS)){
+    for(const a of ATTS){ if(a && Array.isArray(a.demands)){ for(const d of a.demands){ _normalizarUpdates(d); } } }
   }
   // poda tombstones muito antigos (>120 dias) para não crescer sem limite
   const corte=agora-120*864e5;
@@ -4299,13 +4333,21 @@ function _ehListaComId(arr){ return Array.isArray(arr) && arr.every(o=>o && type
 // trazê-lo de volta só porque o outro lado (servidor, ainda sem saber do delete)
 // continua com ele. Comentários são imutáveis (nunca reeditados no mesmo id), então
 // não precisa comparar timestamp: id na lista de tombstones = fica de fora, ponto.
+// Dedup por CONTEÚDO (texto+data+autor), não pelo id nem pelo JSON completo: um
+// bug antigo (corrigido em _migrarIdsUpdates) sorteava um id aleatório novo a
+// cada passada de migração pro mesmo comentário sem id, então dois comentários
+// idênticos podiam ter ids diferentes — dedup por JSON/id não pegava isso e a
+// lista crescia sem parar a cada sync (chegou a 1793 cópias de 11 comentários
+// numa tarefa em produção). Por conteúdo, colapsa de verdade não importa o id.
 function _unionUpdates(a, b){
   a=Array.isArray(a)?a:[]; b=Array.isArray(b)?b:[];
   const tombIds=new Set(updateTombstones.map(t=>t.id));
   const out=[], visto=new Set();
   for(const u of [...a, ...b]){
-    if(u && u.id!=null && tombIds.has(u.id)) continue;
-    const k=JSON.stringify(u); if(!visto.has(k)){ visto.add(k); out.push(u); }
+    if(!u) continue;
+    if(u.id!=null && tombIds.has(u.id)) continue;
+    const k=(u.texto||'')+'|'+(u.data||'')+'|'+(u.autor||'');
+    if(!visto.has(k)){ visto.add(k); out.push(u); }
   }
   return out;
 }
@@ -7985,7 +8027,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 115;
+const APP_VERSION = 116;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

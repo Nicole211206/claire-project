@@ -321,6 +321,7 @@ function setAvView(modo,btn){
 // ═══════════════════ LOGIN MULTIUSUÁRIO ═══════════════════
 let conquistas=[];
 let tombstones=[]; // exclusões { id, ts } — para o delete propagar sem ressuscitar
+let updateTombstones=[]; // exclusões { id, ts } de itens dentro de arrays "updates" (comentários de tarefa/demanda/plantão) — mesma ideia de tombstones, mas para o sub-item aninhado, que não tem proteção de merge por id própria
 let _legadoFiltro='';
 let _conquistaEditId=null;
 let usuarios=[]; // gerenciados pelo admin (espelha localStorage nx_users)
@@ -599,7 +600,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     }
   }, 2000);
   // guarda o estado atual como "já enviado" pra não regravar à toa logo no início
-  try{ _kvLastPushed=_kvBuildBlob(); }catch(e){}
+  try{ _setKvLastPushed(_kvBuildBlob()); }catch(e){}
   ATTS.forEach(a=>{if(!a.respWeekly)a.respWeekly=[null,null,null,null];if(a.respMes===undefined)a.respMes=null;if(a.qtdRespMes===undefined)a.qtdRespMes=null;});
   // Migração única: a.qtdRespMes era solto (sem mês) — se o mês vigente ainda
   // não tem nada lançado em _ksv().qtdResp, aproveita o que já tinha sido
@@ -1748,7 +1749,7 @@ function adicionarUpdate(){
   const texto=document.getElementById('td-nova-update').value.trim();
   if(!texto)return;
   if(!t.updates)t.updates=[];
-  t.updates.push({texto,data:new Date().toISOString(),autor:_autorAtual()});
+  t.updates.push({id:Date.now()+Math.floor(Math.random()*1000),texto,data:new Date().toISOString(),autor:_autorAtual()});
   document.getElementById('td-nova-update').value='';
   renderTaskUpdates();
   renderTasks();
@@ -1758,7 +1759,8 @@ function adicionarUpdate(){
 
 function removerUpdate(idx){
   const t=tasks.find(x=>x.id===taskDetalheAtivo);if(!t||!t.updates)return;
-  t.updates.splice(idx,1);
+  const [rem]=t.updates.splice(idx,1);
+  if(rem&&rem.id!=null)updateTombstones.push({id:rem.id,ts:Date.now()});
   renderTaskUpdates();
   renderTasks();
   if(typeof saveAll==='function')saveAll();
@@ -2318,7 +2320,7 @@ function adicionarUpdateDemanda(){
   const d=a.demands[_demandaAtiva.idx]; if(!d) return;
   const txt=document.getElementById('dd-nova-update').value.trim(); if(!txt) return;
   if(!d.updates) d.updates=[];
-  d.updates.push({texto:txt, data:new Date().toISOString(), autor:_autorAtual()});
+  d.updates.push({id:Date.now()+Math.floor(Math.random()*1000), texto:txt, data:new Date().toISOString(), autor:_autorAtual()});
   document.getElementById('dd-nova-update').value='';
   renderDemandaUpdates();
   if(typeof saveAll==='function') saveAll();
@@ -2326,7 +2328,9 @@ function adicionarUpdateDemanda(){
 function removerUpdateDemanda(i){
   const a=ATTS.find(x=>x.id===_demandaAtiva.attId); if(!a) return;
   const d=a.demands[_demandaAtiva.idx]; if(!d||!d.updates) return;
-  d.updates.splice(i,1); renderDemandaUpdates(); if(typeof saveAll==='function') saveAll();
+  const [rem]=d.updates.splice(i,1);
+  if(rem&&rem.id!=null)updateTombstones.push({id:rem.id,ts:Date.now()});
+  renderDemandaUpdates(); if(typeof saveAll==='function') saveAll();
 }
 function _mesAtualSal(){ return salarioMesSel || new Date().toISOString().substring(0,7); }
 // Plantões (dias trabalhados) do mês selecionado na aba Salário — cria o
@@ -4150,23 +4154,67 @@ const _PERSIST_KEYS = {
   nx_validacoes_fin:()=>validacoesFinanceiro,
   nx_sla_validacao_dias:()=>slaValidacaoDias,
   nx_avaliacoes_negativas:()=>avaliacoesNegativas,
-  nx_tombstones:()=>tombstones
+  nx_tombstones:()=>tombstones,
+  nx_update_tombstones:()=>updateTombstones
 };
 
 // Listas com id próprio que o servidor mescla registro a registro (id + _ts).
 // DEVE espelhar a MERGE_POR_ID do backend (backend/app/merge.py).
-const _MERGE_POR_ID_KEYS=['nx_manutencoes','nx_tasks','nx_plantao','nx_projetos','nx_compras','nx_extras','nx_conquistas','nx_despesas','nx_anotacoes_controle','nx_superhost','nx_cancelamentos','nx_imoveis','nx_pagamentos_fin','nx_relatorios_fin','nx_validacoes_fin','nx_avaliacoes_negativas'];
+// Mantido em sincronia com MERGE_POR_ID em backend/app/merge.py.
+const _MERGE_POR_ID_KEYS=['nx_manutencoes','nx_tasks','nx_plantao','nx_projetos','nx_compras','nx_extras','nx_conquistas','nx_despesas','nx_anotacoes_controle','nx_superhost','nx_cancelamentos','nx_imoveis','nx_pagamentos_fin','nx_relatorios_fin','nx_validacoes_fin','nx_avaliacoes_negativas','nx_taskcats','nx_kpidefs','nx_transcricoes','nx_outros','nx_fornecedores_cad','nx_manual','nx_update_tombstones'];
 function _semTs(o){ const c=Object.assign({},o); delete c._ts; return JSON.stringify(c); }
 // Antes de salvar: carimba _ts nos registros novos/alterados e cria tombstone
 // para os que foram apagados. Assim o servidor sabe qual versão é a mais recente
 // (um aparelho com app antigo, sem _ts, não reverte mais) e os deletes se
 // propagam de verdade (sem "ressuscitar"). Centralizado — não precisa mexer em
 // cada função de excluir.
+// Hash simples (djb2) de string → inteiro positivo. Usado só para gerar um id
+// DETERMINÍSTICO a partir do conteúdo de um comentário legado sem id (ver
+// _idEstavelUpdate abaixo) — não precisa ser criptográfico, só estável.
+function _hashStr(s){
+  s=String(s||''); let h=5381;
+  for(let i=0;i<s.length;i++){ h=((h*33)^s.charCodeAt(i))>>>0; }
+  return h>>>0;
+}
+// Id determinístico a partir do conteúdo (texto+data+autor): a MESMA entrada
+// sempre gera o MESMO id, não importa em qual aparelho ou quantas vezes a
+// migração abaixo rodar. Isso é o oposto do bug antigo: id=Date.now()+random()
+// sorteava um id NOVO a cada passada para o mesmo comentário sem id, e como o
+// merge só une por id, cada passada virava um duplicado permanente (chegou a
+// 1793 cópias de 11 comentários numa única tarefa em produção). Comentários
+// "de verdade" continuam usando Date.now()+random na criação (adicionarUpdate
+// etc.) — isso aqui é só para o resgate retroativo dos sem id.
+function _idEstavelUpdate(u){ return _hashStr((u&&u.texto||'')+'|'+(u&&u.data||'')+'|'+(u&&u.autor||'')); }
+// Normaliza um item com array "updates" (tarefa/demanda/plantão/manutenção):
+// 1) dá id determinístico a comentário sem id (dados de antes do fix de id);
+// 2) colapsa duplicatas de conteúdo idêntico (mesmo texto+data+autor) que
+//    sobraram da versão anterior do bug (cada uma com um id aleatório
+//    diferente) — mantém só a primeira ocorrência. Devolve true se mexeu.
+function _normalizarUpdates(o){
+  if(!o || !Array.isArray(o.updates)) return false;
+  let mudou=false;
+  for(const u of o.updates){ if(u && u.id==null){ u.id=_idEstavelUpdate(u); mudou=true; } }
+  const vistos=new Set(), nova=[];
+  for(const u of o.updates){
+    if(!u) continue;
+    const chave=(u.texto||'')+'|'+(u.data||'')+'|'+(u.autor||'');
+    if(vistos.has(chave)){ mudou=true; continue; }
+    vistos.add(chave); nova.push(u);
+  }
+  if(nova.length!==o.updates.length) o.updates=nova;
+  return mudou;
+}
+function _migrarIdsUpdates(live){
+  let mudou=false;
+  for(const o of live){ if(_normalizarUpdates(o)) mudou=true; }
+  return mudou;
+}
 function _carimbarTsEDeletes(){
   const agora=Date.now();
   for(const k of _MERGE_POR_ID_KEYS){
     const live=_PERSIST_KEYS[k]?_PERSIST_KEYS[k]():null;
     if(!Array.isArray(live)) continue;
+    _migrarIdsUpdates(live);
     let prev=[]; try{ const raw=localStorage.getItem(k); if(raw) prev=JSON.parse(raw); }catch(e){}
     if(!Array.isArray(prev)) prev=[];
     const prevMap=new Map(prev.filter(o=>o&&o.id!=null).map(o=>[o.id,o]));
@@ -4178,9 +4226,17 @@ function _carimbarTsEDeletes(){
     const liveIds=new Set(live.filter(o=>o&&o.id!=null).map(o=>o.id));
     for(const p of prev){ if(p&&p.id!=null && !liveIds.has(p.id)){ if(!tombstones.some(t=>t.id===p.id)) tombstones.push({id:p.id,ts:agora}); } }
   }
+  // Demandas dentro de nx_atts têm "updates" um nível mais fundo (att.demands[i].updates)
+  // e nx_atts NÃO está em _MERGE_POR_ID_KEYS (é mesclado à parte, por _mergeAtts) — por
+  // isso ficaram de fora do _migrarIdsUpdates acima e vulneráveis ao mesmo bug de
+  // duplicação. Mesma normalização, aplicada diretamente nas demandas.
+  if(Array.isArray(ATTS)){
+    for(const a of ATTS){ if(a && Array.isArray(a.demands)){ for(const d of a.demands){ _normalizarUpdates(d); } } }
+  }
   // poda tombstones muito antigos (>120 dias) para não crescer sem limite
   const corte=agora-120*864e5;
   if(tombstones.length>500) tombstones=tombstones.filter(t=>(t.ts||0)>=corte);
+  if(updateTombstones.length>500) updateTombstones=updateTombstones.filter(t=>(t.ts||0)>=corte);
 }
 
 let _avisouStorageCheio=false; // evita repetir o toast de armazenamento cheio a cada 5s
@@ -4247,7 +4303,16 @@ function saveAll(){
 const _SYNC_EXCLUDE = new Set(['nx_avaliacoes']);
 const SYNC_KEYS=['nx_lastSaved','nx_users','nx_name',...Object.keys(_PERSIST_KEYS).filter(k=>!_SYNC_EXCLUDE.has(k))];
 let _kvDirty=false;       // há mudança local não enviada?
-let _kvLastPushed=null;   // último blob enviado (string) — evita gravações repetidas
+// Último blob enviado (string) — é a "base" do merge de 3 vias (permite saber
+// se ESTE aparelho apagou um item de propósito, em vez de nunca ter conhecido
+// ele). Persistido no localStorage (não só em memória): sem isso, um F5 logo
+// depois de apagar algo — antes do próximo ciclo de envio (até 60s, ver
+// KV_MIN_INTERVAL_MS) — zerava a base no primeiro kvPull() da sessão nova, e
+// o merge não tinha como diferenciar "apaguei" de "nunca vi esse item",
+// ressuscitando de volta o que tinha sido apagado (imóveis do catálogo,
+// manutenções, atendentes...).
+let _kvLastPushed=(function(){ try{ return localStorage.getItem('_kvBase'); }catch(e){ return null; } })();
+function _setKvLastPushed(blob){ _kvLastPushed=blob; try{ localStorage.setItem('_kvBase', blob); }catch(e){} }
 let _kvPushing=false;
 let _dataLoaded=false;    // bloqueia flush antes de loadAll() completar
 function _kvBuildBlob(){
@@ -4263,10 +4328,27 @@ function _ehListaComId(arr){ return Array.isArray(arr) && arr.every(o=>o && type
 // Une arrays de "updates" (comentários/atualizações), que são só-adição: junta os
 // dois lados e remove duplicados exatos, preservando a ordem. Assim, se duas
 // pessoas comentam na MESMA tarefa/demanda ao mesmo tempo, nenhum comentário some.
+// Exceção: um comentário cujo id está em updateTombstones foi apagado de propósito
+// (removerUpdate/removerUpdateDemanda/removerUpdatePlantao) — a união NÃO pode
+// trazê-lo de volta só porque o outro lado (servidor, ainda sem saber do delete)
+// continua com ele. Comentários são imutáveis (nunca reeditados no mesmo id), então
+// não precisa comparar timestamp: id na lista de tombstones = fica de fora, ponto.
+// Dedup por CONTEÚDO (texto+data+autor), não pelo id nem pelo JSON completo: um
+// bug antigo (corrigido em _migrarIdsUpdates) sorteava um id aleatório novo a
+// cada passada de migração pro mesmo comentário sem id, então dois comentários
+// idênticos podiam ter ids diferentes — dedup por JSON/id não pegava isso e a
+// lista crescia sem parar a cada sync (chegou a 1793 cópias de 11 comentários
+// numa tarefa em produção). Por conteúdo, colapsa de verdade não importa o id.
 function _unionUpdates(a, b){
   a=Array.isArray(a)?a:[]; b=Array.isArray(b)?b:[];
+  const tombIds=new Set(updateTombstones.map(t=>t.id));
   const out=[], visto=new Set();
-  for(const u of [...a, ...b]){ const k=JSON.stringify(u); if(!visto.has(k)){ visto.add(k); out.push(u); } }
+  for(const u of [...a, ...b]){
+    if(!u) continue;
+    if(u.id!=null && tombIds.has(u.id)) continue;
+    const k=(u.texto||'')+'|'+(u.data||'')+'|'+(u.autor||'');
+    if(!visto.has(k)){ visto.add(k); out.push(u); }
+  }
   return out;
 }
 // Se ambos os lados têm o mesmo item e ambos têm updates, devolve uma cópia do
@@ -4546,6 +4628,27 @@ function _mergeKpiObj(a, b){
   }
   return out;
 }
+// Mescla dicionários "chave→valor" (headFixo, headComissao, headFotos, salPagos,
+// notasFiscais, PRECOS_ITENS, PRECOS_ENXOVAL, workDaysP1/P2...) por 3 vias, no
+// nível de cada chave de topo — mesma ideia do _mergeById, só que pra objeto em
+// vez de lista. Sem isso, a proteção antiga só contava "quantos valores não-nulos
+// tem cada lado" e adotava quem tinha mais, sem olhar a base: apagar UM campo
+// (ex.: desmarcar um pagamento em salPagos) e recarregar antes do próximo envio
+// trazia o campo de volta, porque o servidor "tinha mais coisa preenchida" —
+// mesma classe do bug dos imóveis/tarefas, só que em objeto em vez de array.
+function _mergeObjByKey(base, local, server){
+  local  = (local  && typeof local ==='object' && !Array.isArray(local )) ? local  : {};
+  server = (server && typeof server==='object' && !Array.isArray(server)) ? server : {};
+  base   = (base   && typeof base  ==='object' && !Array.isArray(base  )) ? base   : {};
+  const out={};
+  new Set([...Object.keys(server), ...Object.keys(local)]).forEach(k=>{
+    if(Object.prototype.hasOwnProperty.call(local,k)){ out[k]=local[k]; return; } // local tem a chave (editou ou manteve) → vence
+    const inB=Object.prototype.hasOwnProperty.call(base,k);
+    if(!inB || JSON.stringify(server[k])!==JSON.stringify(base[k])) out[k]=server[k]; // nunca conheceu OU servidor mudou depois → adota
+    // senão: este aparelho apagou essa chave de propósito → não volta
+  });
+  return out;
+}
 // Envia ao KV SOMENTE se houver mudança real (deduplicado). Chamado por um intervalo espaçado.
 async function _kvFlush(){
   const s=window.CLAIRE_SYNC||{};
@@ -4599,8 +4702,14 @@ async function _kvFlush(){
               local[k]=merged; try{ localStorage.setItem(k, JSON.stringify(merged)); }catch(e){} ajustou=true;
             }
           } else if(Array.isArray(sv) && Array.isArray(lv)){
-            // 1) vazio NUNCA apaga cheio (trava anti-perda preservada)
-            if(lv.length===0 && sv.length>0){
+            // 1) vazio NUNCA apaga cheio (trava anti-perda preservada) — MAS só
+            //    quando não há prova de que este aparelho já conhecia a lista.
+            //    Se a base (última sincronização confirmada) já tinha esses
+            //    itens, "vazio agora" é um apagão de propósito (ex.: apagar
+            //    todas as tarefas de uma vez) — deixa cair no merge por id
+            //    abaixo, que sabe distinguir isso de servidor com dado novo.
+            const _baseArr = baseBlob && Array.isArray(baseBlob[k]) ? baseBlob[k] : null;
+            if(lv.length===0 && sv.length>0 && !(_baseArr && _baseArr.length>0)){
               local[k]=sv; try{ localStorage.setItem(k, JSON.stringify(sv)); }catch(e){} ajustou=true;
             // 2) listas com 'id' → mesclagem por item (3-vias): preserva o que outro
             //    aparelho editou e impede este (desatualizado) de reverter.
@@ -4625,13 +4734,12 @@ async function _kvFlush(){
             if(JSON.stringify(merged)!==JSON.stringify(lv)){
               local[k]=merged; try{ localStorage.setItem(k, JSON.stringify(merged)); }catch(e){} ajustou=true;
             }
-          // objeto (demais chaves, ex.: headFixo): conta valores não-nulos — servidor tem mais → local está incompleto
+          // objeto (demais chaves, ex.: headFixo/salPagos/notasFiscais): mescla
+          // por chave de topo em 3 vias — ver _mergeObjByKey.
           } else if(sv && typeof sv==='object' && !Array.isArray(sv) && lv && typeof lv==='object' && !Array.isArray(lv)){
-            const _cnt=o=>Object.values(o).flatMap(x=>typeof x==='object'&&x?Object.values(x):[x]).filter(v=>v!==null&&v!==undefined&&v!=='').length;
-            if(_cnt(sv) > _cnt(lv)){
-              local[k]=sv;
-              try{ localStorage.setItem(k, JSON.stringify(sv)); }catch(e){}
-              ajustou=true;
+            const merged=_mergeObjByKey(baseBlob?baseBlob[k]:null, lv, sv);
+            if(JSON.stringify(merged)!==JSON.stringify(lv)){
+              local[k]=merged; try{ localStorage.setItem(k, JSON.stringify(merged)); }catch(e){} ajustou=true;
             }
           }
         }
@@ -4649,7 +4757,7 @@ async function _kvFlush(){
     const r=await fetch(s.url.replace(/\/$/,'')+'/save?token='+encodeURIComponent(s.token||''),{
       method:'POST', headers:{'Content-Type':'application/json'}, body:body
     });
-    if(r.ok){ _kvLastPushed=body; _kvDirty=false; }
+    if(r.ok){ _setKvLastPushed(body); _kvDirty=false; }
   }catch(e){ /* offline/limite: tenta no próximo ciclo */ }
   finally{ _kvPushing=false; }
 }
@@ -4671,7 +4779,7 @@ async function kvPull(){
       // dar refresh forçado. Agora reconcilia sempre, registro por registro —
       // seguro porque as mesclagens abaixo (_mergeById/_mergeAtts/_mergeManutencoes)
       // são por id (+ _ts quando existe) e nunca perdem edição local real.
-      if(j.data.nx_lastSaved===localStorage.getItem('nx_lastSaved')){ _kvLastPushed=_kvBuildBlob(); return false; } // nada mudou, nem tenta
+      if(j.data.nx_lastSaved===localStorage.getItem('nx_lastSaved')){ _setKvLastPushed(_kvBuildBlob()); return false; } // nada mudou, nem tenta
       // baseBlob = último estado que ESTE aparelho sabe ter sincronizado — usado
       // pelas mesclagens de 3 vias abaixo (mesma lógica de _kvFlush, agora
       // também no PULL). Sem isso, um pull que chega enquanto há uma edição
@@ -4720,21 +4828,28 @@ async function kvPull(){
             if(JSON.stringify(lv)!==novo){ localStorage.setItem(k, novo); aplicou=true; }
             continue;
           }
+          // objeto (demais chaves, ex.: headFixo/salPagos/notasFiscais): mescla
+          // por chave de topo em 3 vias — mesmo motivo do _kvFlush acima (a
+          // proteção antiga só contava valores preenchidos, sem olhar a base, e
+          // trazia de volta um campo apagado de propósito).
+          if(sv && typeof sv==='object' && !Array.isArray(sv) && lv && typeof lv==='object' && !Array.isArray(lv)){
+            const merged=_mergeObjByKey(baseBlob?baseBlob[k]:null, lv, sv);
+            const novo=JSON.stringify(merged);
+            if(localStorage.getItem(k)!==novo){ localStorage.setItem(k, novo); aplicou=true; }
+            continue;
+          }
           // Proteção genérica (demais chaves): servidor com menos dados não apaga
-          // lista/objeto local mais completo.
+          // lista local mais completa (arrays sem id — os com id já foram
+          // tratados acima via _mergeById).
           if(lv!==null){
             if(Array.isArray(sv)&&Array.isArray(lv)&&sv.length<lv.length) continue;
-            if(sv&&typeof sv==='object'&&!Array.isArray(sv)&&lv&&typeof lv==='object'&&!Array.isArray(lv)){
-              const _cnt=o=>Object.values(o).flatMap(x=>typeof x==='object'&&x?Object.values(x):[x]).filter(v=>v!==null&&v!==undefined&&v!=='').length;
-              if(_cnt(sv)<_cnt(lv)) continue;
-            }
           }
           const novo=JSON.stringify(sv);
           if(localStorage.getItem(k)!==novo){ localStorage.setItem(k, novo); aplicou=true; }
         }catch(e){}
       }
       if(aplicou) loadAll();
-      _kvLastPushed=_kvBuildBlob();
+      _setKvLastPushed(_kvBuildBlob());
       return aplicou;
     }
   }catch(e){}
@@ -4750,7 +4865,7 @@ async function kvForceRestore(){
     if(j&&j.data&&Object.keys(j.data).length>1){
       for(const k in j.data){ try{ localStorage.setItem(k, JSON.stringify(j.data[k])); }catch(e){} }
       loadAll();
-      _kvLastPushed=_kvBuildBlob();
+      _setKvLastPushed(_kvBuildBlob());
       _renderTudo();
       showToast('✅ Dados restaurados do servidor com sucesso!','sage');
     } else {
@@ -4794,7 +4909,7 @@ async function kvRestoreFromBackup(date){
     if(j&&j.data&&Object.keys(j.data).length>1){
       for(const k in j.data){ try{ localStorage.setItem(k, JSON.stringify(j.data[k])); }catch(e){} }
       loadAll();
-      _kvLastPushed=_kvBuildBlob();
+      _setKvLastPushed(_kvBuildBlob());
       _renderTudo();
       showToast('✅ Backup de '+date+' restaurado com sucesso!','sage');
     } else {
@@ -4882,6 +4997,7 @@ function loadAll(){
     v=g('nx_sla_validacao_dias'); if(typeof v==='number') slaValidacaoDias=v;
     v=g('nx_avaliacoes_negativas'); if(Array.isArray(v)) avaliacoesNegativas=v;
     v=g('nx_tombstones'); if(Array.isArray(v)) tombstones=v;
+    v=g('nx_update_tombstones'); if(Array.isArray(v)) updateTombstones=v;
     // Migração: atendentes só veem o próprio attId (sem attsPermitidos).
     _migAtendentesSemPerms();
   }catch(e){ console.warn('loadAll falhou', e); }
@@ -6871,7 +6987,7 @@ function manutAdicionarUpdateTarefa(id,i){
   const inp=document.getElementById('manut-upd-'+id+'-'+i); if(!inp) return;
   const txt=inp.value.trim(); if(!txt) return;
   if(!m.tarefasManut[i].updates) m.tarefasManut[i].updates=[];
-  m.tarefasManut[i].updates.push({texto:txt,data:new Date().toISOString(),autor:_autorAtual()});
+  m.tarefasManut[i].updates.push({id:Date.now()+Math.floor(Math.random()*1000),texto:txt,data:new Date().toISOString(),autor:_autorAtual()});
   if(typeof saveAll==='function') saveAll();
   manutRenderAba(m);
 }
@@ -7473,7 +7589,7 @@ function adicionarUpdatePlantao(){
   const r=plantaoItems.find(x=>x.id===plantaoAtivo);if(!r)return;
   const txt=document.getElementById('pt-nova-update').value.trim();if(!txt)return;
   if(!r.updates)r.updates=[];
-  r.updates.push({texto:txt,data:new Date().toISOString(),autor:_autorAtual()});
+  r.updates.push({id:Date.now()+Math.floor(Math.random()*1000),texto:txt,data:new Date().toISOString(),autor:_autorAtual()});
   document.getElementById('pt-nova-update').value='';
   renderPlantaoUpdates();saveAll();
 }
@@ -7490,7 +7606,9 @@ function renderPlantaoUpdates(){
 function removerUpdatePlantao(idx){
   if(!plantaoAtivo)return;
   const r=plantaoItems.find(x=>x.id===plantaoAtivo);if(!r||!r.updates)return;
-  r.updates.splice(idx,1);renderPlantaoUpdates();saveAll();
+  const [rem]=r.updates.splice(idx,1);
+  if(rem&&rem.id!=null)updateTombstones.push({id:rem.id,ts:Date.now()});
+  renderPlantaoUpdates();saveAll();
 }
 
 function togglePlantaoConcluidas(){
@@ -7909,7 +8027,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 113;
+const APP_VERSION = 117;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

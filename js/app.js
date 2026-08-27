@@ -157,7 +157,7 @@ function _syncSetupKpiDoOnboarding(){
 function _fetchObImoveis(){
   if(_obData!==null){_renderObList();return;}
   _obData=[];
-  fetch('https://wecare-onboarding.nicole-0e7.workers.dev/onboarding-stats')
+  fetch('https://onboarding.wecarehosting.com.br/onboarding-stats')
     .then(r=>r.json()).then(d=>{
       _obData=Array.isArray(d.imoveis)?d.imoveis:[];
       _obKpiPorMes=d.kpiPorMes||{};
@@ -7909,7 +7909,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 112;
+const APP_VERSION = 113;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

@@ -230,6 +230,8 @@ let imovelsCatalog = [
 ];
 
 let manutencoes=[];
+let limpezaItens=[];
+let caucaoItens=[];
 let manutAtiva=null, manutAba='solicitacao';
 let fornecedoresCadastro=[]; // cadastro de fornecedores reutilizáveis
 let manutExibirPausadas=false;
@@ -281,13 +283,8 @@ let notes=[
   {id:2,title:'KPI — Notas',content:'Airbnb: verificar reviews semanalmente\nBooking: confirmar notas até dia 25',color:'sage'},
 ];
 let noteClr='rose';
-let calY=2026,calM=4;
 let tLeft=25*60,tTotal=25*60,tRun=false,tInt=null;
 let pomodoroSessions=0;
-let chatHist=[];
-let _gcalEventosHoje=[]; // eventos do Google Calendar carregados
-let calViewMode='mes';
-let _gcalTodosEventos=[]; // todos os eventos carregados do Google
 let avaliacoes=[]; // avaliações carregadas do Hostaway
 // Controle manual de avaliações negativas — substituiu a tela de navegar
 // avaliações sincronizadas do Hostaway (aba "Avaliações" em Acompanhamento)
@@ -319,24 +316,20 @@ function setAvView(modo,btn){
 }
 
 // ═══════════════════ LOGIN MULTIUSUÁRIO ═══════════════════
-let conquistas=[];
 let tombstones=[]; // exclusões { id, ts } — para o delete propagar sem ressuscitar
 let updateTombstones=[]; // exclusões { id, ts } de itens dentro de arrays "updates" (comentários de tarefa/demanda/plantão) — mesma ideia de tombstones, mas para o sub-item aninhado, que não tem proteção de merge por id própria
-let _legadoFiltro='';
-let _conquistaEditId=null;
 let usuarios=[]; // gerenciados pelo admin (espelha localStorage nx_users)
 const MODULOS_LISTA=[
   {id:'overview',label:'Visão Geral'},{id:'kpis',label:'Meus KPIs'},{id:'performance',label:'Performance'},
-  {id:'avaliacoes',label:'Acompanhamento'},{id:'tasks',label:'Tarefas'},{id:'calendar',label:'Calendário'},
-  {id:'ai',label:'Assistente IA'},{id:'team',label:'Equipe'},{id:'salary',label:'Salários'},
+  {id:'avaliacoes',label:'Acompanhamento'},{id:'tasks',label:'Tarefas'},{id:'limpezacaucao',label:'Limpeza & Caução'},
+  {id:'team',label:'Equipe'},{id:'salary',label:'Salários'},
   {id:'compras',label:'Compras'},
   {id:'manutencao',label:'Manutenção'},
   {id:'projetos',label:'Projetos'},{id:'plantao',label:'Passagem de Turno'},
   {id:'turnos',label:'Turnos'},
   {id:'extras',label:'Extras'},
   {id:'controle',label:'Controle'},
-  {id:'manual',label:'Manual'},
-  {id:'legado',label:'Meu Legado'}
+  {id:'manual',label:'Manual'}
 ];
 function getMinhaAtt(){ const u=getCurrentUser(); if(!u||!u.attId) return null; return ATTS.find(a=>a.id===u.attId)||null; }
 function getCurrentUser(){ try{ return JSON.parse(sessionStorage.getItem('nx_currentuser')||'null'); }catch(e){ return null; } }
@@ -642,7 +635,6 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   if(typeof _importarDadosFinanceiroJulho2026==='function') _importarDadosFinanceiroJulho2026();
   verificarTarefasDespesas();
   greet();
-  renderOvAgenda();
   buildNivelGrid();
   renderKPIs();
   renderTaskFilterSel();
@@ -650,14 +642,11 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   renderTasks();
   renderKanban();
   renderTaskCalendar();
-  renderCal();
-  renderAgenda();
   renderTeam();
   renderTeamOv();
   renderSalary();
   renderNotes();
   fillFocusSel();
-  loadSettings();
   renderOnboardingKanban();
   renderProjetosKanban();
   renderCompras();
@@ -678,7 +667,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
 });
 
 // ═══════════════════ NAV ═══════════════════
-const PT={overview:'Visão Geral',kpis:'Meus KPIs',performance:'Acompanhamento de Performance',tasks:'Tarefas',calendar:'Calendário',ai:'Assistente IA',equipe:'Equipe',drive:'Google Drive',onboarding:'Onboarding de Imóveis',notes:'Anotações',focus:'Foco',projetos:'Projetos',compras:'Registro de Compras',manutencao:'Manutenção',reunioes:'Reuniões e Transcrições',avaliacoes:'Acompanhamento',usuarios:'Usuários e Acessos',extras:'Serviços Extras',controle:'Controle',manual:'Manual'};
+const PT={overview:'Visão Geral',kpis:'Meus KPIs',performance:'Acompanhamento de Performance',tasks:'Tarefas',limpezacaucao:'Limpeza & Caução',equipe:'Equipe',drive:'Google Drive',onboarding:'Onboarding de Imóveis',notes:'Anotações',focus:'Foco',projetos:'Projetos',compras:'Registro de Compras',manutencao:'Manutenção',reunioes:'Reuniões e Transcrições',avaliacoes:'Acompanhamento',usuarios:'Usuários e Acessos',extras:'Serviços Extras',controle:'Controle',manual:'Manual'};
 function showPanel(id,btn){
   if(id==='equipe'){
     const u0=getCurrentUser();
@@ -689,8 +678,8 @@ function showPanel(id,btn){
   document.getElementById('panel-'+id).classList.add('active');
   if(btn)btn.classList.add('active');
   document.getElementById('panel-title').textContent=PT[id]||id;
-  if(id==='overview'){renderOverview();renderOvAgenda();var elDA=document.getElementById('ov-demandas-atrasadas');if(elDA)elDA.textContent=contarDemandasAtrasadas();if(ls('nx_gdrive'))loadCalendarEvents();}
-  if(id==='calendar'){loadCalendarEvents();}
+  if(id==='overview'){renderOverview();var elDA=document.getElementById('ov-demandas-atrasadas');if(elDA)elDA.textContent=contarDemandasAtrasadas();}
+  if(id==='limpezacaucao'){renderLimpezaCaucao();}
   if(id==='tasks'){ const cv=document.getElementById('task-crono-view'); if((!cv||cv.style.display!=='none') && typeof renderTaskGantt==='function') renderTaskGantt(); }
   if(id==='onboarding'){renderOnboardingKanban();}
   if(id==='projetos'){renderProjetosKanban();}
@@ -712,7 +701,6 @@ function showPanel(id,btn){
     else if(_controleTab==='validacoes') renderValidacoesFinanceiro();
     else renderDespesasFixas();
   }
-  if(id==='legado'){ if(typeof renderLegado==='function') renderLegado(); }
   if(id==='manual'){renderManual();}
 }
 
@@ -733,59 +721,6 @@ function greet(){
   document.getElementById('top-date').textContent='— '+new Date().toLocaleDateString('pt-BR',opts);
   const p=tasks.filter(t=>!t.done).length;
   document.getElementById('overview-sub').textContent='Você tem '+p+' tarefa'+(p!==1?'s':'')+' pendente'+(p!==1?'s':'')+'.';
-}
-
-function renderOvAgenda(){
-  var el=document.getElementById('ov-agenda-body');
-  if(!el)return;
-  var hoje=new Date().toISOString().split('T')[0];
-
-  var eventosHtml='';
-  if(_gcalEventosHoje.length>0){
-    var cores=['var(--sky)','var(--sage)','var(--rose)','var(--lavender)','var(--peach)'];
-    eventosHtml=_gcalEventosHoje.map(function(ev,i){
-      var start=ev.start&&(ev.start.dateTime||ev.start.date);
-      var hora=start&&ev.start.dateTime?new Date(start).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'Dia todo';
-      var local=ev.location?' · '+ev.location.split(',')[0]:'';
-      return '<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">'+
-        '<div style="font-size:11px;color:var(--text3);width:40px;flex-shrink:0;">'+hora+'</div>'+
-        '<div style="width:3px;border-radius:2px;background:'+cores[i%cores.length]+';flex-shrink:0;"></div>'+
-        '<div><div style="font-size:13px;font-weight:500;">'+esc(ev.summary||'Evento')+'</div>'+
-        (local?'<div style="font-size:11px;color:var(--text3);">'+esc(local)+'</div>':'')+'</div></div>';
-    }).join('');
-  } else if(ls('nx_gdrive')){
-    eventosHtml='<div style="padding:10px 0;color:var(--text3);font-size:12.5px;text-align:center;">Nenhum evento no Google Agenda hoje.<br><button class="btn btn-sm" style="margin-top:6px;" onclick="loadCalendarEvents()"><i class="fa-solid fa-rotate"></i> Sincronizar</button></div>';
-  } else {
-    var evtsHoje=EVTS.filter(function(e){return e.date===hoje;});
-    if(evtsHoje.length>0){
-      eventosHtml=evtsHoje.map(function(e){return '<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">'+
-        '<div style="font-size:11px;color:var(--text3);width:40px;flex-shrink:0;">'+e.time+'</div>'+
-        '<div style="width:3px;border-radius:2px;background:'+e.c+';flex-shrink:0;"></div>'+
-        '<div><div style="font-size:13px;font-weight:500;">'+e.title+'</div>'+
-        '<div style="font-size:11px;color:var(--text3);">'+e.sub+'</div></div></div>';}).join('');
-    } else {
-      eventosHtml='<div style="padding:10px 0;color:var(--text3);font-size:12.5px;text-align:center;">Nenhum evento hoje.<br><a href="#" onclick="openSettings()" style="font-size:11px;color:var(--rose);">Conectar Google Agenda</a></div>';
-    }
-  }
-
-  var tarefasHoje=tasks.filter(function(t){return !t.done&&t.due===hoje;});
-  var tarefasHtml='';
-  if(tarefasHoje.length>0){
-    var PCt={high:'var(--vermelha)',med:'var(--amarela)',low:'var(--sage)'};
-    tarefasHtml='<div style="margin-top:12px;padding-top:10px;border-top:2px solid var(--border);">'+
-      '<div style="font-size:10.5px;font-weight:700;text-transform:uppercase;color:var(--text3);letter-spacing:0.5px;margin-bottom:8px;">&#x2705; Tarefas de Hoje</div>'+
-      tarefasHoje.map(function(t){
-        var cat=getCatInfo(t.cat);
-        return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);">'+
-          '<div style="width:3px;height:18px;border-radius:2px;background:'+(PCt[t.prio]||'var(--text3)')+';flex-shrink:0;"></div>'+
-          '<div onclick="toggleTask('+t.id+')" style="width:16px;height:16px;border-radius:50%;border:1.5px solid var(--border2);cursor:pointer;flex-shrink:0;"></div>'+
-          '<span style="font-size:12.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(t.text)+'</span>'+
-          '<span style="font-size:9.5px;padding:1px 6px;border-radius:12px;background:'+cat.color+'22;color:'+cat.color+';font-weight:600;">'+cat.label+'</span>'+
-          '</div>';
-      }).join('')+'</div>';
-  }
-
-  el.innerHTML=eventosHtml+tarefasHtml;
 }
 
 // ═══════════════════ KPIs ═══════════════════
@@ -1512,13 +1447,11 @@ function renderTasks(f){
       (t._isManutTarefa&&!t.done?'<select onchange="manutSetTarefaField('+t._manutId+','+t._tarefaIdx+',\'status\',this.value);this.blur();" onclick="event.stopPropagation();" style="font-size:10px;padding:1px 6px;border-radius:8px;border:1px solid var(--border2);background:var(--bg2);color:var(--text);cursor:pointer;"><option value="todo"'+(t.status==='todo'?' selected':'')+'>A fazer</option><option value="doing"'+(t.status==='doing'?' selected':'')+'>Em andamento</option><option value="done"'+(t.status==='done'?' selected':'')+'>Concluída</option></select>':'')+
       '</div></div>'+
       (!t._isDemand&&!t._isManutTarefa&&(typeof isAdmin==='function'&&isAdmin())?'<button onclick="delTask('+t.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:2px 4px;transition:color 0.15s;" onmouseover="this.style.color=\'var(--vermelha)\'" onmouseout="this.style.color=\'var(--text3)\'"><i class="fa-solid fa-xmark"></i></button>':'')+
-      ((!t.done&&t.due&&!t._isDemand&&!t._isManutTarefa)?'<button onclick="criarEventoGCal(\''+escQ(t.text)+'\',\''+t.due+'\',\''+(t.hora||'09:00')+'\',60,\'Tarefa Claire\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:2px 4px;" title="Criar no Google Agenda"><i class="fa-brands fa-google"></i></button>':'')+
       '</div>';
   }).join('');
   const p=effective.filter(t=>!t.done).length;
   const badge=document.getElementById('tasks-badge'); if(badge) badge.textContent=p;
   const ovt=document.getElementById('ov-tasks'); if(ovt) ovt.textContent=p;
-  renderOvAgenda();
   renderTaskGantt();
 }
 
@@ -2029,7 +1962,6 @@ function openAddTask(){
   document.getElementById('t-date').value=new Date().toISOString().split('T')[0];
   document.getElementById('t-hora').value='';
   document.getElementById('t-recorrencia').value='';
-  document.getElementById('t-gcal').checked=false;
   document.getElementById('t-recorr-detail').style.display='none';
   renderTaskCatSelect();
   document.getElementById('t-kpitag').value='nao_relacionado';
@@ -2042,7 +1974,6 @@ function addTask(){
   const due=document.getElementById('t-date').value;
   const hora=document.getElementById('t-hora').value||'';
   const recorrencia=document.getElementById('t-recorrencia').value;
-  const criarGcal=document.getElementById('t-gcal').checked;
   const _cu=typeof getCurrentUser==='function'?getCurrentUser():null;
   const nova={
     id:Date.now(),text,
@@ -2059,9 +1990,6 @@ function addTask(){
   tasks.unshift(nova);
   closeModal('modal-task');
   renderTasks();renderKanban();fillFocusSel();
-  if(criarGcal&&due){
-    criarEventoGCal(text,due,hora||'09:00',60,'Tarefa Claire'+(recorrencia?' — Recorrente ('+recorrencia+')':''));
-  }
 }
 
 // ═══════════════════ TEAM ═══════════════════
@@ -2789,50 +2717,7 @@ function openAddNote(){document.getElementById('n-title').value='';document.getE
 function addNote(){const t=document.getElementById('n-title').value.trim();if(!t)return;notes.unshift({id:Date.now(),title:t,content:document.getElementById('n-content').value,color:noteClr});closeModal('modal-note');renderNotes();}
 function delNote(id){notes=notes.filter(n=>n.id!==id);renderNotes();}
 
-// ═══════════════════ CALENDAR ═══════════════════
-const MNS=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-const DNS=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-function renderCal(){
-  document.getElementById('cal-label').textContent=MNS[calM]+' '+calY;
-  const first=new Date(calY,calM,1).getDay(),total=new Date(calY,calM+1,0).getDate(),today=new Date();
-  let h=DNS.map(d=>'<div class="cal-day-name">'+d+'</div>').join('');
-  for(let i=0;i<first;i++)h+='<div class="cal-day other">'+new Date(calY,calM,-first+i+1).getDate()+'</div>';
-  for(let d=1;d<=total;d++){
-    const isT=d===today.getDate()&&calM===today.getMonth()&&calY===today.getFullYear();
-    const ds=calY+'-'+String(calM+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
-    const hasT=tasks.some(t=>t.due===ds);
-    h+='<div class="cal-day'+(isT?' today':'')+(hasT?' has-ev':'')+'" onclick="renderAgenda(\''+ds+'\')">'+d+'</div>';
-  }
-  document.getElementById('cal-grid').innerHTML=h;
-}
-function changeMonth(d){calM+=d;if(calM>11){calM=0;calY++;}if(calM<0){calM=11;calY--;}renderCal();}
-
-const EVTS=[
-  {date:'2026-05-29',time:'09:00',title:'Daily Team Sync',sub:'Google Meet · 30min',c:'var(--sky)'},
-  {date:'2026-05-29',time:'11:00',title:'Revisão de Onboardings',sub:'Sala A · 1h',c:'var(--sage)'},
-  {date:'2026-05-29',time:'15:00',title:'Avaliação de Equipe',sub:'1h30',c:'var(--rose)'},
-  {date:'2026-05-30',time:'10:00',title:'Reunião Sprint',sub:'Teams · 1h',c:'var(--sky)'},
-  {date:'2026-05-31',time:'09:00',title:'Envio KPIs — prazo',sub:'Deadline',c:'var(--peach)'},
-];
-const ELBL={'2026-05-29':'Hoje, 29 Mai','2026-05-30':'Amanhã, 30 Mai','2026-05-31':'Sábado, 31 Mai'};
-
-function renderAgenda(){
-  const gr={};EVTS.forEach(e=>{if(!gr[e.date])gr[e.date]=[];gr[e.date].push(e);});
-  let h='';
-  Object.entries(gr).forEach(([date,evs])=>{
-    h+='<div style="border-bottom:1px solid var(--border);"><div style="padding:8px 14px;background:var(--bg3);font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;">'+(ELBL[date]||date)+'</div>'+
-    evs.map(e=>'<div style="display:flex;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\'transparent\'"><div style="font-size:11px;color:var(--text3);width:38px;flex-shrink:0;">'+e.time+'</div><div style="width:3px;border-radius:2px;background:'+e.c+';flex-shrink:0;"></div><div><div style="font-size:13px;font-weight:500;">'+e.title+'</div><div style="font-size:11px;color:var(--text3);">'+e.sub+'</div></div></div>').join('')+
-    '</div>';
-  });
-  document.getElementById('agenda-list').innerHTML=h||'<p style="padding:18px;color:var(--text3);text-align:center;">Nenhum evento</p>';
-}
-
-function connectGCal(){
-  const btn=document.getElementById('gcal-btn');btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i>';btn.disabled=true;
-  setTimeout(()=>{document.getElementById('gcal-sub').textContent='Conectado';document.getElementById('gcal-sub').style.color='var(--sage)';btn.innerHTML='<i class="fa-solid fa-check"></i> Conectado';btn.style.color='var(--sage)';document.getElementById('gcal-body').innerHTML='<p style="font-size:13px;color:var(--text2);">✅ Google Agenda conectado. Eventos sincronizados automaticamente.</p>';},1500);
-}
-
-// ═══════════════════ AI CHAT ═══════════════════
+// ═══════════════════ IA (usado por Editar com IA / callAI) ═══════════════════
 function toggleAIProvider(v){
   document.getElementById('s-gemini-group').style.display = v==='gemini' ? '' : 'none';
   document.getElementById('s-anthropic-group').style.display = v==='anthropic' ? '' : 'none';
@@ -2876,53 +2761,6 @@ async function callAI(systemPrompt, messages, maxTokens){
     throw new Error(data.error ? data.error.message : 'api_error');
   }
 }
-
-async function sendMsg(){
-  const inp=document.getElementById('chat-input'),text=inp.value.trim();if(!text)return;
-  appendMsg(text,'user');inp.value='';autoResize(inp);
-  chatHist.push({role:'user',content:text});
-  const btn=document.getElementById('send-btn');btn.disabled=true;
-  const typing=showTyping();
-  try{
-    // Verificar se há chave configurada para o provedor atual
-    const provider = ls('nx_ai_provider') || 'gemini';
-    const temChave = provider==='anthropic' ? ls('nx_apikey') : ls('nx_gemini_key');
-    if(!temChave){
-      removeTyping(typing);
-      appendMsg('⚙️ Configure sua chave de IA nas configurações. Você pode usar o Gemini gratuitamente (aistudio.google.com).','ai');
-      btn.disabled=false;
-      return;
-    }
-    const tc=tasks.filter(t=>!t.done).slice(0,5).map(t=>'- '+t.text+' ['+t.cat+', '+t.prio+']').join('\n');
-    const kc=KPI_DEFS.map(k=>'- '+k.label+': '+(_kv()[k.id]||'não preenchido')+' (peso '+Math.round(k.peso*100)+'%)').join('\n');
-    const gOte=calcGlobalOTE(),bandOte=getBand(gOte),nv=NIVEIS[selNivelIdx],vp=Math.round(nv.variavel*bandOte.mult);
-    const sys='Você é Claire, assistente pessoal da Nicole, gerente de operações da WeCare. Responda sempre em português brasileiro.\n\nCONTEXTO:\n- KPI Global: '+gOte+'% — Bandeira '+bandOte.name+'\n- Nível: '+nv.n+' (Fixo: '+brl(nv.fixo)+', Variável meta 100%: '+brl(nv.variavel)+')\n- Salário estimado: '+brl(nv.fixo+vp)+'\n- KPIs:\n'+kc+'\n- Tarefas pendentes:\n'+tc+'\n- Equipe: Patrícia (R$17/h), Sara, Lisarb, Laís (R$14/h)\n\nPara calcular salário: Fixo + (Variável × multiplicador da bandeira). Vermelha=0%, Amarela=50%, Verde=100%, Azul=150%, Elite=200%.\nSeja concisa, use markdown.';
-    const r = await callAI(sys, chatHist.slice(-12), 1000);
-    removeTyping(typing);
-    chatHist.push({role:'assistant',content:r});
-    appendMsg(r,'ai');
-  }catch(e){
-    removeTyping(typing);
-    appendMsg('Erro: '+(e.message==='no_key_gemini'||e.message==='no_key_anthropic'?'configure a chave de IA nas configurações.':(e.message||'falha na conexão.')),'ai');
-  }
-  btn.disabled=false;
-}
-
-function appendMsg(text,role){
-  const w=document.getElementById('chat-messages'),div=document.createElement('div');
-  div.className='msg '+role;
-  const t=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-  div.innerHTML='<div class="avatar '+(role==='ai'?'av-rose':'av-lav')+'" style="width:28px;height:28px;font-size:11px;flex-shrink:0;">'+(role==='ai'?'N':'U')+'</div><div><div class="msg-bub">'+md(text)+'</div><div class="msg-time">'+t+'</div></div>';
-  w.appendChild(div);w.scrollTop=w.scrollHeight;
-}
-
-function md(t){return t.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\*(.*?)\*/g,'<em>$1</em>').replace(/`(.*?)`/g,'<code style="background:var(--bg4);padding:1px 5px;border-radius:3px;font-size:12px;">$1</code>').replace(/^[-•]\s+(.+)/gm,'<li style="margin-left:14px;margin-bottom:2px;">$1</li>').replace(/\n/g,'<br>');}
-function showTyping(){const w=document.getElementById('chat-messages'),d=document.createElement('div');d.className='msg ai';d.id='typing-msg';d.innerHTML='<div class="avatar av-rose" style="width:28px;height:28px;font-size:11px;">N</div><div><div class="typing-ind"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div></div>';w.appendChild(d);w.scrollTop=w.scrollHeight;return d;}
-function removeTyping(el){el&&el.remove();}
-function clearChat(){chatHist=[];document.getElementById('chat-messages').innerHTML='<div class="msg ai"><div class="avatar av-rose" style="width:28px;height:28px;font-size:11px;">N</div><div><div class="msg-bub">Chat limpo! Como posso ajudar, Nicole? 🌸</div><div class="msg-time">Agora</div></div></div>';}
-function sendQuick(t){document.getElementById('chat-input').value=t;sendMsg();}
-function handleKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg();}}
-function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,110)+'px';}
 
 // ═══════════════════ FOCUS ═══════════════════
 function updTimer(){const m=String(Math.floor(tLeft/60)).padStart(2,'0'),s=String(tLeft%60).padStart(2,'0');document.getElementById('timer-disp').textContent=m+':'+s;document.getElementById('ring').style.strokeDashoffset=502*(1-tLeft/tTotal);}
@@ -3077,24 +2915,12 @@ function saveSettings(){
   // (ex.: "Nicole" aparecendo pra Patrícia). aplicarPermissoes() já cuida
   // do rodapé a partir do usuário logado.
   if(typeof aplicarPermissoes==='function') aplicarPermissoes();
-  _applyGoogleStatus();
   greet();closeModal('modal-settings');
   // Atualiza a tela de Manutenção na hora (o "Saldo Restante" usa esse valor)
   if(typeof renderManutencaoKanban==='function') renderManutencaoKanban();
   if(typeof renderManutSaldoGeral==='function') renderManutSaldoGeral();
   if(typeof renderPerformance==='function') renderPerformance();
   showToast('Configurações salvas!','sage');
-}
-function loadSettings(){
-  // O rodapé (nome/avatar) é definido por aplicarPermissoes() a partir do
-  // usuário logado — nx_name é só o valor do campo "Seu nome" nas Configurações
-  // (sincroniza entre aparelhos), não deve sobrescrever quem está logado aqui.
-  _applyGoogleStatus();
-}
-function _applyGoogleStatus(){
-  const connected=!!ls('nx_gdrive');
-  const gcalSub=document.getElementById('gcal-sub');
-  if(gcalSub)gcalSub.textContent=connected?'Conectado':'Não conectado';
 }
 function refreshGoogleStatus(){
   const connected=!!ls('nx_gdrive');
@@ -3112,46 +2938,18 @@ function refreshGoogleStatus(){
   }
 }
 function disconnectGoogle(){
-  ['nx_gdrive','nx_gcal'].forEach(k=>localStorage.removeItem(k));
-  refreshGoogleStatus();_applyGoogleStatus();
+  ['nx_gdrive'].forEach(k=>localStorage.removeItem(k));
+  refreshGoogleStatus();
   showToast('Google desconectado.','peach');
 }
 
-async function criarEventoGCal(titulo, data, hora, duracaoMin, descricao) {
-  let token;
-  try { token = await getGoogleToken(); } catch(e) { showToast('Conecte o Google Agenda para criar eventos.','peach'); return false; }
-  const horaStr = hora || '09:00';
-  const inicio = new Date(data + 'T' + horaStr + ':00');
-  if (isNaN(inicio.getTime())) { showToast('Data inválida para o evento.','peach'); return false; }
-  const fim = new Date(inicio.getTime() + (duracaoMin||60) * 60000);
-  const body = {
-    summary: titulo,
-    description: descricao || '',
-    start: { dateTime: inicio.toISOString(), timeZone: 'America/Sao_Paulo' },
-    end:   { dateTime: fim.toISOString(),    timeZone: 'America/Sao_Paulo' }
-  };
-  try {
-    const resp = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    if (resp.ok) { showToast('Evento "' + titulo + '" criado no Google Agenda! 📅','sage'); return true; }
-    if (resp.status === 401) { silentRefreshGoogle(() => criarEventoGCal(titulo,data,hora,duracaoMin,descricao)); return false; }
-    const err = await resp.json();
-    showToast('Erro ao criar evento: ' + ((err.error && err.error.message) || resp.status),'vermelha');
-    return false;
-  } catch(e) { showToast('Erro de conexão ao criar evento.','vermelha'); return false; }
-}
-
 // ═══════════════════ GOOGLE OAUTH (GIS) ═══════════════════
-const GOOGLE_SCOPES='https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly';
+const GOOGLE_SCOPES='https://www.googleapis.com/auth/drive';
 let _gTokenClient=null; // cliente OAuth reutilizável para renovação silenciosa
 
 function _saveGoogleToken(token, expiresIn){
   const exp=Date.now()+(expiresIn||3600)*1000;
   localStorage.setItem('nx_gdrive',token);
-  localStorage.setItem('nx_gcal',token);
   localStorage.setItem('nx_gexpiry',String(exp));
 }
 
@@ -3175,7 +2973,7 @@ function connectGoogle(){
   if(typeof google==='undefined'||!google.accounts){showToast('Biblioteca Google ainda carregando, aguarde 2s e tente de novo.','peach');return;}
   _gTokenClient=_initGTokenClient(clientId,'consent',(token,err)=>{
     if(err){showToast('Erro OAuth: '+err,'vermelha');return;}
-    refreshGoogleStatus();_applyGoogleStatus();
+    refreshGoogleStatus();
     showToast('Google conectado! Token válido por 1 hora — renovação automática ativa.','sage');
     _startTokenWatcher();
   });
@@ -3193,7 +2991,7 @@ function silentRefreshGoogle(onSuccess, onFail){
       if(onFail)onFail();
     } else {
       _hideGoogleExpiredBanner();
-      refreshGoogleStatus();_applyGoogleStatus();
+      refreshGoogleStatus();
       if(onSuccess)onSuccess(token);
     }
   });
@@ -3257,168 +3055,6 @@ document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click
 function brl(v){return 'R$ '+Math.round(v||0).toLocaleString('pt-BR');}
 function fd(s){if(!s)return'';const[,m,d]=s.split('-');return d+'/'+m;}
 function ls(k){return localStorage.getItem(k);}
-// ═══════════════════ GOOGLE CALENDAR (DIRECT API — ZERO CUSTO) ═══════════════════
-// Usa Google Calendar REST API com OAuth token — sem chamada à API Anthropic
-
-async function loadCalendarEvents() {
-  const evList = document.getElementById('gcal-events-list');
-  const token = ls('nx_gcal');
-
-  if (!token) {
-    if (evList) evList.innerHTML = '<div style="text-align:center;padding:12px 8px;">' +
-      '<p style="color:var(--text3);font-size:13px;margin-bottom:8px;">Configure o token do Google nas configurações para sincronizar sua agenda.</p>' +
-      '<button class="btn btn-sm btn-rose" onclick="openSettings()"><i class="fa-solid fa-gear"></i> Configurar</button></div>';
-    return;
-  }
-
-  if (evList) evList.innerHTML = '<div style="text-align:center;padding:10px;color:var(--text3);"><i class="fa-solid fa-spinner fa-spin"></i> Carregando...</div>';
-
-  const now = new Date().toISOString();
-  const endDate = new Date(); endDate.setDate(endDate.getDate() + 14);
-
-  try {
-    const resp = await fetch(
-      'https://www.googleapis.com/calendar/v3/calendars/primary/events' +
-      '?timeMin=' + encodeURIComponent(now) +
-      '&timeMax=' + encodeURIComponent(endDate.toISOString()) +
-      '&singleEvents=true&orderBy=startTime&maxResults=30',
-      { headers: { 'Authorization': 'Bearer ' + token } }
-    );
-    if (!resp.ok) {
-      const status = resp.status;
-      if(status===401){
-        silentRefreshGoogle(()=>{showToast('Token renovado! Recarregando agenda...','sage');setTimeout(loadCalendarEvents,800);},()=>_showGoogleExpiredBanner());
-        return;
-      }
-      const errMsg = status === 403 ? 'Permissão negada. Verifique os escopos (calendar.readonly).' : 'Erro ' + status;
-      if (evList) evList.innerHTML = '<div style="padding:10px;text-align:center;"><p style="color:var(--vermelha);font-size:12.5px;">' + errMsg + '</p></div>';
-      return;
-    }
-    const data = await resp.json();
-    const events = data.items || [];
-    renderCalendarEvents(events);
-    renderAgendaFromGCal(events);
-    markCalendarDays(events);
-  } catch(e) {
-    if (evList) evList.innerHTML = '<p style="color:var(--vermelha);font-size:13px;padding:10px;text-align:center;">Erro de conexão. Verifique o token.</p>';
-  }
-}
-
-function setCalView(mode,btn){
-  calViewMode=mode;
-  document.querySelectorAll('#calview-mes,#calview-semana').forEach(b=>b.classList.remove('active'));
-  if(btn)btn.classList.add('active');
-  document.getElementById('cal-mes-view').style.display=mode==='mes'?'':'none';
-  document.getElementById('cal-semana-view').style.display=mode==='semana'?'':'none';
-  if(mode==='semana')renderSemana();
-}
-
-function renderSemana(){
-  const el=document.getElementById('cal-semana-view');if(!el)return;
-  const hoje=new Date();
-  const diaSemana=hoje.getDay();
-  const inicio=new Date(hoje); inicio.setDate(hoje.getDate()-diaSemana); // domingo
-  const dias=[];
-  for(let i=0;i<7;i++){const d=new Date(inicio);d.setDate(inicio.getDate()+i);dias.push(d);}
-  const nomes=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-  const cores=['var(--sky)','var(--sage)','var(--rose)','var(--lavender)','var(--peach)','var(--gold)','var(--sky)'];
-  el.innerHTML='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;">'+dias.map((d,idx)=>{
-    const ds=d.toISOString().split('T')[0];
-    const ehHoje=ds===hoje.toISOString().split('T')[0];
-    const evs=(_gcalTodosEventos||[]).filter(ev=>{const s=ev.start&&(ev.start.dateTime||ev.start.date);return s&&s.startsWith(ds);});
-    const tks=tasks.filter(t=>!t.done&&t.due===ds);
-    return '<div style="background:var(--bg2);border:1px solid '+(ehHoje?'var(--rose)':'var(--border)')+';border-radius:var(--r-sm);padding:8px;min-height:160px;">'+
-      '<div style="font-size:10px;color:var(--text3);text-transform:uppercase;">'+nomes[idx]+'</div>'+
-      '<div style="font-size:16px;font-weight:700;margin-bottom:6px;'+(ehHoje?'color:var(--rose);':'')+'">'+d.getDate()+'</div>'+
-      evs.map(ev=>{const s=ev.start&&(ev.start.dateTime||ev.start.date);const h=s&&ev.start.dateTime?new Date(s).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'';return '<div style="background:'+cores[idx]+'22;border-left:2px solid '+cores[idx]+';border-radius:3px;padding:3px 5px;margin-bottom:3px;font-size:10.5px;">'+(h?'<b>'+h+'</b> ':'')+esc(ev.summary||'Evento')+'</div>';}).join('')+
-      tks.map(t=>'<div style="background:var(--bg3);border-left:2px solid var(--text3);border-radius:3px;padding:3px 5px;margin-bottom:3px;font-size:10.5px;">✓ '+esc(t.text)+'</div>').join('')+
-      '</div>';
-  }).join('')+'</div>';
-}
-
-function renderCalendarEvents(events) {
-  _gcalTodosEventos = events || [];
-  if (calViewMode === 'semana') renderSemana();
-  const evList = document.getElementById('gcal-events-list');
-  if (!evList) return;
-  if (!events || events.length === 0) {
-    evList.innerHTML = '<p style="color:var(--text3);font-size:13px;text-align:center;padding:8px;">Nenhum evento nos próximos 7 dias.</p>';
-    return;
-  }
-  const colors = ['var(--rose)','var(--sky)','var(--sage)','var(--lavender)','var(--peach)'];
-  evList.innerHTML = events.map((ev, i) => {
-    const start = ev.start && (ev.start.dateTime || ev.start.date);
-    const d = start ? new Date(start) : null;
-    const dayLabel = d ? d.toLocaleDateString('pt-BR', {weekday:'short', day:'2-digit', month:'short'}) : '';
-    const timeLabel = d && ev.start.dateTime ? d.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : 'Dia todo';
-    return '<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">' +
-      '<div style="width:3px;border-radius:2px;background:' + colors[i % colors.length] + ';flex-shrink:0;"></div>' +
-      '<div style="flex:1;min-width:0;">' +
-      '<div style="font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(ev.summary || 'Sem título') + '</div>' +
-      '<div style="font-size:11px;color:var(--text3);margin-top:2px;">' + dayLabel + ' · ' + timeLabel + (ev.location ? ' · ' + esc(ev.location) : '') + '</div>' +
-      '</div></div>';
-  }).join('');
-  // Guardar eventos de hoje para o overview
-  const hoje = new Date().toISOString().split('T')[0];
-  _gcalEventosHoje = (events || []).filter(function(ev){
-    const start = ev.start && (ev.start.dateTime || ev.start.date);
-    return start && start.startsWith(hoje);
-  });
-  renderOvAgenda();
-}
-
-function renderAgendaFromGCal(events) {
-  const agEl = document.getElementById('agenda-list');
-  if (!agEl || !events || events.length === 0) return;
-  const colors = ['var(--sky)','var(--sage)','var(--rose)','var(--lavender)','var(--peach)'];
-  // Group by date
-  const groups = {};
-  events.forEach((ev, i) => {
-    const start = ev.start && (ev.start.dateTime || ev.start.date);
-    if (!start) return;
-    const d = new Date(start);
-    const key = d.toISOString().split('T')[0];
-    if (!groups[key]) groups[key] = [];
-    groups[key].push({...ev, _color: colors[i % colors.length]});
-  });
-
-  let html = '';
-  Object.entries(groups).slice(0, 5).forEach(([date, evs]) => {
-    const d = new Date(date + 'T12:00:00');
-    const today = new Date(); today.setHours(0,0,0,0);
-    const diff = Math.round((d - today) / 86400000);
-    const lbl = diff === 0 ? 'Hoje' : diff === 1 ? 'Amanhã' : d.toLocaleDateString('pt-BR', {weekday:'long', day:'2-digit', month:'short'});
-    html += '<div style="border-bottom:1px solid var(--border);">' +
-      '<div style="padding:8px 14px;background:var(--bg3);font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;">' + lbl + '</div>' +
-      evs.map(ev => {
-        const start = ev.start && (ev.start.dateTime || ev.start.date);
-        const t = start && ev.start.dateTime ? new Date(start).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : 'Dia todo';
-        return '<div style="display:flex;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:default;">' +
-          '<div style="font-size:11px;color:var(--text3);width:40px;flex-shrink:0;">' + t + '</div>' +
-          '<div style="width:3px;border-radius:2px;background:' + ev._color + ';flex-shrink:0;"></div>' +
-          '<div><div style="font-size:13px;font-weight:500;">' + esc(ev.summary || 'Sem título') + '</div>' +
-          (ev.location ? '<div style="font-size:11px;color:var(--text3);">' + esc(ev.location) + '</div>' : '') +
-          '</div></div>';
-      }).join('') + '</div>';
-  });
-  agEl.innerHTML = html || '<p style="padding:18px;color:var(--text3);text-align:center;">Nenhum evento</p>';
-}
-
-function markCalendarDays(events) {
-  // Mark days with real events on the mini calendar
-  if (!events) return;
-  events.forEach(ev => {
-    const start = ev.start && (ev.start.dateTime || ev.start.date);
-    if (!start) return;
-    const d = new Date(start);
-    const ds = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-    document.querySelectorAll('.cal-day').forEach(el => {
-      if (el.onclick && el.onclick.toString().includes(ds)) el.classList.add('has-ev');
-    });
-  });
-}
-
-// Auto-load calendar handled inside showPanel above
 // Override aiDraftEmail to do nothing (removed from UI but stub kept for safety)
 function aiDraftEmail() { return; }
 function draftReplyWithAI() { return; }
@@ -3685,14 +3321,6 @@ function showDriveError(msg) {
     el.innerHTML = '<div style="padding:28px;text-align:center;"><p style="color:var(--vermelha);font-size:13px;margin-bottom:8px;"><i class="fa-solid fa-triangle-exclamation"></i> ' + (msg||'Erro no Drive') + '</p>'
       + '<button class="btn btn-sm" onclick="openSettings()">Reconfigurar token</button></div>';
   }
-}
-
-async function summarizeWithAI() {
-  if (!currentFileContent) return;
-  const aiNavBtn = Array.from(document.querySelectorAll('.nav-item')).find(b => b.textContent.trim().startsWith('Assistente')); showPanel('ai', aiNavBtn);
-  const summary = 'Resuma o seguinte documento de forma clara e objetiva, destacando os pontos principais:\n\n' + currentFileContent.substring(0, 3000);
-  document.getElementById('chat-input').value = summary;
-  sendMsg();
 }
 
 function openInDrive() {
@@ -4000,132 +3628,292 @@ let PRECOS_ITENS = {
   'Detector de Fumaça': 59.90,
 };
 
-// ═══════════════════ PERSISTÊNCIA ═══════════════════
-// ═══════════════════ MEU LEGADO ═══════════════════
-const LEGADO_CATS={
-  financeiro:{label:'Financeiro',emoji:'💰',color:'sage'},
-  tecnologia:{label:'Tecnologia',emoji:'⚙️',color:'sky'},
-  processo:{label:'Processo',emoji:'📋',color:'lav'},
-  equipe:{label:'Equipe',emoji:'🤝',color:'peach'},
-  produto:{label:'Produto',emoji:'🏠',color:'gold'},
-};
-
-function filtrarLegado(cat, btn){
-  _legadoFiltro=cat;
-  document.querySelectorAll('#legado-filtros .tab-btn').forEach(b=>b.classList.remove('active'));
+// ═══════════════════ LIMPEZA & CAUÇÃO ═══════════════════
+let _lcFiltro='ambos';
+function switchLCFiltro(f,btn){
+  _lcFiltro=f;
+  const secL=document.getElementById('lc-secao-limpeza'), secC=document.getElementById('lc-secao-caucao');
+  if(secL) secL.style.display=(f==='ambos'||f==='limpeza')?'':'none';
+  if(secC) secC.style.display=(f==='ambos'||f==='caucao')?'':'none';
+  document.querySelectorAll('.lc-tab-btn').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
-  renderLegado();
+}
+function renderLimpezaCaucao(){ renderLimpezaKanban(); renderCaucaoKanban(); }
+
+const LIMPEZA_COLS=[
+  {id:'a_solicitar',label:'A Solicitar',color:'var(--peach)'},
+  {id:'solicitado',label:'Solicitado',color:'var(--sky)'},
+  {id:'realizada',label:'Realizada',color:'var(--sage)'}
+];
+let _limpezaEditId=null;
+
+function abrirNovaLimpeza(){
+  _limpezaEditId=null;
+  document.getElementById('modal-limpeza-titulo').textContent='Nova Limpeza';
+  ['lz-hospede','lz-imovel-interno','lz-imovel-externo','lz-endereco','lz-responsavel','lz-responsavel-tel','lz-checkin','lz-checkout','lz-data-limpeza','lz-hora-limpeza','lz-obs'].forEach(id=>{document.getElementById(id).value='';});
+  document.getElementById('lz-status').value='a_solicitar';
+  document.getElementById('lz-btn-apagar').style.display='none';
+  document.getElementById('modal-limpeza').classList.add('open');
 }
 
-function renderLegado(){
-  const el=document.getElementById('legado-lista'); if(!el) return;
-  const resumoEl=document.getElementById('legado-resumo');
+function abrirEditarLimpeza(id){
+  const l=limpezaItens.find(x=>x.id===id); if(!l) return;
+  _limpezaEditId=id;
+  document.getElementById('modal-limpeza-titulo').textContent='Editar Limpeza';
+  document.getElementById('lz-hospede').value=l.hospede||'';
+  document.getElementById('lz-status').value=l.status||'a_solicitar';
+  document.getElementById('lz-imovel-interno').value=l.imovelInterno||'';
+  document.getElementById('lz-imovel-externo').value=l.imovelExterno||'';
+  document.getElementById('lz-endereco').value=l.endereco||'';
+  document.getElementById('lz-responsavel').value=l.responsavel||'';
+  document.getElementById('lz-responsavel-tel').value=l.responsavelTel||'';
+  document.getElementById('lz-checkin').value=l.checkin||'';
+  document.getElementById('lz-checkout').value=l.checkout||'';
+  document.getElementById('lz-data-limpeza').value=l.dataLimpeza||'';
+  document.getElementById('lz-hora-limpeza').value=l.horaLimpeza||'';
+  document.getElementById('lz-obs').value=l.obs||'';
+  document.getElementById('lz-btn-apagar').style.display='';
+  document.getElementById('modal-limpeza').classList.add('open');
+}
 
-  const lista=conquistas.slice().sort((a,b)=>b.data.localeCompare(a.data));
-  const filtrada=_legadoFiltro?lista.filter(c=>c.categoria===_legadoFiltro):lista;
+function salvarLimpeza(){
+  const hospede=document.getElementById('lz-hospede').value.trim();
+  if(!hospede){ showToast('Informe o hóspede.','peach'); return; }
+  const obj={
+    id:_limpezaEditId||Date.now(),
+    status:document.getElementById('lz-status').value,
+    hospede,
+    imovelInterno:document.getElementById('lz-imovel-interno').value.trim(),
+    imovelExterno:document.getElementById('lz-imovel-externo').value.trim(),
+    endereco:document.getElementById('lz-endereco').value.trim(),
+    responsavel:document.getElementById('lz-responsavel').value.trim(),
+    responsavelTel:document.getElementById('lz-responsavel-tel').value.trim(),
+    checkin:document.getElementById('lz-checkin').value,
+    checkout:document.getElementById('lz-checkout').value,
+    dataLimpeza:document.getElementById('lz-data-limpeza').value,
+    horaLimpeza:document.getElementById('lz-hora-limpeza').value,
+    obs:document.getElementById('lz-obs').value.trim(),
+    dataCriacao:new Date().toISOString(),
+  };
+  if(_limpezaEditId){ const i=limpezaItens.findIndex(x=>x.id===_limpezaEditId); if(i>=0) limpezaItens[i]=obj; }
+  else limpezaItens.unshift(obj);
+  closeModal('modal-limpeza');
+  if(typeof saveAll==='function') saveAll();
+  renderLimpezaKanban();
+  showToast('Limpeza salva!','sage');
+}
 
-  // Resumo cards
-  if(resumoEl){
-    const total=conquistas.length;
-    const porCat=Object.keys(LEGADO_CATS).map(k=>({key:k,...LEGADO_CATS[k],n:conquistas.filter(c=>c.categoria===k).length}));
-    resumoEl.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;">'
-      +'<div class="card"><div class="card-body" style="padding:14px;text-align:center;"><div style="font-size:28px;font-weight:700;font-family:var(--font-display);color:var(--rose);">'+total+'</div><div style="font-size:11px;color:var(--text3);text-transform:uppercase;font-weight:700;">Total de Feitos</div></div></div>'
-      +porCat.filter(c=>c.n>0).map(c=>'<div class="card"><div class="card-body" style="padding:14px;text-align:center;"><div style="font-size:22px;font-weight:700;font-family:var(--font-display);color:var(--'+c.color+');">'+c.n+'</div><div style="font-size:11px;color:var(--text3);">'+c.emoji+' '+c.label+'</div></div></div>').join('')
+function deletarLimpezaModal(){
+  if(!_limpezaEditId||!confirm('Apagar esta limpeza?')) return;
+  limpezaItens=limpezaItens.filter(x=>x.id!==_limpezaEditId);
+  closeModal('modal-limpeza');
+  if(typeof saveAll==='function') saveAll();
+  renderLimpezaKanban();
+  showToast('Limpeza removida.','peach');
+}
+
+function moverLimpeza(id,delta){
+  const l=limpezaItens.find(x=>x.id===id); if(!l) return;
+  const idx=LIMPEZA_COLS.findIndex(c=>c.id===l.status);
+  const novoIdx=idx+delta;
+  if(novoIdx<0||novoIdx>=LIMPEZA_COLS.length) return;
+  l.status=LIMPEZA_COLS[novoIdx].id;
+  if(typeof saveAll==='function') saveAll();
+  renderLimpezaKanban();
+}
+
+function enviarWhatsappLimpeza(id){
+  const l=limpezaItens.find(x=>x.id===id); if(!l) return;
+  const tel=(l.responsavelTel||'').replace(/\D/g,'');
+  if(!tel){ showToast('Cadastre o WhatsApp do responsável.','peach'); return; }
+  const msg='Oi '+(l.responsavel||'')+'! Precisamos de uma limpeza no imóvel '+(l.imovelInterno||l.imovelExterno||'')+
+    (l.endereco?' ('+l.endereco+')':'')+' para '+(fd(l.dataLimpeza)||'data a combinar')+(l.horaLimpeza?' às '+l.horaLimpeza:'')+
+    '. Check-out: '+(fd(l.checkout)||'—')+', próximo check-in: '+(fd(l.checkin)||'—')+'.';
+  window.open('https://wa.me/55'+tel+'?text='+encodeURIComponent(msg),'_blank');
+}
+
+function renderLimpezaKanban(){
+  const kEl=document.getElementById('limpeza-kanban'); if(!kEl) return;
+  kEl.innerHTML=LIMPEZA_COLS.map((col,colIdx)=>{
+    const itens=limpezaItens.filter(l=>(l.status||'a_solicitar')===col.id);
+    const podeVoltar=colIdx>0, podeAvancar=colIdx<LIMPEZA_COLS.length-1;
+    return '<div>'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;"><div style="width:8px;height:8px;border-radius:50%;background:'+col.color+';"></div><span style="font-size:12.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--text2);">'+col.label+'</span><span style="font-size:11px;color:var(--text3);">('+itens.length+')</span></div>'
+      +itens.map(l=>{
+        const urgente=col.id==='a_solicitar'&&l.checkin&&(new Date(l.checkin+'T00:00:00')-new Date())<24*3600*1000;
+        return '<div class="card" style="margin-bottom:10px;'+(urgente?'border-color:var(--vermelha);':'')+'" onclick="abrirEditarLimpeza('+l.id+')">'
+        +'<div class="card-body" style="padding:10px 12px;">'
+        +(urgente?'<div style="font-size:10.5px;color:var(--vermelha);font-weight:700;margin-bottom:4px;"><i class="fa-solid fa-triangle-exclamation"></i> Check-in próximo</div>':'')
+        +'<div style="font-size:13.5px;font-weight:700;">'+esc(l.imovelInterno||l.imovelExterno||'Imóvel')+'</div>'
+        +(l.imovelExterno?'<div style="font-size:11.5px;color:var(--text3);">'+esc(l.imovelExterno)+'</div>':'')
+        +'<div style="font-size:12px;margin-top:4px;"><i class="fa-solid fa-user"></i> '+esc(l.hospede||'—')+'</div>'
+        +'<div style="font-size:11px;color:var(--text3);">Check-in '+(fd(l.checkin)||'—')+' · Check-out '+(fd(l.checkout)||'—')+'</div>'
+        +'<div style="font-size:11px;color:var(--text3);">Limpeza: '+(fd(l.dataLimpeza)||'—')+(l.horaLimpeza?' às '+l.horaLimpeza:'')+'</div>'
+        +(l.responsavel?'<div style="font-size:11.5px;margin-top:4px;"><i class="fa-solid fa-broom"></i> '+esc(l.responsavel)+'</div>':'')
+        +'<div style="display:flex;justify-content:flex-end;gap:4px;margin-top:8px;" onclick="event.stopPropagation()">'
+        +(l.responsavelTel?'<button onclick="enviarWhatsappLimpeza('+l.id+')" class="btn btn-sm" title="Enviar WhatsApp" style="color:#25D366;"><i class="fa-brands fa-whatsapp"></i></button>':'')
+        +(podeVoltar?'<button onclick="moverLimpeza('+l.id+',-1)" class="btn btn-sm" title="Voltar etapa"><i class="fa-solid fa-arrow-left"></i></button>':'')
+        +(podeAvancar?'<button onclick="moverLimpeza('+l.id+',1)" class="btn btn-sm btn-rose" title="Avançar etapa"><i class="fa-solid fa-arrow-right"></i></button>':'')
+        +'</div></div></div>';
+      }).join('')
       +'</div>';
-  }
-
-  if(filtrada.length===0){
-    el.innerHTML='<div class="card"><div class="card-body" style="text-align:center;padding:40px 24px;"><i class="fa-solid fa-trophy" style="font-size:36px;color:var(--text3);opacity:0.3;margin-bottom:14px;display:block;"></i><div style="font-size:14px;color:var(--text3);">Nenhum feito registrado ainda.<br>Clique em "+ Novo Feito" para começar!</div></div></div>';
-    return;
-  }
-
-  el.innerHTML=filtrada.map(c=>{
-    const cat=LEGADO_CATS[c.categoria]||LEGADO_CATS.processo;
-    const dataFmt=c.data?new Date(c.data+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'numeric'}):'—';
-    return '<div class="card" style="margin-bottom:10px;">'
-      +'<div class="card-body" style="padding:16px 18px;">'
-      +'<div style="display:flex;align-items:flex-start;gap:14px;">'
-      +'<div class="metric-icon '+cat.color+'" style="width:36px;height:36px;font-size:16px;flex-shrink:0;margin-top:2px;">'+cat.emoji+'</div>'
-      +'<div style="flex:1;min-width:0;">'
-      +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px;">'
-      +'<span style="font-size:15px;font-weight:700;">'+esc(c.titulo)+'</span>'
-      +'<span style="font-size:10.5px;background:var(--bg3);color:var(--text3);padding:2px 8px;border-radius:8px;font-weight:600;">'+cat.emoji+' '+cat.label+'</span>'
-      +'<span style="font-size:11px;color:var(--text3);margin-left:auto;">'+dataFmt+'</span>'
-      +'</div>'
-      +(c.impacto?'<div style="font-size:12.5px;font-weight:600;color:var(--'+cat.color+');margin-bottom:6px;"><i class="fa-solid fa-bolt"></i> '+esc(c.impacto)+'</div>':'')
-      +(c.descricao?'<div style="font-size:13px;color:var(--text2);white-space:pre-wrap;line-height:1.55;">'+esc(c.descricao)+'</div>':'')
-      +'</div>'
-      +'<div style="display:flex;gap:6px;flex-shrink:0;">'
-      +'<button onclick="editarConquista(\''+c.id+'\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:4px;"><i class="fa-solid fa-pencil"></i></button>'
-      +'<button onclick="excluirConquista(\''+c.id+'\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:4px;"><i class="fa-solid fa-trash"></i></button>'
-      +'</div>'
-      +'</div></div></div>';
   }).join('');
 }
 
-function _cqSetApagar(show){ const b=document.getElementById('cq-btn-apagar'); if(b) b.style.display=show?'':'none'; }
+const CAUCAO_COLS=[
+  {id:'aguardando',label:'Aguardando Devolução',color:'var(--sky)'},
+  {id:'analise',label:'Em Análise (Irregularidade)',color:'var(--vermelha)'},
+  {id:'devolvido',label:'Devolvido',color:'var(--sage)'}
+];
+let _caucaoEditId=null;
 
-function abrirNovaConquista(){
-  _conquistaEditId=null;
-  document.getElementById('modal-conquista-titulo').textContent='Nova Conquista';
-  document.getElementById('cq-titulo').value='';
-  document.getElementById('cq-data').value=new Date().toISOString().substring(0,10);
-  document.getElementById('cq-categoria').value='financeiro';
-  document.getElementById('cq-impacto').value='';
-  document.getElementById('cq-descricao').value='';
-  _cqSetApagar(false);
-  document.getElementById('modal-conquista').classList.add('open');
+function toggleCaucaoPix(v){
+  document.getElementById('cc-pix-group').style.display = v==='pix' ? '' : 'none';
 }
 
-function editarConquista(id){
-  const c=conquistas.find(x=>x.id===id); if(!c) return;
-  _conquistaEditId=id;
-  document.getElementById('modal-conquista-titulo').textContent='Editar Conquista';
-  document.getElementById('cq-titulo').value=c.titulo||'';
-  document.getElementById('cq-data').value=c.data||'';
-  document.getElementById('cq-categoria').value=c.categoria||'financeiro';
-  document.getElementById('cq-impacto').value=c.impacto||'';
-  document.getElementById('cq-descricao').value=c.descricao||'';
-  _cqSetApagar(true);
-  document.getElementById('modal-conquista').classList.add('open');
+function abrirNovaCaucao(){
+  _caucaoEditId=null;
+  document.getElementById('modal-caucao-titulo').textContent='Nova Caução';
+  ['cc-hospede','cc-imovel-interno','cc-imovel-externo','cc-valor','cc-pix-banco','cc-pix-chave','cc-pix-titular','cc-data-devolucao'].forEach(id=>{document.getElementById(id).value='';});
+  document.getElementById('cc-status').value='aguardando';
+  document.getElementById('cc-forma-pagamento').value='pix';
+  toggleCaucaoPix('pix');
+  document.getElementById('cc-irregularidade-box').style.display='none';
+  document.getElementById('cc-btn-apagar').style.display='none';
+  document.getElementById('cc-btn-irregularidade').style.display='';
+  document.getElementById('modal-caucao').classList.add('open');
 }
 
-function excluirConquistaModal(){
-  if(!_conquistaEditId||!confirm('Apagar esta conquista?')) return;
-  conquistas=conquistas.filter(x=>x.id!==_conquistaEditId);
-  closeModal('modal-conquista');
+function abrirEditarCaucao(id){
+  const c=caucaoItens.find(x=>x.id===id); if(!c) return;
+  _caucaoEditId=id;
+  document.getElementById('modal-caucao-titulo').textContent='Editar Caução';
+  document.getElementById('cc-hospede').value=c.hospede||'';
+  document.getElementById('cc-status').value=c.status||'aguardando';
+  document.getElementById('cc-imovel-interno').value=c.imovelInterno||'';
+  document.getElementById('cc-imovel-externo').value=c.imovelExterno||'';
+  document.getElementById('cc-valor').value=c.valorCaucao||'';
+  document.getElementById('cc-forma-pagamento').value=c.formaPagamento||'pix';
+  toggleCaucaoPix(c.formaPagamento||'pix');
+  const db=c.dadosBancarios||{};
+  document.getElementById('cc-pix-banco').value=db.banco||'';
+  document.getElementById('cc-pix-chave').value=db.chavePix||'';
+  document.getElementById('cc-pix-titular').value=db.titular||'';
+  document.getElementById('cc-data-devolucao').value=c.dataPrevistaDevolucao||'';
+  document.getElementById('cc-btn-apagar').style.display='';
+  _atualizarBoxIrregularidade(c);
+  document.getElementById('modal-caucao').classList.add('open');
+}
+
+function _atualizarBoxIrregularidade(c){
+  const box=document.getElementById('cc-irregularidade-box');
+  const btnIrreg=document.getElementById('cc-btn-irregularidade');
+  if(!c.irregularidade){ box.style.display='none'; btnIrreg.style.display=''; return; }
+  btnIrreg.style.display='none';
+  box.style.display='';
+  const m=c.manutencaoId?manutencoes.find(x=>x.id===c.manutencaoId):null;
+  document.getElementById('cc-valor-devolver').textContent = m
+    ? 'Valor a cobrar do hóspede (definido em Manutenção): '+brl(manutSubtotal(m))
+    : 'Valor a cobrar: aguardando avaliação em Manutenção.';
+}
+
+function marcarIrregularidadeCaucao(id){
+  const targetId=id||_caucaoEditId;
+  if(!targetId){ showToast('Selecione uma caução primeiro.','peach'); return; }
+  const c=caucaoItens.find(x=>x.id===targetId); if(!c) return;
+  if(!c.manutencaoId){
+    const m={id:Date.now(),status:'solicitacao',pausado:false,origem:'hospede',imovelNome:c.imovelInterno||c.imovelExterno||'',dataSolicitacao:new Date().toISOString().split('T')[0],dataPrazo:'',tipo:'dano',itens:[{desc:'',valor:0}],margemPercent:20,fotos:[],quemPaga:'hospede',fornecedor:{nome:'',contato:'',email:'',pix:''},precisaComprar:false,linksItens:[],ondeEntregar:'',obsCompra:'',pagarFornecedor:false,pagFornecedor:{valor:0,nome:'',email:'',pix:'',cpfCnpj:'',dataPagamento:'',fornCadId:null},repassarHostaway:false,valorPago:0,pagoPor:'hospede',valorGasto:0,obs:'Irregularidade identificada na devolução de caução de '+(c.hospede||'hóspede'),tarefasManut:[],responsavel:'',dataCriacao:new Date().toISOString(),hospede:{nome:c.hospede||'',plataforma:'',codigo:'',checkout:''}};
+    manutencoes.unshift(m);
+    c.manutencaoId=m.id;
+    c.irregularidade=true;
+    if(typeof renderManutencaoKanban==='function') renderManutencaoKanban();
+  }
   if(typeof saveAll==='function') saveAll();
-  renderLegado();
-  showToast('Conquista removida.','peach');
+  renderCaucaoKanban();
+  if(document.getElementById('modal-caucao').classList.contains('open')) _atualizarBoxIrregularidade(c);
+  showToast('Card de manutenção criado. Defina o valor lá para refletir aqui.','sage');
 }
 
-function salvarConquista(){
-  const titulo=document.getElementById('cq-titulo').value.trim();
-  if(!titulo){ showToast('Informe um título.','peach'); return; }
+function salvarCaucao(){
+  const hospede=document.getElementById('cc-hospede').value.trim();
+  if(!hospede){ showToast('Informe o hóspede.','peach'); return; }
+  const formaPagamento=document.getElementById('cc-forma-pagamento').value;
+  const existente=_caucaoEditId?caucaoItens.find(x=>x.id===_caucaoEditId):null;
   const obj={
-    id:_conquistaEditId||('cq'+Date.now()),
-    titulo,
-    data:document.getElementById('cq-data').value,
-    categoria:document.getElementById('cq-categoria').value||'processo',
-    impacto:document.getElementById('cq-impacto').value.trim(),
-    descricao:document.getElementById('cq-descricao').value.trim(),
+    id:_caucaoEditId||Date.now(),
+    status:document.getElementById('cc-status').value,
+    hospede,
+    imovelInterno:document.getElementById('cc-imovel-interno').value.trim(),
+    imovelExterno:document.getElementById('cc-imovel-externo').value.trim(),
+    valorCaucao:parseFloat(document.getElementById('cc-valor').value)||0,
+    formaPagamento,
+    dadosBancarios: formaPagamento==='pix' ? {
+      banco:document.getElementById('cc-pix-banco').value.trim(),
+      chavePix:document.getElementById('cc-pix-chave').value.trim(),
+      titular:document.getElementById('cc-pix-titular').value.trim(),
+    } : null,
+    dataPrevistaDevolucao:document.getElementById('cc-data-devolucao').value,
+    irregularidade: existente?existente.irregularidade:false,
+    manutencaoId: existente?existente.manutencaoId:null,
+    dataCriacao: existente?existente.dataCriacao:new Date().toISOString(),
   };
-  if(_conquistaEditId){ const i=conquistas.findIndex(x=>x.id===_conquistaEditId); if(i>=0) conquistas[i]=obj; }
-  else conquistas.push(obj);
-  closeModal('modal-conquista');
+  if(_caucaoEditId){ const i=caucaoItens.findIndex(x=>x.id===_caucaoEditId); if(i>=0) caucaoItens[i]=obj; }
+  else { caucaoItens.unshift(obj); _caucaoEditId=obj.id; }
+  closeModal('modal-caucao');
   if(typeof saveAll==='function') saveAll();
-  renderLegado();
-  showToast('Feito salvo!','sage');
+  renderCaucaoKanban();
+  showToast('Caução salva!','sage');
 }
 
-function excluirConquista(id){
-  if(!confirm('Apagar este feito?')) return;
-  conquistas=conquistas.filter(x=>x.id!==id);
+function deletarCaucaoModal(){
+  if(!_caucaoEditId||!confirm('Apagar esta caução?')) return;
+  caucaoItens=caucaoItens.filter(x=>x.id!==_caucaoEditId);
+  closeModal('modal-caucao');
   if(typeof saveAll==='function') saveAll();
-  renderLegado();
-  showToast('Feito removido.','peach');
+  renderCaucaoKanban();
+  showToast('Caução removida.','peach');
 }
 
+function moverCaucao(id,delta){
+  const c=caucaoItens.find(x=>x.id===id); if(!c) return;
+  const idx=CAUCAO_COLS.findIndex(col=>col.id===c.status);
+  const novoIdx=idx+delta;
+  if(novoIdx<0||novoIdx>=CAUCAO_COLS.length) return;
+  c.status=CAUCAO_COLS[novoIdx].id;
+  if(typeof saveAll==='function') saveAll();
+  renderCaucaoKanban();
+}
+
+function renderCaucaoKanban(){
+  const kEl=document.getElementById('caucao-kanban'); if(!kEl) return;
+  kEl.innerHTML=CAUCAO_COLS.map((col,colIdx)=>{
+    const itens=caucaoItens.filter(c=>(c.status||'aguardando')===col.id);
+    const podeVoltar=colIdx>0, podeAvancar=colIdx<CAUCAO_COLS.length-1;
+    const formaLbl={pix:'Pix',cartao:'Cartão',dinheiro:'Dinheiro',outro:'Outro'};
+    return '<div>'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;"><div style="width:8px;height:8px;border-radius:50%;background:'+col.color+';"></div><span style="font-size:12.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--text2);">'+col.label+'</span><span style="font-size:11px;color:var(--text3);">('+itens.length+')</span></div>'
+      +itens.map(c=>{
+        const m=c.manutencaoId?manutencoes.find(x=>x.id===c.manutencaoId):null;
+        const valorADevolver=m?manutSubtotal(m):null;
+        return '<div class="card" style="margin-bottom:10px;" onclick="abrirEditarCaucao('+c.id+')">'
+        +'<div class="card-body" style="padding:10px 12px;">'
+        +'<div style="font-size:13.5px;font-weight:700;">'+esc(c.imovelInterno||c.imovelExterno||'Imóvel')+'</div>'
+        +(c.imovelExterno?'<div style="font-size:11.5px;color:var(--text3);">'+esc(c.imovelExterno)+'</div>':'')
+        +'<div style="font-size:12px;margin-top:4px;"><i class="fa-solid fa-user"></i> '+esc(c.hospede||'—')+'</div>'
+        +'<div style="font-size:11px;color:var(--text3);">Caução: '+brl(c.valorCaucao)+' · '+(formaLbl[c.formaPagamento]||'—')+'</div>'
+        +'<div style="font-size:11px;color:var(--text3);">Devolução prevista: '+(fd(c.dataPrevistaDevolucao)||'—')+'</div>'
+        +(c.irregularidade?('<div style="margin-top:6px;background:var(--bg3);border-radius:6px;padding:5px 8px;font-size:11px;color:var(--vermelha);font-weight:600;"><i class="fa-solid fa-triangle-exclamation"></i> Irregularidade — '+(valorADevolver!=null?'cobrar '+brl(valorADevolver):'aguardando avaliação')+'</div>'):'')
+        +'<div style="display:flex;justify-content:flex-end;gap:4px;margin-top:8px;" onclick="event.stopPropagation()">'
+        +(!c.manutencaoId?'<button onclick="marcarIrregularidadeCaucao('+c.id+')" class="btn btn-sm" title="Marcar irregularidade" style="color:var(--vermelha);"><i class="fa-solid fa-triangle-exclamation"></i></button>':'')
+        +(podeVoltar?'<button onclick="moverCaucao('+c.id+',-1)" class="btn btn-sm" title="Voltar etapa"><i class="fa-solid fa-arrow-left"></i></button>':'')
+        +(podeAvancar?'<button onclick="moverCaucao('+c.id+',1)" class="btn btn-sm btn-rose" title="Avançar etapa"><i class="fa-solid fa-arrow-right"></i></button>':'')
+        +'</div></div></div>';
+      }).join('')
+      +'</div>';
+  }).join('');
+}
+
+// ═══════════════════ PERSISTÊNCIA ═══════════════════
 const _PERSIST_KEYS = {
   nx_tasks:()=>tasks, nx_imoveis:()=>imoveis, nx_notes:()=>notes,
   nx_compras:()=>comprasList, nx_projetos:()=>projetos, nx_atts:()=>ATTS,
@@ -4146,7 +3934,8 @@ const _PERSIST_KEYS = {
   nx_superhost:()=>superhostPeriodos,
   nx_cancelamentos:()=>cancelamentos,
   nx_notasfiscais:()=>notasFiscais,
-  nx_conquistas:()=>conquistas,
+  nx_limpeza:()=>limpezaItens,
+  nx_caucao:()=>caucaoItens,
   nx_despesas:()=>despesasFixas,
   nx_anotacoes_controle:()=>anotacoesControle,
   nx_pagamentos_fin:()=>pagamentosFinanceiro,
@@ -4161,7 +3950,7 @@ const _PERSIST_KEYS = {
 // Listas com id próprio que o servidor mescla registro a registro (id + _ts).
 // DEVE espelhar a MERGE_POR_ID do backend (backend/app/merge.py).
 // Mantido em sincronia com MERGE_POR_ID em backend/app/merge.py.
-const _MERGE_POR_ID_KEYS=['nx_manutencoes','nx_tasks','nx_plantao','nx_projetos','nx_compras','nx_extras','nx_conquistas','nx_despesas','nx_anotacoes_controle','nx_superhost','nx_cancelamentos','nx_imoveis','nx_pagamentos_fin','nx_relatorios_fin','nx_validacoes_fin','nx_avaliacoes_negativas','nx_taskcats','nx_kpidefs','nx_transcricoes','nx_outros','nx_fornecedores_cad','nx_manual','nx_update_tombstones'];
+const _MERGE_POR_ID_KEYS=['nx_manutencoes','nx_tasks','nx_plantao','nx_projetos','nx_compras','nx_extras','nx_limpeza','nx_caucao','nx_despesas','nx_anotacoes_controle','nx_superhost','nx_cancelamentos','nx_imoveis','nx_pagamentos_fin','nx_relatorios_fin','nx_validacoes_fin','nx_avaliacoes_negativas','nx_taskcats','nx_kpidefs','nx_transcricoes','nx_outros','nx_fornecedores_cad','nx_manual','nx_update_tombstones'];
 function _semTs(o){ const c=Object.assign({},o); delete c._ts; return JSON.stringify(c); }
 // Antes de salvar: carimba _ts nos registros novos/alterados e cria tombstone
 // para os que foram apagados. Assim o servidor sabe qual versão é a mais recente
@@ -4930,7 +4719,7 @@ function _renderTudo(){
     if(typeof renderPlantao==='function') renderPlantao();
     if(typeof renderExtras==='function') renderExtras();
     if(typeof renderManutencaoKanban==='function') renderManutencaoKanban();
-    if(typeof renderLegado==='function') renderLegado();
+    if(typeof renderLimpezaCaucao==='function') renderLimpezaCaucao();
     if(typeof aplicarPermissoes==='function') aplicarPermissoes();
   }catch(e){ console.warn('render falhou', e); }
 }
@@ -4988,7 +4777,8 @@ function loadAll(){
     v=g('nx_superhost');  if(Array.isArray(v)) superhostPeriodos=v;
     v=g('nx_cancelamentos'); if(Array.isArray(v)) cancelamentos=v;
     v=g('nx_notasfiscais'); if(v&&typeof v==='object') notasFiscais=v;
-    v=g('nx_conquistas'); if(Array.isArray(v)) conquistas=v;
+    v=g('nx_limpeza'); if(Array.isArray(v)) limpezaItens=v;
+    v=g('nx_caucao'); if(Array.isArray(v)) caucaoItens=v;
     v=g('nx_despesas'); if(Array.isArray(v)) despesasFixas=v;
     v=g('nx_anotacoes_controle'); if(Array.isArray(v)) anotacoesControle=v;
     v=g('nx_pagamentos_fin'); if(Array.isArray(v)) pagamentosFinanceiro=v;
@@ -5790,21 +5580,10 @@ function obAbaOperacional(im){
         '<input type="number" class="form-input" style="width:100px;padding:5px 8px;font-size:12px;" placeholder="0,00" value="'+(op.custo||'')+'" oninput="obSalvarOpsCusto('+im.id+',\''+b.key+'\',this.value)">'+
         '</div>'+
         '<button class="btn btn-sm" style="margin-top:8px;" onclick="obAdicionarTarefa('+im.id+',\''+b.label+'\',\''+b.key+'\')"><i class="fa-solid fa-plus"></i> Adicionar à agenda</button>'+
-        '<button class="btn btn-sm" onclick="obCriarEventoGCal('+im.id+',\''+b.key+'\')" style="font-size:10px;padding:3px 8px;margin-top:4px;"><i class="fa-brands fa-google"></i> Google Agenda</button>'+
         '</div></div>';
     }).join('')+
     obRenderComentarios(im,'operacional')+
     '</div>';
-}
-
-function obCriarEventoGCal(id, bloco) {
-  const im = imoveis.find(x => x.id === id); if (!im) return;
-  const op = im.ops && im.ops[bloco] || {};
-  if (!op.data) { showToast('Preencha a data antes de criar o evento.', 'peach'); return; }
-  const labels = { fotos: 'Sessão de Fotos', limpeza: 'Primeira Limpeza', vistoria: 'Vistoria' };
-  const titulo = (labels[bloco] || bloco) + ' — ' + (im.nome || 'Imóvel');
-  const desc = 'Responsável: ' + (op.responsavel || '—') + '\nImóvel: ' + (im.endereco || '—');
-  criarEventoGCal(titulo, op.data, op.hora || '09:00', 90, desc);
 }
 
 function obAbaCustos(im){
@@ -8027,7 +7806,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 117;
+const APP_VERSION = 118;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

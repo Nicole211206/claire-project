@@ -3827,16 +3827,27 @@ function abrirEditarCaucao(id){
   document.getElementById('modal-caucao').classList.add('open');
 }
 
+// Concilia o valor apurado em Manutenção com o valor do caução retido: o que
+// exceder o caução vira cobrança adicional; o que sobrar do caução é devolvido.
+function _caucaoResumoValores(c){
+  if(!c.manutencaoId) return null;
+  const m=manutencoes.find(function(x){return x.id===c.manutencaoId;});
+  if(!m) return null;
+  const cobrar=manutSubtotal(m);
+  const devolver=Math.max(0,(c.valorCaucao||0)-cobrar);
+  const adicional=Math.max(0,cobrar-(c.valorCaucao||0));
+  return {cobrar,devolver,adicional};
+}
 function _atualizarBoxIrregularidade(c){
   const box=document.getElementById('cc-irregularidade-box');
   const btnIrreg=document.getElementById('cc-btn-irregularidade');
   if(!c.irregularidade){ box.style.display='none'; btnIrreg.style.display=''; return; }
   btnIrreg.style.display='none';
   box.style.display='';
-  const m=c.manutencaoId?manutencoes.find(x=>x.id===c.manutencaoId):null;
-  document.getElementById('cc-valor-devolver').textContent = m
-    ? 'Valor a cobrar do hóspede (definido em Manutenção): '+brl(manutSubtotal(m))
-    : 'Valor a cobrar: aguardando avaliação em Manutenção.';
+  const rv=_caucaoResumoValores(c);
+  document.getElementById('cc-valor-devolver').textContent = rv
+    ? 'Cobrar do hóspede: '+brl(rv.cobrar)+' · Devolver do caução: '+brl(rv.devolver)+(rv.adicional>0?' · Cobrança adicional (excede o caução): '+brl(rv.adicional):'')
+    : 'Aguardando avaliação em Manutenção.';
 }
 
 function marcarIrregularidadeCaucao(id){
@@ -3919,15 +3930,14 @@ function renderCaucaoKanban(){
       +'<span style="font-size:11px;background:var(--bg3);padding:1px 8px;border-radius:10px;color:var(--text3);">'+itens.length+'</span>'
       +'</div>'
       +(itens.length===0?'<div style="font-size:12px;color:var(--text3);padding:12px 0;text-align:center;">Nenhuma aqui.</div>':itens.map(function(c){
-        const m=c.manutencaoId?manutencoes.find(x=>x.id===c.manutencaoId):null;
-        const valorADevolver=m?manutSubtotal(m):null;
+        const rv=_caucaoResumoValores(c);
         return '<div class="card" style="margin-bottom:10px;cursor:pointer;" onclick="abrirEditarCaucao('+c.id+')"><div class="card-body" style="padding:10px 12px;">'
         +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:4px;">'
         +'<span style="font-size:12.5px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(c.imovelExterno||'Imóvel')+'</span>'
         +(c.irregularidade?'<span style="font-size:10px;background:var(--vermelha-bg);color:var(--vermelha);padding:2px 8px;border-radius:8px;font-weight:600;white-space:nowrap;">Irregularidade</span>':'')
         +'</div>'
         +'<div style="font-size:10.5px;color:var(--text3);margin-bottom:5px;"><i class="fa-solid fa-user"></i> '+esc(c.hospede||'—')+' · '+brl(c.valorCaucao)+' · '+(formaLbl[c.formaPagamento]||'—')+'</div>'
-        +'<div style="font-size:12px;color:var(--text2);line-height:1.4;margin-bottom:6px;">Check-out '+(fd(c.checkout)||'—')+' · Devolução prevista: '+(fd(c.dataPrevistaDevolucao)||'—')+(c.irregularidade?' · '+(valorADevolver!=null?'cobrar '+brl(valorADevolver):'aguardando avaliação'):'')+'</div>'
+        +'<div style="font-size:12px;color:var(--text2);line-height:1.4;margin-bottom:6px;">Check-out '+(fd(c.checkout)||'—')+' · Devolução prevista: '+(fd(c.dataPrevistaDevolucao)||'—')+(c.irregularidade?' · '+(rv?('cobrar '+brl(rv.cobrar)+' · devolver '+brl(rv.devolver)+(rv.adicional>0?' · adicional '+brl(rv.adicional):'')):'aguardando avaliação'):'')+'</div>'
         +'<div style="display:flex;justify-content:flex-end;gap:4px;" onclick="event.stopPropagation()">'
         +(!c.manutencaoId?'<button onclick="marcarIrregularidadeCaucao('+c.id+')" class="btn btn-sm" title="Marcar irregularidade" style="color:var(--vermelha);"><i class="fa-solid fa-triangle-exclamation"></i></button>':'')
         +(podeVoltar?'<button onclick="moverCaucao('+c.id+',-1)" class="btn btn-sm" title="Voltar etapa"><i class="fa-solid fa-arrow-left"></i></button>':'')
@@ -7982,7 +7992,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 122;
+const APP_VERSION = 123;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

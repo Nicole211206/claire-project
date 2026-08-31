@@ -12,12 +12,12 @@ const NIVEIS=[
 // interpola linearmente entre esses pontos pra chegar no % de atingimento.
 // Configurável pela tela "Configurar KPIs" — por isso é `let`, não `const`.
 let KPI_DEFS=[
-  {id:'av',   label:'Avaliação dos Hóspedes', peso:0.20, unit:'estrelas', meta:4.8, limVermelha:4.7, limAzul:4.9, limElite:5.0, menorMelhor:false, color:'rose',  icon:'fa-star',        hint:'Média Airbnb + Booking'},
+  {id:'av',   label:'Avaliação dos Hóspedes', peso:0.20, unit:'estrelas', meta:9.6, limVermelha:9.4, limAzul:9.8, limElite:10.0, menorMelhor:false, color:'rose',  icon:'fa-star',        hint:'Média Airbnb + Booking'},
   {id:'tr',   label:'Tempo de Resposta',      peso:0.15, unit:'min',      meta:5,   limVermelha:6,   limAzul:4,   limElite:3,   menorMelhor:true,  color:'lav',   icon:'fa-clock',       hint:'Média da equipe (Conduit)'},
   {id:'ob',   label:'Tempo de Onboarding',    peso:0.15, unit:'dias',     meta:10,  limVermelha:12,  limAzul:9,   limElite:8,   menorMelhor:true,  color:'sage',  icon:'fa-house-flag',  hint:'Assinatura → Anúncio ativo'},
   {id:'cv',   label:'Conversão de Avaliações',peso:0.10, unit:'%',        meta:60,  limVermelha:50,  limAzul:70,  limElite:80,  menorMelhor:false, color:'peach', icon:'fa-comments',    hint:'% reviews/checkouts (Hostaway)'},
   {id:'rc',   label:'Redução de Custos',      peso:0.15, unit:'%',        meta:10,  limVermelha:0,   limAzul:20,  limElite:30,  menorMelhor:false, color:'sky',   icon:'fa-piggy-bank',  hint:'% economia gerada'},
-  {id:'av360',label:'Avaliação 360',          peso:0.10, unit:'estrelas', meta:4.8, limVermelha:4.7, limAzul:4.9, limElite:4.9, menorMelhor:false, color:'gold',  icon:'fa-user-check',  hint:'Formulário de desempenho'},
+  {id:'av360',label:'Avaliação 360',          peso:0.10, unit:'estrelas', meta:9.6, limVermelha:9.4, limAzul:9.8, limElite:9.8, menorMelhor:false, color:'gold',  icon:'fa-user-check',  hint:'Formulário de desempenho'},
   {id:'fin',  label:'Índice Financeiro',      peso:0.15, unit:'%',        meta:95,  limVermelha:85,  limAzul:98,  limElite:100, menorMelhor:false, color:'teal',  icon:'fa-money-check-dollar', hint:'Pontualidade + Precisão + Eficiência'},
 ];
 function kpiScoreGeneric(v,k){
@@ -808,25 +808,39 @@ function _recalcularAVParaMes(mes){
   if(!kpiVals[mes])kpiVals[mes]={};
   kpiVals[mes].av=pesoTotal>0?(soma/pesoTotal).toFixed(2):null;
 }
-// O Booking deixou de ser normalizado automaticamente (0-10 → 0-5) — agora a
-// pessoa já digita a nota convertida. Valores antigos lançados na escala
-// 0-10 ficariam errados sob a regra nova (nunca passa de 5 nessa escala),
-// então qualquer booking >5 encontrado só pode ser do formato antigo —
-// converte uma vez (idempotente: depois de convertido já fica ≤5 e para).
-function _migrarBookingEscala10Para5(){
-  let mudou=false;
-  Object.keys(kpiSubVals).forEach(mes=>{
-    const av=kpiSubVals[mes]&&kpiSubVals[mes].av;
-    if(av && av.booking!==undefined && av.booking!=='' && (+av.booking)>5){
-      av.booking=(+av.booking/2).toFixed(2);
-      _recalcularAVParaMes(mes);
-      mudou=true;
-    }
+// Migração 1x (2026-08-31): KPI de Avaliação (dos Hóspedes e 360) passou de
+// escala 0-5 para 0-10, pra bater com a escala nativa do Hostaway (que já
+// entrega tudo em 0-10 — o /2 só existia pra exibição/meta). Gate: enquanto
+// KPI_DEFS['av'].limElite ainda for ≤5 é sinal de instalação/servidor ainda
+// na escala antiga — idempotente, porque depois de migrado limElite vira 10
+// e a condição nunca mais é verdadeira (mesmo padrão de
+// _migrarKpiIndiceFinanceiro, que usa estrutura em vez de magnitude de dado
+// como gate, já que magnitude de nota não distingue "já migrado" de "nota
+// baixa" de forma confiável).
+function _migrarAvaliacaoEscala10(){
+  const av=KPI_DEFS.find(k=>k.id==='av');
+  if(!av || av.limElite>5) return;
+  ['av','av360'].forEach(function(kid){
+    const k=KPI_DEFS.find(x=>x.id===kid); if(!k) return;
+    ['meta','limVermelha','limAzul','limElite'].forEach(function(campo){
+      if(k[campo]!=null) k[campo]=+(k[campo]*2).toFixed(2);
+    });
   });
-  if(mudou && typeof saveAll==='function') saveAll();
+  Object.keys(kpiVals).forEach(function(mes){
+    const kv=kpiVals[mes]; if(!kv) return;
+    if(kv.av!=null && kv.av!=='') kv.av=(+kv.av*2).toFixed(2);
+    if(kv.av360!=null && kv.av360!=='') kv.av360=(+kv.av360*2).toFixed(2);
+  });
+  Object.keys(kpiSubVals).forEach(function(mes){
+    const sv=kpiSubVals[mes] && kpiSubVals[mes].av; if(!sv) return;
+    if(sv.airbnb!=null && sv.airbnb!=='') sv.airbnb=(+sv.airbnb*2).toFixed(2);
+    if(sv.booking!=null && sv.booking!=='') sv.booking=(+sv.booking*2).toFixed(2);
+  });
+  _wireKpiCalc(KPI_DEFS);
+  if(typeof saveAll==='function') saveAll();
 }
 function renderKPIs(){
-  _migrarBookingEscala10Para5();
+  _migrarAvaliacaoEscala10();
   // "ob" (Tempo de Onboarding) e "rc.setup" (Redução de Custos) vêm dos imóveis marcados no onboarding, por mês de referência
   _syncObKpiDoOnboarding();
   _syncSetupKpiDoOnboarding();
@@ -877,9 +891,9 @@ function renderKPIs(){
       if(hasB){ const w=(+sub.qtdBooking||0)>0?(+sub.qtdBooking):1; somaW+=(+sub.booking||0)*w; pesoW+=w; }
       const avg=pesoW>0?(somaW/pesoW).toFixed(2):null;
       inputHTML='<div style="display:grid;gap:6px;">'+
-        '<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:90px;">Airbnb (0-5):</label><input type="number" step="0.01" min="0" max="5" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub.airbnb||'')+'" placeholder="—" onchange="setKPISub(\'av\',\'airbnb\',this.value)"><label style="font-size:11px;color:var(--text3);margin-left:6px;">Qtd. avaliações:</label><input type="number" step="1" min="0" class="form-input" style="width:70px;padding:5px 8px;" value="'+(sub.qtdAirbnb||'')+'" placeholder="—" onchange="setKPISub(\'av\',\'qtdAirbnb\',this.value)"></div>'+
-        '<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:90px;">Booking (0-5):</label><input type="number" step="0.01" min="0" max="5" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub.booking||'')+'" placeholder="—" onchange="setKPISub(\'av\',\'booking\',this.value)"><label style="font-size:11px;color:var(--text3);margin-left:6px;">Qtd. avaliações:</label><input type="number" step="1" min="0" class="form-input" style="width:70px;padding:5px 8px;" value="'+(sub.qtdBooking||'')+'" placeholder="—" onchange="setKPISub(\'av\',\'qtdBooking\',this.value)"></div>'+
-        (avg!==null?'<div style="font-size:12px;font-weight:700;color:var(--sage);margin-top:2px;">Média Ponderada: '+avg+' estrelas <span style="font-weight:400;color:var(--text3);">(ponderado pela qtd. de avaliações de cada canal — informe o Booking já convertido p/ 0-5)</span></div>':'')+'</div>';
+        '<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:90px;">Airbnb (0-10):</label><input type="number" step="0.01" min="0" max="10" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub.airbnb||'')+'" placeholder="—" onchange="setKPISub(\'av\',\'airbnb\',this.value)"><label style="font-size:11px;color:var(--text3);margin-left:6px;">Qtd. avaliações:</label><input type="number" step="1" min="0" class="form-input" style="width:70px;padding:5px 8px;" value="'+(sub.qtdAirbnb||'')+'" placeholder="—" onchange="setKPISub(\'av\',\'qtdAirbnb\',this.value)"></div>'+
+        '<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:12px;color:var(--text2);min-width:90px;">Booking (0-10):</label><input type="number" step="0.01" min="0" max="10" class="form-input" style="width:90px;padding:5px 8px;" value="'+(sub.booking||'')+'" placeholder="—" onchange="setKPISub(\'av\',\'booking\',this.value)"><label style="font-size:11px;color:var(--text3);margin-left:6px;">Qtd. avaliações:</label><input type="number" step="1" min="0" class="form-input" style="width:70px;padding:5px 8px;" value="'+(sub.qtdBooking||'')+'" placeholder="—" onchange="setKPISub(\'av\',\'qtdBooking\',this.value)"></div>'+
+        (avg!==null?'<div style="font-size:12px;font-weight:700;color:var(--sage);margin-top:2px;">Média Ponderada: '+avg+' <span style="font-weight:400;color:var(--text3);">(ponderado pela qtd. de avaliações de cada canal — escala 0-10, igual ao Hostaway)</span></div>':'')+'</div>';
     } else if(k.id==='cv'){
       const sub=_ksv().cv||{};
       const pct2=(sub.reviews!==undefined&&sub.checkouts!==undefined&&+sub.checkouts>0?(((+sub.reviews||0)/(+sub.checkouts||1))*100).toFixed(1):null);
@@ -5328,13 +5342,12 @@ async function aplicarAvaliacoesNoKPI(){
   const mAir10=medCanal(['Airbnb']);          // média Airbnb em 0-10
   const mBook10=medCanal(['Booking.com','Booking']); // média Booking em 0-10
   if(!_ksv().av) _ksv().av={};
-  // Exibição: Airbnb na escala real 0-5 (Hostaway/2); Booking na escala 0-10
-  if(mAir10!=null) _ksv().av.airbnb=(mAir10/2).toFixed(2);
+  // Airbnb e Booking ficam na escala real 0-10 (igual o Hostaway entrega) — nada de conversão.
+  if(mAir10!=null) _ksv().av.airbnb=mAir10.toFixed(2);
   if(mBook10!=null) _ksv().av.booking=mBook10.toFixed(2);
-  // KPI combinado em 0-5: cada canal normalizado para 0-5 (dividir o valor 0-10 por 2)
   const partes=[];
-  if(mAir10!=null) partes.push(mAir10/2);
-  if(mBook10!=null) partes.push(mBook10/2);
+  if(mAir10!=null) partes.push(mAir10);
+  if(mBook10!=null) partes.push(mBook10);
   // '' (não null) pra realmente limpar no servidor — mesmo motivo do _recalcularAV.
   _kv().av = partes.length ? (partes.reduce((a,b)=>a+b,0)/partes.length).toFixed(2) : '';
 
@@ -5358,7 +5371,7 @@ async function aplicarAvaliacoesNoKPI(){
   }
 
   if(typeof renderKPIs==='function') renderKPIs();
-  showToast('KPIs atualizados: Aval. Airbnb '+(mAir10!=null?(mAir10/2).toFixed(2)+'★':'—')+' · Booking '+(mBook10!=null?mBook10.toFixed(2)+'/10':'—')+(reservas!=null?' · Conversão '+avNoPeriodo+'/'+reservas:'')+' ('+per.de+' a '+per.ate+').','sage');
+  showToast('KPIs atualizados: Aval. Airbnb '+(mAir10!=null?mAir10.toFixed(2)+'/10':'—')+' · Booking '+(mBook10!=null?mBook10.toFixed(2)+'/10':'—')+(reservas!=null?' · Conversão '+avNoPeriodo+'/'+reservas:'')+' ('+per.de+' a '+per.ate+').','sage');
 }
 
 let PRECOS_ENXOVAL = {
@@ -7853,7 +7866,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 119;
+const APP_VERSION = 120;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

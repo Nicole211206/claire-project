@@ -426,26 +426,24 @@ function _validarLogin(){
           <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Limpeza &amp; Caução</h2>
           <p style="color:var(--text3);font-size:13px;margin-top:2px;">Controle de solicitação de limpeza e devolução de caução</p>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="tab-btn lc-tab-btn active" onclick="switchLCFiltro('ambos',this)">Ambos</button>
-          <button class="tab-btn lc-tab-btn" onclick="switchLCFiltro('limpeza',this)">Só Limpeza</button>
-          <button class="tab-btn lc-tab-btn" onclick="switchLCFiltro('caucao',this)">Só Caução</button>
-        </div>
-      </div>
-
-      <div id="lc-secao-limpeza">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-          <h3 style="font-family:var(--font-display);font-size:16px;font-weight:600;"><i class="fa-solid fa-broom"></i> Limpeza</h3>
+        <div id="lc-actions-limpeza" style="display:flex;gap:8px;">
           <button class="btn btn-rose" onclick="abrirNovaLimpeza()"><i class="fa-solid fa-plus"></i> Nova Limpeza</button>
         </div>
-        <div id="limpeza-kanban" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:28px;"></div>
-      </div>
-
-      <div id="lc-secao-caucao">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-          <h3 style="font-family:var(--font-display);font-size:16px;font-weight:600;"><i class="fa-solid fa-sack-dollar"></i> Devolução de Caução</h3>
+        <div id="lc-actions-caucao" style="display:none;gap:8px;">
           <button class="btn btn-rose" onclick="abrirNovaCaucao()"><i class="fa-solid fa-plus"></i> Nova Caução</button>
         </div>
+      </div>
+
+      <div class="tab-bar" style="margin-bottom:16px;">
+        <button class="tab-btn lc-tab-btn active" onclick="switchLCTab('limpeza',this)">Limpeza</button>
+        <button class="tab-btn lc-tab-btn" onclick="switchLCTab('caucao',this)">Caução</button>
+      </div>
+
+      <div id="lc-content-limpeza">
+        <div id="limpeza-kanban" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;"></div>
+      </div>
+
+      <div id="lc-content-caucao" style="display:none;">
         <div id="caucao-kanban" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;"></div>
       </div>
     </div>
@@ -1764,6 +1762,6 @@ function _validarLogin(){
   </div>
 </div>
 
-<script src="js/app.js?v=120"></script>
+<script src="js/app.js?v=121"></script>
 </body>
 </html>

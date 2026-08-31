@@ -3643,12 +3643,15 @@ let PRECOS_ITENS = {
 };
 
 // ═══════════════════ LIMPEZA & CAUÇÃO ═══════════════════
-let _lcFiltro='ambos';
-function switchLCFiltro(f,btn){
-  _lcFiltro=f;
-  const secL=document.getElementById('lc-secao-limpeza'), secC=document.getElementById('lc-secao-caucao');
-  if(secL) secL.style.display=(f==='ambos'||f==='limpeza')?'':'none';
-  if(secC) secC.style.display=(f==='ambos'||f==='caucao')?'':'none';
+let _lcTab='limpeza';
+function switchLCTab(tab,btn){
+  _lcTab=tab;
+  const contL=document.getElementById('lc-content-limpeza'), contC=document.getElementById('lc-content-caucao');
+  if(contL) contL.style.display = tab==='limpeza' ? '' : 'none';
+  if(contC) contC.style.display = tab==='caucao' ? '' : 'none';
+  const actL=document.getElementById('lc-actions-limpeza'), actC=document.getElementById('lc-actions-caucao');
+  if(actL) actL.style.display = tab==='limpeza' ? 'flex' : 'none';
+  if(actC) actC.style.display = tab==='caucao' ? 'flex' : 'none';
   document.querySelectorAll('.lc-tab-btn').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
 }
@@ -3754,25 +3757,27 @@ function renderLimpezaKanban(){
     const itens=limpezaItens.filter(l=>(l.status||'a_solicitar')===col.id);
     const podeVoltar=colIdx>0, podeAvancar=colIdx<LIMPEZA_COLS.length-1;
     return '<div>'
-      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;"><div style="width:8px;height:8px;border-radius:50%;background:'+col.color+';"></div><span style="font-size:12.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--text2);">'+col.label+'</span><span style="font-size:11px;color:var(--text3);">('+itens.length+')</span></div>'
-      +itens.map(l=>{
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid '+col.color+';">'
+      +'<span style="font-weight:700;font-size:13px;">'+col.label+'</span>'
+      +'<span style="font-size:11px;background:var(--bg3);padding:1px 8px;border-radius:10px;color:var(--text3);">'+itens.length+'</span>'
+      +'</div>'
+      +(itens.length===0?'<div style="font-size:12px;color:var(--text3);padding:12px 0;text-align:center;">Nenhuma aqui.</div>':itens.map(function(l){
         const urgente=col.id==='a_solicitar'&&l.checkin&&(new Date(l.checkin+'T00:00:00')-new Date())<24*3600*1000;
-        return '<div class="card" style="margin-bottom:10px;'+(urgente?'border-color:var(--vermelha);':'')+'" onclick="abrirEditarLimpeza('+l.id+')">'
-        +'<div class="card-body" style="padding:10px 12px;">'
-        +(urgente?'<div style="font-size:10.5px;color:var(--vermelha);font-weight:700;margin-bottom:4px;"><i class="fa-solid fa-triangle-exclamation"></i> Check-in próximo</div>':'')
-        +'<div style="font-size:13.5px;font-weight:700;">'+esc(l.imovelExterno||'Imóvel')+'</div>'
-        +'<div style="font-size:12px;margin-top:4px;"><i class="fa-solid fa-user"></i> '+esc(l.hospede||'—')+'</div>'
-        +'<div style="font-size:11px;color:var(--text3);">Check-in '+(fd(l.checkin)||'—')+' · Check-out '+(fd(l.checkout)||'—')+'</div>'
-        +'<div style="font-size:11px;color:var(--text3);">Limpeza: '+(fd(l.dataLimpeza)||'—')+(l.horaLimpeza?' às '+l.horaLimpeza:'')+'</div>'
-        +(l.responsavel?'<div style="font-size:11.5px;margin-top:4px;"><i class="fa-solid fa-broom"></i> '+esc(l.responsavel)+'</div>':'')
-        +'<div style="display:flex;justify-content:flex-end;gap:4px;margin-top:8px;" onclick="event.stopPropagation()">'
+        return '<div class="card" style="margin-bottom:10px;cursor:pointer;" onclick="abrirEditarLimpeza('+l.id+')"><div class="card-body" style="padding:10px 12px;">'
+        +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:4px;">'
+        +'<span style="font-size:12.5px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(l.imovelExterno||'Imóvel')+'</span>'
+        +(urgente?'<span style="font-size:10px;background:var(--vermelha-bg);color:var(--vermelha);padding:2px 8px;border-radius:8px;font-weight:600;white-space:nowrap;">Check-in próximo</span>':'')
+        +'</div>'
+        +'<div style="font-size:10.5px;color:var(--text3);margin-bottom:5px;"><i class="fa-solid fa-user"></i> '+esc(l.hospede||'—')+' · Check-in '+(fd(l.checkin)||'—')+' · Check-out '+(fd(l.checkout)||'—')+'</div>'
+        +'<div style="font-size:12px;color:var(--text2);line-height:1.4;margin-bottom:6px;">Limpeza: '+(fd(l.dataLimpeza)||'—')+(l.horaLimpeza?' às '+l.horaLimpeza:'')+(l.responsavel?' · '+esc(l.responsavel):'')+'</div>'
+        +'<div style="display:flex;justify-content:flex-end;gap:4px;" onclick="event.stopPropagation()">'
         +(l.grupoWpp?'<button onclick="enviarWhatsappLimpeza('+l.id+')" class="btn btn-sm" title="Enviar para o grupo de WhatsApp" style="color:#25D366;"><i class="fa-brands fa-whatsapp"></i></button>':'')
         +(podeVoltar?'<button onclick="moverLimpeza('+l.id+',-1)" class="btn btn-sm" title="Voltar etapa"><i class="fa-solid fa-arrow-left"></i></button>':'')
         +(podeAvancar?'<button onclick="moverLimpeza('+l.id+',1)" class="btn btn-sm btn-rose" title="Avançar etapa"><i class="fa-solid fa-arrow-right"></i></button>':'')
-        +'<button onclick="abrirEditarLimpeza('+l.id+')" class="btn btn-sm" title="Editar"><i class="fa-solid fa-pencil"></i></button>'
-        +'<button onclick="deletarLimpeza('+l.id+')" class="btn btn-sm" title="Apagar"><i class="fa-solid fa-trash"></i></button>'
-        +'</div></div></div>';
-      }).join('')
+        +'<button onclick="deletarLimpeza('+l.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:4px 6px;" title="Apagar"><i class="fa-solid fa-trash"></i></button>'
+        +'</div>'
+        +'</div></div>';
+      }).join(''))
       +'</div>';
   }).join('');
 }
@@ -3907,25 +3912,28 @@ function renderCaucaoKanban(){
     const podeVoltar=colIdx>0, podeAvancar=colIdx<CAUCAO_COLS.length-1;
     const formaLbl={pix:'Pix',cartao:'Cartão',dinheiro:'Dinheiro',outro:'Outro'};
     return '<div>'
-      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;"><div style="width:8px;height:8px;border-radius:50%;background:'+col.color+';"></div><span style="font-size:12.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--text2);">'+col.label+'</span><span style="font-size:11px;color:var(--text3);">('+itens.length+')</span></div>'
-      +itens.map(c=>{
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid '+col.color+';">'
+      +'<span style="font-weight:700;font-size:13px;">'+col.label+'</span>'
+      +'<span style="font-size:11px;background:var(--bg3);padding:1px 8px;border-radius:10px;color:var(--text3);">'+itens.length+'</span>'
+      +'</div>'
+      +(itens.length===0?'<div style="font-size:12px;color:var(--text3);padding:12px 0;text-align:center;">Nenhuma aqui.</div>':itens.map(function(c){
         const m=c.manutencaoId?manutencoes.find(x=>x.id===c.manutencaoId):null;
         const valorADevolver=m?manutSubtotal(m):null;
-        return '<div class="card" style="margin-bottom:10px;" onclick="abrirEditarCaucao('+c.id+')">'
-        +'<div class="card-body" style="padding:10px 12px;">'
-        +'<div style="font-size:13.5px;font-weight:700;">'+esc(c.imovelExterno||'Imóvel')+'</div>'
-        +'<div style="font-size:12px;margin-top:4px;"><i class="fa-solid fa-user"></i> '+esc(c.hospede||'—')+'</div>'
-        +'<div style="font-size:11px;color:var(--text3);">Caução: '+brl(c.valorCaucao)+' · '+(formaLbl[c.formaPagamento]||'—')+'</div>'
-        +'<div style="font-size:11px;color:var(--text3);">Devolução prevista: '+(fd(c.dataPrevistaDevolucao)||'—')+'</div>'
-        +(c.irregularidade?('<div style="margin-top:6px;background:var(--bg3);border-radius:6px;padding:5px 8px;font-size:11px;color:var(--vermelha);font-weight:600;"><i class="fa-solid fa-triangle-exclamation"></i> Irregularidade — '+(valorADevolver!=null?'cobrar '+brl(valorADevolver):'aguardando avaliação')+'</div>'):'')
-        +'<div style="display:flex;justify-content:flex-end;gap:4px;margin-top:8px;" onclick="event.stopPropagation()">'
+        return '<div class="card" style="margin-bottom:10px;cursor:pointer;" onclick="abrirEditarCaucao('+c.id+')"><div class="card-body" style="padding:10px 12px;">'
+        +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:4px;">'
+        +'<span style="font-size:12.5px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(c.imovelExterno||'Imóvel')+'</span>'
+        +(c.irregularidade?'<span style="font-size:10px;background:var(--vermelha-bg);color:var(--vermelha);padding:2px 8px;border-radius:8px;font-weight:600;white-space:nowrap;">Irregularidade</span>':'')
+        +'</div>'
+        +'<div style="font-size:10.5px;color:var(--text3);margin-bottom:5px;"><i class="fa-solid fa-user"></i> '+esc(c.hospede||'—')+' · '+brl(c.valorCaucao)+' · '+(formaLbl[c.formaPagamento]||'—')+'</div>'
+        +'<div style="font-size:12px;color:var(--text2);line-height:1.4;margin-bottom:6px;">Devolução prevista: '+(fd(c.dataPrevistaDevolucao)||'—')+(c.irregularidade?' · '+(valorADevolver!=null?'cobrar '+brl(valorADevolver):'aguardando avaliação'):'')+'</div>'
+        +'<div style="display:flex;justify-content:flex-end;gap:4px;" onclick="event.stopPropagation()">'
         +(!c.manutencaoId?'<button onclick="marcarIrregularidadeCaucao('+c.id+')" class="btn btn-sm" title="Marcar irregularidade" style="color:var(--vermelha);"><i class="fa-solid fa-triangle-exclamation"></i></button>':'')
         +(podeVoltar?'<button onclick="moverCaucao('+c.id+',-1)" class="btn btn-sm" title="Voltar etapa"><i class="fa-solid fa-arrow-left"></i></button>':'')
         +(podeAvancar?'<button onclick="moverCaucao('+c.id+',1)" class="btn btn-sm btn-rose" title="Avançar etapa"><i class="fa-solid fa-arrow-right"></i></button>':'')
-        +'<button onclick="abrirEditarCaucao('+c.id+')" class="btn btn-sm" title="Editar"><i class="fa-solid fa-pencil"></i></button>'
-        +'<button onclick="deletarCaucao('+c.id+')" class="btn btn-sm" title="Apagar"><i class="fa-solid fa-trash"></i></button>'
-        +'</div></div></div>';
-      }).join('')
+        +'<button onclick="deletarCaucao('+c.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:4px 6px;" title="Apagar"><i class="fa-solid fa-trash"></i></button>'
+        +'</div>'
+        +'</div></div>';
+      }).join(''))
       +'</div>';
   }).join('');
 }
@@ -7866,7 +7874,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 120;
+const APP_VERSION = 121;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

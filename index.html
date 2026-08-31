@@ -1604,14 +1604,11 @@ function _validarLogin(){
         </select>
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-      <div class="form-group"><label class="form-label">Imóvel (nome interno)</label><input type="text" class="form-input" id="lz-imovel-interno" placeholder="Nome interno"></div>
-      <div class="form-group"><label class="form-label">Imóvel (nome externo)</label><input type="text" class="form-input" id="lz-imovel-externo" placeholder="Nome no Airbnb/Booking"></div>
-    </div>
+    <div class="form-group"><label class="form-label">Imóvel (nome externo)</label><input type="text" class="form-input" id="lz-imovel-externo" placeholder="Nome no Airbnb/Booking"></div>
     <div class="form-group"><label class="form-label">Endereço</label><input type="text" class="form-input" id="lz-endereco" placeholder="Endereço do imóvel"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
       <div class="form-group"><label class="form-label">Responsável pela limpeza</label><input type="text" class="form-input" id="lz-responsavel" placeholder="Nome"></div>
-      <div class="form-group"><label class="form-label">WhatsApp do responsável</label><input type="text" class="form-input" id="lz-responsavel-tel" placeholder="Só números, com DDD"></div>
+      <div class="form-group"><label class="form-label">Grupo de WhatsApp (link)</label><input type="text" class="form-input" id="lz-grupo-wpp" placeholder="https://chat.whatsapp.com/..."></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
       <div class="form-group"><label class="form-label">Check-in</label><input type="date" class="form-input" id="lz-checkin"></div>
@@ -1623,7 +1620,7 @@ function _validarLogin(){
     </div>
     <div class="form-group"><label class="form-label">Observações</label><textarea class="form-input" id="lz-obs" rows="2"></textarea></div>
     <div class="modal-footer">
-      <button class="btn" id="lz-btn-apagar" onclick="deletarLimpezaModal()" style="margin-right:auto;display:none;"><i class="fa-solid fa-trash"></i> Apagar</button>
+      <button class="btn" id="lz-btn-apagar" onclick="deletarLimpeza()" style="margin-right:auto;display:none;"><i class="fa-solid fa-trash"></i> Apagar</button>
       <button class="btn" onclick="closeModal('modal-limpeza')">Cancelar</button>
       <button class="btn btn-rose" onclick="salvarLimpeza()"><i class="fa-solid fa-check"></i> Salvar</button>
     </div>
@@ -1644,10 +1641,7 @@ function _validarLogin(){
         </select>
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-      <div class="form-group"><label class="form-label">Imóvel (nome interno)</label><input type="text" class="form-input" id="cc-imovel-interno" placeholder="Nome interno"></div>
-      <div class="form-group"><label class="form-label">Imóvel (nome externo)</label><input type="text" class="form-input" id="cc-imovel-externo" placeholder="Nome no Airbnb/Booking"></div>
-    </div>
+    <div class="form-group"><label class="form-label">Imóvel (nome externo)</label><input type="text" class="form-input" id="cc-imovel-externo" placeholder="Nome no Airbnb/Booking"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
       <div class="form-group"><label class="form-label">Valor do caução (R$)</label><input type="number" class="form-input" id="cc-valor" placeholder="0,00"></div>
       <div class="form-group"><label class="form-label">Forma de pagamento</label>
@@ -1671,7 +1665,7 @@ function _validarLogin(){
     </div>
     <div class="modal-footer">
       <button class="btn" id="cc-btn-irregularidade" onclick="marcarIrregularidadeCaucao()" style="margin-right:auto;"><i class="fa-solid fa-triangle-exclamation"></i> Irregularidade</button>
-      <button class="btn" id="cc-btn-apagar" onclick="deletarCaucaoModal()" style="display:none;"><i class="fa-solid fa-trash"></i> Apagar</button>
+      <button class="btn" id="cc-btn-apagar" onclick="deletarCaucao()" style="display:none;"><i class="fa-solid fa-trash"></i> Apagar</button>
       <button class="btn" onclick="closeModal('modal-caucao')">Cancelar</button>
       <button class="btn btn-rose" onclick="salvarCaucao()"><i class="fa-solid fa-check"></i> Salvar</button>
     </div>
@@ -1770,6 +1764,6 @@ function _validarLogin(){
   </div>
 </div>
 
-<script src="js/app.js?v=118"></script>
+<script src="js/app.js?v=119"></script>
 </body>
 </html>

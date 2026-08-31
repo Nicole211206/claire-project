@@ -3650,7 +3650,7 @@ let _limpezaEditId=null;
 function abrirNovaLimpeza(){
   _limpezaEditId=null;
   document.getElementById('modal-limpeza-titulo').textContent='Nova Limpeza';
-  ['lz-hospede','lz-imovel-interno','lz-imovel-externo','lz-endereco','lz-responsavel','lz-responsavel-tel','lz-checkin','lz-checkout','lz-data-limpeza','lz-hora-limpeza','lz-obs'].forEach(id=>{document.getElementById(id).value='';});
+  ['lz-hospede','lz-imovel-externo','lz-endereco','lz-responsavel','lz-grupo-wpp','lz-checkin','lz-checkout','lz-data-limpeza','lz-hora-limpeza','lz-obs'].forEach(id=>{document.getElementById(id).value='';});
   document.getElementById('lz-status').value='a_solicitar';
   document.getElementById('lz-btn-apagar').style.display='none';
   document.getElementById('modal-limpeza').classList.add('open');
@@ -3662,11 +3662,10 @@ function abrirEditarLimpeza(id){
   document.getElementById('modal-limpeza-titulo').textContent='Editar Limpeza';
   document.getElementById('lz-hospede').value=l.hospede||'';
   document.getElementById('lz-status').value=l.status||'a_solicitar';
-  document.getElementById('lz-imovel-interno').value=l.imovelInterno||'';
   document.getElementById('lz-imovel-externo').value=l.imovelExterno||'';
   document.getElementById('lz-endereco').value=l.endereco||'';
   document.getElementById('lz-responsavel').value=l.responsavel||'';
-  document.getElementById('lz-responsavel-tel').value=l.responsavelTel||'';
+  document.getElementById('lz-grupo-wpp').value=l.grupoWpp||'';
   document.getElementById('lz-checkin').value=l.checkin||'';
   document.getElementById('lz-checkout').value=l.checkout||'';
   document.getElementById('lz-data-limpeza').value=l.dataLimpeza||'';
@@ -3683,11 +3682,10 @@ function salvarLimpeza(){
     id:_limpezaEditId||Date.now(),
     status:document.getElementById('lz-status').value,
     hospede,
-    imovelInterno:document.getElementById('lz-imovel-interno').value.trim(),
     imovelExterno:document.getElementById('lz-imovel-externo').value.trim(),
     endereco:document.getElementById('lz-endereco').value.trim(),
     responsavel:document.getElementById('lz-responsavel').value.trim(),
-    responsavelTel:document.getElementById('lz-responsavel-tel').value.trim(),
+    grupoWpp:document.getElementById('lz-grupo-wpp').value.trim(),
     checkin:document.getElementById('lz-checkin').value,
     checkout:document.getElementById('lz-checkout').value,
     dataLimpeza:document.getElementById('lz-data-limpeza').value,
@@ -3703,10 +3701,11 @@ function salvarLimpeza(){
   showToast('Limpeza salva!','sage');
 }
 
-function deletarLimpezaModal(){
-  if(!_limpezaEditId||!confirm('Apagar esta limpeza?')) return;
-  limpezaItens=limpezaItens.filter(x=>x.id!==_limpezaEditId);
-  closeModal('modal-limpeza');
+function deletarLimpeza(id){
+  const targetId = id!=null ? id : _limpezaEditId;
+  if(!targetId || !confirm('Apagar esta limpeza?')) return;
+  limpezaItens=limpezaItens.filter(x=>x.id!==targetId);
+  if(document.getElementById('modal-limpeza').classList.contains('open')) closeModal('modal-limpeza');
   if(typeof saveAll==='function') saveAll();
   renderLimpezaKanban();
   showToast('Limpeza removida.','peach');
@@ -3724,12 +3723,15 @@ function moverLimpeza(id,delta){
 
 function enviarWhatsappLimpeza(id){
   const l=limpezaItens.find(x=>x.id===id); if(!l) return;
-  const tel=(l.responsavelTel||'').replace(/\D/g,'');
-  if(!tel){ showToast('Cadastre o WhatsApp do responsável.','peach'); return; }
-  const msg='Oi '+(l.responsavel||'')+'! Precisamos de uma limpeza no imóvel '+(l.imovelInterno||l.imovelExterno||'')+
+  const link=(l.grupoWpp||'').trim();
+  if(!link){ showToast('Cadastre o link do grupo de WhatsApp.','peach'); return; }
+  const msg='Oi pessoal! Precisamos de uma limpeza no imóvel '+(l.imovelExterno||'')+
     (l.endereco?' ('+l.endereco+')':'')+' para '+(fd(l.dataLimpeza)||'data a combinar')+(l.horaLimpeza?' às '+l.horaLimpeza:'')+
     '. Check-out: '+(fd(l.checkout)||'—')+', próximo check-in: '+(fd(l.checkin)||'—')+'.';
-  window.open('https://wa.me/55'+tel+'?text='+encodeURIComponent(msg),'_blank');
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(msg).then(()=>showToast('Mensagem copiada — cole no grupo.','sage')).catch(()=>{});
+  }
+  window.open(link,'_blank');
 }
 
 function renderLimpezaKanban(){
@@ -3744,16 +3746,17 @@ function renderLimpezaKanban(){
         return '<div class="card" style="margin-bottom:10px;'+(urgente?'border-color:var(--vermelha);':'')+'" onclick="abrirEditarLimpeza('+l.id+')">'
         +'<div class="card-body" style="padding:10px 12px;">'
         +(urgente?'<div style="font-size:10.5px;color:var(--vermelha);font-weight:700;margin-bottom:4px;"><i class="fa-solid fa-triangle-exclamation"></i> Check-in próximo</div>':'')
-        +'<div style="font-size:13.5px;font-weight:700;">'+esc(l.imovelInterno||l.imovelExterno||'Imóvel')+'</div>'
-        +(l.imovelExterno?'<div style="font-size:11.5px;color:var(--text3);">'+esc(l.imovelExterno)+'</div>':'')
+        +'<div style="font-size:13.5px;font-weight:700;">'+esc(l.imovelExterno||'Imóvel')+'</div>'
         +'<div style="font-size:12px;margin-top:4px;"><i class="fa-solid fa-user"></i> '+esc(l.hospede||'—')+'</div>'
         +'<div style="font-size:11px;color:var(--text3);">Check-in '+(fd(l.checkin)||'—')+' · Check-out '+(fd(l.checkout)||'—')+'</div>'
         +'<div style="font-size:11px;color:var(--text3);">Limpeza: '+(fd(l.dataLimpeza)||'—')+(l.horaLimpeza?' às '+l.horaLimpeza:'')+'</div>'
         +(l.responsavel?'<div style="font-size:11.5px;margin-top:4px;"><i class="fa-solid fa-broom"></i> '+esc(l.responsavel)+'</div>':'')
         +'<div style="display:flex;justify-content:flex-end;gap:4px;margin-top:8px;" onclick="event.stopPropagation()">'
-        +(l.responsavelTel?'<button onclick="enviarWhatsappLimpeza('+l.id+')" class="btn btn-sm" title="Enviar WhatsApp" style="color:#25D366;"><i class="fa-brands fa-whatsapp"></i></button>':'')
+        +(l.grupoWpp?'<button onclick="enviarWhatsappLimpeza('+l.id+')" class="btn btn-sm" title="Enviar para o grupo de WhatsApp" style="color:#25D366;"><i class="fa-brands fa-whatsapp"></i></button>':'')
         +(podeVoltar?'<button onclick="moverLimpeza('+l.id+',-1)" class="btn btn-sm" title="Voltar etapa"><i class="fa-solid fa-arrow-left"></i></button>':'')
         +(podeAvancar?'<button onclick="moverLimpeza('+l.id+',1)" class="btn btn-sm btn-rose" title="Avançar etapa"><i class="fa-solid fa-arrow-right"></i></button>':'')
+        +'<button onclick="abrirEditarLimpeza('+l.id+')" class="btn btn-sm" title="Editar"><i class="fa-solid fa-pencil"></i></button>'
+        +'<button onclick="deletarLimpeza('+l.id+')" class="btn btn-sm" title="Apagar"><i class="fa-solid fa-trash"></i></button>'
         +'</div></div></div>';
       }).join('')
       +'</div>';
@@ -3774,7 +3777,7 @@ function toggleCaucaoPix(v){
 function abrirNovaCaucao(){
   _caucaoEditId=null;
   document.getElementById('modal-caucao-titulo').textContent='Nova Caução';
-  ['cc-hospede','cc-imovel-interno','cc-imovel-externo','cc-valor','cc-pix-banco','cc-pix-chave','cc-pix-titular','cc-data-devolucao'].forEach(id=>{document.getElementById(id).value='';});
+  ['cc-hospede','cc-imovel-externo','cc-valor','cc-pix-banco','cc-pix-chave','cc-pix-titular','cc-data-devolucao'].forEach(id=>{document.getElementById(id).value='';});
   document.getElementById('cc-status').value='aguardando';
   document.getElementById('cc-forma-pagamento').value='pix';
   toggleCaucaoPix('pix');
@@ -3790,7 +3793,6 @@ function abrirEditarCaucao(id){
   document.getElementById('modal-caucao-titulo').textContent='Editar Caução';
   document.getElementById('cc-hospede').value=c.hospede||'';
   document.getElementById('cc-status').value=c.status||'aguardando';
-  document.getElementById('cc-imovel-interno').value=c.imovelInterno||'';
   document.getElementById('cc-imovel-externo').value=c.imovelExterno||'';
   document.getElementById('cc-valor').value=c.valorCaucao||'';
   document.getElementById('cc-forma-pagamento').value=c.formaPagamento||'pix';
@@ -3822,7 +3824,7 @@ function marcarIrregularidadeCaucao(id){
   if(!targetId){ showToast('Selecione uma caução primeiro.','peach'); return; }
   const c=caucaoItens.find(x=>x.id===targetId); if(!c) return;
   if(!c.manutencaoId){
-    const m={id:Date.now(),status:'solicitacao',pausado:false,origem:'hospede',imovelNome:c.imovelInterno||c.imovelExterno||'',dataSolicitacao:new Date().toISOString().split('T')[0],dataPrazo:'',tipo:'dano',itens:[{desc:'',valor:0}],margemPercent:20,fotos:[],quemPaga:'hospede',fornecedor:{nome:'',contato:'',email:'',pix:''},precisaComprar:false,linksItens:[],ondeEntregar:'',obsCompra:'',pagarFornecedor:false,pagFornecedor:{valor:0,nome:'',email:'',pix:'',cpfCnpj:'',dataPagamento:'',fornCadId:null},repassarHostaway:false,valorPago:0,pagoPor:'hospede',valorGasto:0,obs:'Irregularidade identificada na devolução de caução de '+(c.hospede||'hóspede'),tarefasManut:[],responsavel:'',dataCriacao:new Date().toISOString(),hospede:{nome:c.hospede||'',plataforma:'',codigo:'',checkout:''}};
+    const m={id:Date.now(),status:'solicitacao',pausado:false,origem:'hospede',imovelNome:c.imovelExterno||'',dataSolicitacao:new Date().toISOString().split('T')[0],dataPrazo:'',tipo:'dano',itens:[{desc:'',valor:0}],margemPercent:20,fotos:[],quemPaga:'hospede',fornecedor:{nome:'',contato:'',email:'',pix:''},precisaComprar:false,linksItens:[],ondeEntregar:'',obsCompra:'',pagarFornecedor:false,pagFornecedor:{valor:0,nome:'',email:'',pix:'',cpfCnpj:'',dataPagamento:'',fornCadId:null},repassarHostaway:false,valorPago:0,pagoPor:'hospede',valorGasto:0,obs:'Irregularidade identificada na devolução de caução de '+(c.hospede||'hóspede'),updates:[],tarefasManut:[],responsavel:'',dataCriacao:new Date().toISOString(),hospede:{nome:c.hospede||'',plataforma:'',codigo:'',checkout:''}};
     manutencoes.unshift(m);
     c.manutencaoId=m.id;
     c.irregularidade=true;
@@ -3843,7 +3845,6 @@ function salvarCaucao(){
     id:_caucaoEditId||Date.now(),
     status:document.getElementById('cc-status').value,
     hospede,
-    imovelInterno:document.getElementById('cc-imovel-interno').value.trim(),
     imovelExterno:document.getElementById('cc-imovel-externo').value.trim(),
     valorCaucao:parseFloat(document.getElementById('cc-valor').value)||0,
     formaPagamento,
@@ -3865,10 +3866,11 @@ function salvarCaucao(){
   showToast('Caução salva!','sage');
 }
 
-function deletarCaucaoModal(){
-  if(!_caucaoEditId||!confirm('Apagar esta caução?')) return;
-  caucaoItens=caucaoItens.filter(x=>x.id!==_caucaoEditId);
-  closeModal('modal-caucao');
+function deletarCaucao(id){
+  const targetId = id!=null ? id : _caucaoEditId;
+  if(!targetId || !confirm('Apagar esta caução?')) return;
+  caucaoItens=caucaoItens.filter(x=>x.id!==targetId);
+  if(document.getElementById('modal-caucao').classList.contains('open')) closeModal('modal-caucao');
   if(typeof saveAll==='function') saveAll();
   renderCaucaoKanban();
   showToast('Caução removida.','peach');
@@ -3897,8 +3899,7 @@ function renderCaucaoKanban(){
         const valorADevolver=m?manutSubtotal(m):null;
         return '<div class="card" style="margin-bottom:10px;" onclick="abrirEditarCaucao('+c.id+')">'
         +'<div class="card-body" style="padding:10px 12px;">'
-        +'<div style="font-size:13.5px;font-weight:700;">'+esc(c.imovelInterno||c.imovelExterno||'Imóvel')+'</div>'
-        +(c.imovelExterno?'<div style="font-size:11.5px;color:var(--text3);">'+esc(c.imovelExterno)+'</div>':'')
+        +'<div style="font-size:13.5px;font-weight:700;">'+esc(c.imovelExterno||'Imóvel')+'</div>'
         +'<div style="font-size:12px;margin-top:4px;"><i class="fa-solid fa-user"></i> '+esc(c.hospede||'—')+'</div>'
         +'<div style="font-size:11px;color:var(--text3);">Caução: '+brl(c.valorCaucao)+' · '+(formaLbl[c.formaPagamento]||'—')+'</div>'
         +'<div style="font-size:11px;color:var(--text3);">Devolução prevista: '+(fd(c.dataPrevistaDevolucao)||'—')+'</div>'
@@ -3907,6 +3908,8 @@ function renderCaucaoKanban(){
         +(!c.manutencaoId?'<button onclick="marcarIrregularidadeCaucao('+c.id+')" class="btn btn-sm" title="Marcar irregularidade" style="color:var(--vermelha);"><i class="fa-solid fa-triangle-exclamation"></i></button>':'')
         +(podeVoltar?'<button onclick="moverCaucao('+c.id+',-1)" class="btn btn-sm" title="Voltar etapa"><i class="fa-solid fa-arrow-left"></i></button>':'')
         +(podeAvancar?'<button onclick="moverCaucao('+c.id+',1)" class="btn btn-sm btn-rose" title="Avançar etapa"><i class="fa-solid fa-arrow-right"></i></button>':'')
+        +'<button onclick="abrirEditarCaucao('+c.id+')" class="btn btn-sm" title="Editar"><i class="fa-solid fa-pencil"></i></button>'
+        +'<button onclick="deletarCaucao('+c.id+')" class="btn btn-sm" title="Apagar"><i class="fa-solid fa-trash"></i></button>'
         +'</div></div></div>';
       }).join('')
       +'</div>';
@@ -4298,12 +4301,13 @@ function _mergeManutencoes(base, local, server){
       if(porTs){ out.push(porTs); continue; }
       const merged={...l};
       Object.keys(s).forEach(k=>{
-        if(_MANUT_ARRAY_FIELDS.includes(k)) return; // tratados abaixo, posicionalmente
+        if(_MANUT_ARRAY_FIELDS.includes(k)||k==='updates') return; // tratados abaixo
         const bv = b?JSON.stringify(b[k]):undefined;
         const localMudou = JSON.stringify(l[k])!==bv;
         if(!localMudou) merged[k]=s[k];
       });
       _MANUT_ARRAY_FIELDS.forEach(k=>{ merged[k]=_mergePositional(b&&b[k], l[k], s[k]); });
+      merged.updates=_unionUpdates(l.updates, s.updates); // une por conteúdo (texto+data+autor), não por posição — comentários de dois aparelhos não podem se substituir
       out.push(merged);
     } else if(l){ out.push(l); }
     else if(s){
@@ -6335,7 +6339,7 @@ function manutSubtotal(m){ return (m.itens||[]).reduce(function(s,it){return s+(
 function manutTotalComMargem(m){ const sub=manutSubtotal(m); const margem=parseFloat(m.margemPercent); return sub*(1+((isNaN(margem)?20:margem)/100)); }
 
 function abrirNovaManutencao(){
-  const m={id:Date.now(),status:'solicitacao',pausado:false,origem:'proprietario',imovelNome:'',dataSolicitacao:new Date().toISOString().split('T')[0],dataPrazo:'',tipo:'dano',itens:[{desc:'',valor:0}],margemPercent:20,fotos:[],quemPaga:'proprietario',fornecedor:{nome:'',contato:'',email:'',pix:''},precisaComprar:false,linksItens:[],ondeEntregar:'',obsCompra:'',pagarFornecedor:false,pagFornecedor:{valor:0,nome:'',email:'',pix:'',cpfCnpj:'',dataPagamento:'',fornCadId:null},repassarHostaway:false,valorPago:0,pagoPor:'proprietario',valorGasto:0,obs:'',tarefasManut:[],responsavel:'',dataCriacao:new Date().toISOString()};
+  const m={id:Date.now(),status:'solicitacao',pausado:false,origem:'proprietario',imovelNome:'',dataSolicitacao:new Date().toISOString().split('T')[0],dataPrazo:'',tipo:'dano',itens:[{desc:'',valor:0}],margemPercent:20,fotos:[],quemPaga:'proprietario',fornecedor:{nome:'',contato:'',email:'',pix:''},precisaComprar:false,linksItens:[],ondeEntregar:'',obsCompra:'',pagarFornecedor:false,pagFornecedor:{valor:0,nome:'',email:'',pix:'',cpfCnpj:'',dataPagamento:'',fornCadId:null},repassarHostaway:false,valorPago:0,pagoPor:'proprietario',valorGasto:0,obs:'',updates:[],tarefasManut:[],responsavel:'',dataCriacao:new Date().toISOString()};
   manutencoes.unshift(m); manutAtiva=m.id; manutAba='solicitacao';
   abrirManutModal(m.id); renderManutencaoKanban();
   if(typeof saveAll==='function') saveAll();
@@ -6460,7 +6464,50 @@ function manutAbaSolicitacao(m){
       '<div class="form-group"><label class="form-label">Data de check-out</label><input type="date" class="form-input" value="'+esc(h.checkout||'')+'" onchange="salvarCampoManutNested('+m.id+',\'hospede\',\'checkout\',this.value)"></div></div>'+
       '</div>';})():'')+
     '<div class="form-group"><label class="form-label">Observações</label><textarea class="form-input" rows="3" placeholder="Detalhes da solicitação..." oninput="salvarCampoManut('+m.id+',\'obs\',this.value)">'+esc(m.obs||'')+'</textarea></div>'+
+    _manutUpdatesHtml(m)+
     '</div>';
+}
+
+function _manutUpdatesHtml(m){
+  const updates=m.updates||[];
+  const lista = updates.length===0
+    ? '<div style="text-align:center;padding:14px;color:var(--text3);font-size:13px;">Nenhuma atualização ainda.</div>'
+    : updates.map(function(u,i){
+        return '<div style="padding:8px 0;border-bottom:1px solid var(--border);">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">'+
+        '<span style="font-size:10.5px;color:var(--text3);">'+new Date(u.data).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+(u.autor?' · '+esc(u.autor):'')+'</span>'+
+        '<button onclick="manutRemoverUpdate('+m.id+','+i+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;" title="Remover"><i class="fa-solid fa-xmark"></i></button>'+
+        '</div>'+
+        '<div style="font-size:13px;color:var(--text);white-space:pre-wrap;">'+esc(u.texto)+'</div>'+
+        '</div>';
+      }).reverse().join('');
+  return '<div class="form-group"><label class="form-label">Atualizações</label>'+
+    '<div style="display:flex;gap:8px;margin-bottom:10px;">'+
+    '<textarea id="manut-nova-update-'+m.id+'" class="form-input" rows="2" style="flex:1;resize:none;font-size:13px;" placeholder="Escreva uma atualização..." onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();manutAdicionarUpdate('+m.id+');}"></textarea>'+
+    '<button class="btn btn-rose" onclick="manutAdicionarUpdate('+m.id+')" style="align-self:flex-end;white-space:nowrap;"><i class="fa-solid fa-paper-plane"></i></button>'+
+    '</div>'+
+    '<div style="max-height:220px;overflow-y:auto;">'+lista+'</div>'+
+    '</div>';
+}
+
+function manutAdicionarUpdate(id){
+  const m=manutencoes.find(function(x){return x.id===id;}); if(!m) return;
+  const inp=document.getElementById('manut-nova-update-'+id);
+  const texto=(inp&&inp.value||'').trim();
+  if(!texto) return;
+  if(!m.updates) m.updates=[];
+  m.updates.push({id:Date.now()+Math.floor(Math.random()*1000),texto,data:new Date().toISOString(),autor:_autorAtual()});
+  if(typeof saveAll==='function') saveAll();
+  manutRenderAba(m);
+  showToast('Atualização adicionada!','sage');
+}
+
+function manutRemoverUpdate(id,idx){
+  const m=manutencoes.find(function(x){return x.id===id;}); if(!m||!m.updates) return;
+  const rem=m.updates.splice(idx,1)[0];
+  if(rem&&rem.id!=null) updateTombstones.push({id:rem.id,ts:Date.now()});
+  if(typeof saveAll==='function') saveAll();
+  manutRenderAba(m);
 }
 
 function manutSetOrigem(id,valor){
@@ -7806,7 +7853,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 118;
+const APP_VERSION = 119;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

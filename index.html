@@ -757,6 +757,7 @@ function _validarLogin(){
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
         <select class="form-select" id="pt-filter-status" onchange="renderPlantao()" style="width:auto;padding:6px 10px;font-size:13px;">
           <option value="todos">Todos os status</option>
+          <option value="atrasadas">Atrasadas</option>
           <option value="pendente">Pendente</option>
           <option value="aguardando">Aguardando informações</option>
           <option value="concluido">Concluído</option>
@@ -1320,9 +1321,11 @@ function _validarLogin(){
         </select>
       </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">Imóvel</label>
-      <select class="form-select" id="pt-imovel"><option value="">— Selecione o imóvel —</option></select>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Imóvel</label>
+        <select class="form-select" id="pt-imovel"><option value="">— Selecione o imóvel —</option></select>
+      </div>
+      <div class="form-group"><label class="form-label">Prazo para resolução</label><input type="date" class="form-input" id="pt-prazo"></div>
     </div>
     <div class="form-group">
       <label class="form-label">Situação / Assunto</label>
@@ -1339,6 +1342,16 @@ function _validarLogin(){
         <button class="btn btn-sm" onclick="adicionarUpdatePlantao()"><i class="fa-solid fa-plus"></i></button>
       </div>
       <div id="pt-updates-list"></div>
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:12px;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:8px;">Lembrar-me sobre</div>
+      <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+        <input type="text" id="pt-lembrete-texto" class="form-input" style="flex:1;min-width:160px;" placeholder="O que verificar...">
+        <input type="number" id="pt-lembrete-valor" class="form-input" style="width:70px;" value="1" min="1">
+        <select id="pt-lembrete-unidade" class="form-select" style="width:110px;"><option value="horas">horas</option><option value="minutos">minutos</option></select>
+        <button class="btn btn-sm btn-rose" onclick="plantaoAdicionarLembrete()"><i class="fa-solid fa-clock"></i> Agendar</button>
+      </div>
+      <div id="pt-lembretes-list"></div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="apagarPlantao()" style="color:var(--vermelha);border-color:var(--vermelha);margin-right:auto;"><i class="fa-solid fa-trash"></i> Apagar</button>
@@ -1656,7 +1669,10 @@ function _validarLogin(){
       <div class="form-group"><label class="form-label">Chave Pix</label><input type="text" class="form-input" id="cc-pix-chave"></div>
       <div class="form-group"><label class="form-label">Titular</label><input type="text" class="form-input" id="cc-pix-titular"></div>
     </div>
-    <div class="form-group"><label class="form-label">Data prevista da devolução</label><input type="date" class="form-input" id="cc-data-devolucao"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group"><label class="form-label">Data de check-out</label><input type="date" class="form-input" id="cc-checkout"></div>
+      <div class="form-group"><label class="form-label">Data prevista da devolução</label><input type="date" class="form-input" id="cc-data-devolucao"></div>
+    </div>
     <div id="cc-irregularidade-box" style="display:none;background:var(--bg3);border-radius:var(--r-sm);padding:10px 12px;margin-bottom:14px;">
       <div style="font-size:12px;font-weight:700;color:var(--vermelha);margin-bottom:4px;"><i class="fa-solid fa-triangle-exclamation"></i> Irregularidade identificada</div>
       <div style="font-size:13px;" id="cc-valor-devolver">Valor a cobrar: aguardando avaliação em Manutenção.</div>
@@ -1762,6 +1778,6 @@ function _validarLogin(){
   </div>
 </div>
 
-<script src="js/app.js?v=121"></script>
+<script src="js/app.js?v=122"></script>
 </body>
 </html>

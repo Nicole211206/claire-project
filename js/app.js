@@ -4326,8 +4326,13 @@ function _mergePositional(bArr, lArr, sArr){
 // mesclagem genérica (_mergeById) troca o registro INTEIRO, não campo a
 // campo. Aqui, por manutenção: parte do local e, campo a campo, só adota o
 // servidor onde o local NÃO mudou desde a última sincronização. Os arrays
-// sem id (itens, subtarefas, fotos, links) mesclam por posição.
-const _MANUT_ARRAY_FIELDS = ['itens','tarefasManut','fotos','linksItens','lembretes'];
+// sem id (itens, subtarefas, fotos, links) mesclam por posição — "lembretes"
+// FICA DE FORA dessa lista de propósito: cada lembrete tem id próprio
+// (Date.now()+random, gerado uma única vez na criação), então mescla por
+// união de id (como updates/comentários), não por posição — um lembrete
+// criado num aparelho e outro lembrete criado em outro aparelho, na MESMA
+// posição do array, não pode fazer um sobrescrever o outro.
+const _MANUT_ARRAY_FIELDS = ['itens','tarefasManut','fotos','linksItens'];
 function _mergeManutencoes(base, local, server){
   local  = Array.isArray(local)?local:[];
   server = Array.isArray(server)?server:[];
@@ -4350,13 +4355,14 @@ function _mergeManutencoes(base, local, server){
       if(porTs){ out.push(porTs); continue; }
       const merged={...l};
       Object.keys(s).forEach(k=>{
-        if(_MANUT_ARRAY_FIELDS.includes(k)||k==='updates') return; // tratados abaixo
+        if(_MANUT_ARRAY_FIELDS.includes(k)||k==='updates'||k==='lembretes') return; // tratados abaixo
         const bv = b?JSON.stringify(b[k]):undefined;
         const localMudou = JSON.stringify(l[k])!==bv;
         if(!localMudou) merged[k]=s[k];
       });
       _MANUT_ARRAY_FIELDS.forEach(k=>{ merged[k]=_mergePositional(b&&b[k], l[k], s[k]); });
       merged.updates=_unionUpdates(l.updates, s.updates); // une por conteúdo (texto+data+autor), não por posição — comentários de dois aparelhos não podem se substituir
+      merged.lembretes=_unionPorId(l.lembretes, s.lembretes); // une por id, não por posição — lembrete novo de um aparelho não pode sumir por causa de outro criado na mesma posição no outro aparelho
       out.push(merged);
     } else if(l){ out.push(l); }
     else if(s){
@@ -7992,7 +7998,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 123;
+const APP_VERSION = 124;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

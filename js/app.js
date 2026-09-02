@@ -4182,13 +4182,17 @@ function _unionUpdates(a, b){
 // União simples por id, sem tombstone — usada pra "lembretes" (menor risco que
 // updates: se um dispositivo bem defasado ressuscitar um lembrete já apagado,
 // o pior caso é um aviso perdido reaparecer, não um dado financeiro voltando).
-function _unionPorId(a,b){
-  a=Array.isArray(a)?a:[]; b=Array.isArray(b)?b:[];
-  const map=new Map();
-  [...a,...b].forEach(function(x){ if(x&&x.id!=null) map.set(x.id,x); });
-  return Array.from(map.values());
-}
-function _mergeItemUpdates(winner, other){
+// Se ambos os lados têm o mesmo item e ambos têm updates/lembretes, devolve
+// uma cópia do item vencedor com updates/lembretes MESCLADOS (nunca se perdem).
+// "base" (o item como estava na última sincronização confirmada deste
+// aparelho) é o que permite mesclar lembretes por 3-vias de verdade
+// (_mergeById) em vez de união cega: sem base, apagar um lembrete nunca
+// "pega" — o próprio envio relê o servidor antes de mandar e mescla local×
+// servidor, e nesse instante o servidor ainda tem a versão antiga (é
+// exatamente o que este save está tentando substituir); união cega sempre
+// trazia ela de volta, mesmo sem nenhum outro aparelho envolvido (bug
+// confirmado em teste manual: apagar um lembrete nunca ficava apagado).
+function _mergeItemUpdates(winner, other, base){
   if(!winner || !other) return winner;
   let out=winner;
   if(Array.isArray(winner.updates) && Array.isArray(other.updates)){
@@ -4196,8 +4200,8 @@ function _mergeItemUpdates(winner, other){
     if(!(uni.length===winner.updates.length && JSON.stringify(uni)===JSON.stringify(winner.updates))) out={...out, updates:uni};
   }
   if(Array.isArray(winner.lembretes) && Array.isArray(other.lembretes)){
-    const uni=_unionPorId(winner.lembretes, other.lembretes);
-    if(!(uni.length===winner.lembretes.length && JSON.stringify(uni)===JSON.stringify(winner.lembretes))) out={...out, lembretes:uni};
+    const merged=_mergeById(base&&base.lembretes, winner.lembretes, other.lembretes);
+    if(!(merged.length===winner.lembretes.length && JSON.stringify(merged)===JSON.stringify(winner.lembretes))) out={...out, lembretes:merged};
   }
   return out;
 }
@@ -4223,17 +4227,17 @@ function _tsVence(a, b){
 function _mergeById(base, local, server){
   server = Array.isArray(server)?server:[];
   local  = Array.isArray(local)?local:[];
-  const bMap=new Map((Array.isArray(base)?base:[]).map(o=>[o.id, JSON.stringify(o)]));
+  const bMap=new Map((Array.isArray(base)?base:[]).map(o=>[o.id, o]));
   const sMap=new Map(server.map(o=>[o.id,o]));
   const lMap=new Map(local.map(o=>[o.id,o]));
   const decide=(id)=>{
     const inS=sMap.has(id), inL=lMap.has(id), inB=bMap.has(id);
-    const s=sMap.get(id), l=lMap.get(id), bJson=bMap.get(id);
+    const s=sMap.get(id), l=lMap.get(id), b=bMap.get(id), bJson=inB?JSON.stringify(b):undefined;
     if(inL && inS){
       const porTs=_tsVence(l,s);
-      if(porTs) return _mergeItemUpdates(porTs, porTs===l?s:l);
+      if(porTs) return _mergeItemUpdates(porTs, porTs===l?s:l, b);
       const localChanged = !inB || JSON.stringify(l)!==bJson;
-      return _mergeItemUpdates(localChanged ? l : s, localChanged ? s : l);
+      return _mergeItemUpdates(localChanged ? l : s, localChanged ? s : l, b);
     }
     if(inL && !inS){ if(!inB) return l; return (JSON.stringify(l)!==bJson) ? l : undefined; } // server apagou
     if(!inL && inS){ if(!inB) return s; return (JSON.stringify(s)!==bJson) ? s : undefined; } // local apagou
@@ -4362,7 +4366,16 @@ function _mergeManutencoes(base, local, server){
       });
       _MANUT_ARRAY_FIELDS.forEach(k=>{ merged[k]=_mergePositional(b&&b[k], l[k], s[k]); });
       merged.updates=_unionUpdates(l.updates, s.updates); // une por conteúdo (texto+data+autor), não por posição — comentários de dois aparelhos não podem se substituir
-      merged.lembretes=_unionPorId(l.lembretes, s.lembretes); // une por id, não por posição — lembrete novo de um aparelho não pode sumir por causa de outro criado na mesma posição no outro aparelho
+      // 3-vias de verdade (_mergeById), não união cega (_unionPorId): união sem
+      // base reaparecia um lembrete apagado a cada save, porque o PRÓPRIO envio
+      // relê o servidor antes de mandar e mescla local×servidor — nesse momento
+      // o servidor ainda tem a versão antiga (é exatamente o que este save
+      // está tentando substituir) e a união sempre trazia ela de volta, mesmo
+      // sem nenhum outro aparelho envolvido (bug confirmado em teste manual:
+      // apagar um lembrete nunca "pegava"). _mergeById usa a base pra
+      // distinguir "servidor não mudou desde que este aparelho apagou" (respeita
+      // a exclusão) de "outro aparelho criou um lembrete novo" (nunca some).
+      merged.lembretes=_mergeById(b&&b.lembretes, l.lembretes, s.lembretes);
       out.push(merged);
     } else if(l){ out.push(l); }
     else if(s){
@@ -7998,7 +8011,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 124;
+const APP_VERSION = 125;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

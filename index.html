@@ -153,8 +153,7 @@ function _validarLogin(){
     <button class="nav-item" onclick="showPanel('performance',this)"><i class="fa-solid fa-chart-column"></i> Performance</button>
     <button class="nav-item" onclick="showPanel('avaliacoes',this)"><i class="fa-solid fa-star"></i> Acompanhamento</button>
     <button class="nav-item" onclick="showPanel('tasks',this)"><i class="fa-solid fa-list-check"></i> Tarefas <span class="nav-badge" id="tasks-badge">0</span></button>
-    <button class="nav-item" onclick="showPanel('calendar',this)"><i class="fa-regular fa-calendar-days"></i> Calendário</button>
-    <button class="nav-item" onclick="showPanel('ai',this)"><i class="fa-solid fa-wand-magic-sparkles"></i> Assistente IA</button>
+    <button class="nav-item" onclick="showPanel('limpezacaucao',this)"><i class="fa-solid fa-broom"></i> Limpeza &amp; Caução</button>
     <div class="nav-section">Equipe</div>
     <button class="nav-item" id="nav-equipe" onclick="showPanel('equipe',this)"><i class="fa-solid fa-users"></i> Equipe</button>
     <button class="nav-item" onclick="showPanel('compras',this)"><i class="fa-solid fa-cart-shopping"></i> Compras</button>
@@ -165,7 +164,6 @@ function _validarLogin(){
     <button class="nav-item" onclick="showPanel('projetos',this)"><i class="fa-solid fa-folder-open"></i> Projetos</button>
     <button class="nav-item" onclick="showPanel('plantao',this)"><i class="fa-solid fa-arrow-right-arrow-left"></i> Passagem de Turno</button>
     <button class="nav-item" id="nav-manual" onclick="showPanel('manual',this)"><i class="fa-solid fa-book-open"></i> Manual</button>
-    <button class="nav-item" onclick="showPanel('legado',this)"><i class="fa-solid fa-medal"></i> Conquistas</button>
     <div class="nav-section" id="navsec-admin">Administração</div>
     <button class="nav-item" id="nav-usuarios" onclick="showPanelUsuarios(this)"><i class="fa-solid fa-users-gear"></i> Usuários</button>
   </div>
@@ -227,25 +225,13 @@ function _validarLogin(){
           <div class="metric-delta neutral">das atendentes</div>
         </div>
       </div>
-      <div class="two-col" style="margin-bottom:18px;">
-        <div class="card">
-          <div class="card-header">
-            <div class="metric-icon rose" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-solid fa-chart-pie"></i></div>
-            <div><div class="card-title">KPIs do Mês</div><div class="card-sub">Atingimento ponderado</div></div>
-            <button class="card-action" onclick="showPanel('kpis',document.querySelectorAll('.nav-item')[1])">Ver detalhes →</button>
-          </div>
-          <div class="card-body" id="ov-kpi-list"><p style="color:var(--text3);font-size:13px;text-align:center;padding:12px 0;">Preencha os KPIs para ver o resumo.</p></div>
+      <div class="card" style="margin-bottom:18px;">
+        <div class="card-header">
+          <div class="metric-icon rose" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-solid fa-chart-pie"></i></div>
+          <div><div class="card-title">KPIs do Mês</div><div class="card-sub">Atingimento ponderado</div></div>
+          <button class="card-action" onclick="showPanel('kpis',document.querySelectorAll('.nav-item')[1])">Ver detalhes →</button>
         </div>
-        <div class="card">
-          <div class="card-header">
-            <div class="metric-icon peach" style="width:26px;height:26px;font-size:12px;margin-bottom:0;flex-shrink:0;"><i class="fa-regular fa-calendar"></i></div>
-            <div><div class="card-title">Agenda de Hoje</div></div>
-            <button class="card-action" onclick="loadCalendarEvents();showPanel('calendar',document.querySelectorAll('.nav-item')[3])">Sincronizar →</button>
-          </div>
-          <div class="card-body">
-            <div id="ov-agenda-body" style="font-size:13px;color:var(--text3);text-align:center;padding:12px 0;">Carregando agenda...</div>
-          </div>
-        </div>
+        <div class="card-body" id="ov-kpi-list"><p style="color:var(--text3);font-size:13px;text-align:center;padding:12px 0;">Preencha os KPIs para ver o resumo.</p></div>
       </div>
       <div class="card">
         <div class="card-header">
@@ -433,71 +419,32 @@ function _validarLogin(){
       <div id="task-kanban-view" style="display:none;"><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;" id="kanban-board"></div></div>
     </div>
 
-    <!-- ── CALENDÁRIO ── -->
-    <div class="panel" id="panel-calendar">
-      <div style="display:grid;grid-template-columns:1fr 300px;gap:18px;">
+    <!-- ── LIMPEZA & CAUÇÃO ── -->
+    <div class="panel" id="panel-limpezacaucao">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
         <div>
-          <div class="card" style="margin-bottom:14px;">
-            <div class="card-body">
-              <div style="display:flex;gap:6px;margin-bottom:10px;">
-                <button class="tab-btn active" id="calview-mes" onclick="setCalView('mes',this)">Mês</button>
-                <button class="tab-btn" id="calview-semana" onclick="setCalView('semana',this)">Semana</button>
-              </div>
-              <div id="cal-mes-view">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-                  <div style="font-family:var(--font-display);font-size:16px;font-weight:600;" id="cal-label">Maio 2026</div>
-                  <div style="display:flex;gap:6px;"><button class="btn btn-sm" onclick="changeMonth(-1)"><i class="fa-solid fa-chevron-left"></i></button><button class="btn btn-sm" onclick="changeMonth(1)"><i class="fa-solid fa-chevron-right"></i></button></div>
-                </div>
-                <div class="cal-grid" id="cal-grid"></div>
-              </div>
-              <div id="cal-semana-view" style="display:none;"></div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-header">
-              <i class="fa-brands fa-google" style="color:#4285F4;font-size:14px;"></i>
-              <div><div class="card-title">Google Agenda</div><div class="card-sub" id="gcal-sub" style="color:var(--sage);">Conectado</div></div>
-              <button class="btn btn-sm" onclick="loadCalendarEvents()"><i class="fa-solid fa-rotate"></i> Sincronizar</button>
-            </div>
-            <div class="card-body" id="gcal-body">
-              <div id="gcal-events-list" style="font-size:13px;color:var(--text3);text-align:center;padding:6px 0;">
-                <button class="btn btn-sm" onclick="loadCalendarEvents()"><i class="fa-solid fa-rotate"></i> Carregar eventos</button>
-              </div>
-            </div>
-          </div>
+          <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Limpeza &amp; Caução</h2>
+          <p style="color:var(--text3);font-size:13px;margin-top:2px;">Controle de solicitação de limpeza e devolução de caução</p>
         </div>
-        <div class="card"><div class="card-header"><div class="card-title">Agenda</div></div><div id="agenda-list" style="max-height:520px;overflow-y:auto;"></div></div>
+        <div id="lc-actions-limpeza" style="display:flex;gap:8px;">
+          <button class="btn btn-rose" onclick="abrirNovaLimpeza()"><i class="fa-solid fa-plus"></i> Nova Limpeza</button>
+        </div>
+        <div id="lc-actions-caucao" style="display:none;gap:8px;">
+          <button class="btn btn-rose" onclick="abrirNovaCaucao()"><i class="fa-solid fa-plus"></i> Nova Caução</button>
+        </div>
       </div>
-    </div>
 
-    <!-- ── ASSISTENTE IA ── -->
-    <div class="panel" id="panel-ai">
-      <div class="chat-wrap">
-        <div class="chat-head">
-          <div class="ai-orb"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
-          <div><div style="font-family:var(--font-display);font-size:14px;font-weight:600;">Claire</div><div class="ai-status"><div class="status-dot"></div> Pronto para ajudar</div></div>
-          <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
-            <button class="btn btn-sm" onclick="clearChat()"><i class="fa-solid fa-rotate"></i> Limpar</button>
-          </div>
-        </div>
-        <div class="chat-msgs" id="chat-messages">
-          <div class="msg ai">
-            <div class="avatar av-rose" style="width:28px;height:28px;font-size:11px;flex-shrink:0;">C</div>
-            <div><div class="msg-bub">Olá, Nicole! 🌸 Sou Claire, sua assistente pessoal da WeCare. Posso analisar seus KPIs, calcular seu salário estimado, redigir e-mails e muito mais. Como posso te ajudar hoje?</div><div class="msg-time">Agora</div></div>
-          </div>
-        </div>
-        <div class="chat-footer">
-          <div class="quick-chips">
-            <button class="chip" onclick="sendQuick('Analise meus KPIs e diga em qual bandeira estou')">📊 Analisar KPIs</button>
-            <button class="chip" onclick="sendQuick('Calcule meu salário estimado deste mês')">💰 Calcular salário</button>
-            <button class="chip" onclick="sendQuick('Redija um e-mail de feedback para minha equipe')">✉️ E-mail equipe</button>
-            <button class="chip" onclick="sendQuick('Quais são as tarefas mais urgentes?')">✅ Prioridades</button>
-          </div>
-          <div class="chat-input-row">
-            <textarea class="chat-textarea" id="chat-input" placeholder="Pergunte qualquer coisa... (Enter para enviar)" rows="1" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
-            <button class="send-btn" id="send-btn" onclick="sendMsg()"><i class="fa-solid fa-paper-plane"></i></button>
-          </div>
-        </div>
+      <div class="tab-bar" style="margin-bottom:16px;">
+        <button class="tab-btn lc-tab-btn active" onclick="switchLCTab('limpeza',this)">Limpeza</button>
+        <button class="tab-btn lc-tab-btn" onclick="switchLCTab('caucao',this)">Caução</button>
+      </div>
+
+      <div id="lc-content-limpeza">
+        <div id="limpeza-kanban" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;"></div>
+      </div>
+
+      <div id="lc-content-caucao" style="display:none;">
+        <div id="caucao-kanban" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;"></div>
       </div>
     </div>
 
@@ -586,7 +533,6 @@ function _validarLogin(){
             <div id="doc-actions" style="gap:6px;display:none;">
               <button class="btn btn-sm" id="open-drive-btn" onclick="openInDrive()" title="Abrir no Drive"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
               <button class="btn btn-sm" onclick="openEditModal()" title="Editar com IA"><i class="fa-solid fa-pencil"></i> Editar</button>
-              <button class="btn btn-sm btn-rose" onclick="summarizeWithAI()" title="Resumir com IA"><i class="fa-solid fa-wand-magic-sparkles"></i> Resumir</button>
             </div>
           </div>
           <div id="doc-view-body" style="padding:16px 18px;min-height:360px;max-height:460px;overflow-y:auto;">
@@ -811,6 +757,7 @@ function _validarLogin(){
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
         <select class="form-select" id="pt-filter-status" onchange="renderPlantao()" style="width:auto;padding:6px 10px;font-size:13px;">
           <option value="todos">Todos os status</option>
+          <option value="atrasadas">Atrasadas</option>
           <option value="pendente">Pendente</option>
           <option value="aguardando">Aguardando informações</option>
           <option value="concluido">Concluído</option>
@@ -819,27 +766,6 @@ function _validarLogin(){
         <button class="btn btn-sm" id="pt-btn-concluidas" onclick="togglePlantaoConcluidas()" style="padding:6px 12px;font-size:13px;"><i class="fa-solid fa-check-double"></i> Ver concluídas</button>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px;" id="plantao-lista"></div>
-    </div>
-
-    <!-- ── MEU LEGADO ── -->
-    <div class="panel" id="panel-legado">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
-        <div>
-          <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Conquistas</h2>
-          <p style="color:var(--text3);font-size:13px;margin-top:2px;">Seus feitos e impactos reais na jornada WeCare</p>
-        </div>
-        <button class="btn btn-rose" onclick="abrirNovaConquista()"><i class="fa-solid fa-plus"></i> Nova Conquista</button>
-      </div>
-      <div id="legado-resumo" style="margin-bottom:18px;"></div>
-      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;" id="legado-filtros">
-        <button class="tab-btn active" onclick="filtrarLegado('',this)">Todos</button>
-        <button class="tab-btn" onclick="filtrarLegado('financeiro',this)">💰 Financeiro</button>
-        <button class="tab-btn" onclick="filtrarLegado('tecnologia',this)">⚙️ Tecnologia</button>
-        <button class="tab-btn" onclick="filtrarLegado('processo',this)">📋 Processo</button>
-        <button class="tab-btn" onclick="filtrarLegado('equipe',this)">🤝 Equipe</button>
-        <button class="tab-btn" onclick="filtrarLegado('produto',this)">🏠 Produto</button>
-      </div>
-      <div id="legado-lista"></div>
     </div>
 
     <!-- ── USUÁRIOS (ADMIN) ── -->
@@ -946,11 +872,6 @@ function _validarLogin(){
     <div id="t-recorr-detail" style="display:none;background:var(--bg3);border-radius:var(--r-sm);padding:10px 12px;font-size:12.5px;color:var(--text2);margin-bottom:4px;">
       <span id="t-recorr-preview"></span>
     </div>
-    <!-- Google Agenda -->
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
-      <input type="checkbox" id="t-gcal" style="width:15px;height:15px;">
-      <label for="t-gcal" style="font-size:13px;cursor:pointer;"><i class="fa-brands fa-google" style="color:#4285F4;"></i> Criar também no Google Agenda</label>
-    </div>
     <div class="modal-footer"><button class="btn" onclick="closeModal('modal-task')">Cancelar</button><button class="btn btn-rose" onclick="addTask()"><i class="fa-solid fa-plus"></i> Adicionar</button></div>
   </div>
 </div>
@@ -1004,8 +925,8 @@ function _validarLogin(){
     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin-bottom:8px;">Perfil</div>
     <div class="form-group"><label class="form-label">Seu nome</label><input type="text" class="form-input" id="s-name" placeholder="Nicole"></div>
 
-    <!-- Assistente IA -->
-    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin:14px 0 8px;">Assistente IA</div>
+    <!-- IA (usada em "Editar com IA" no Google Drive) -->
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin:14px 0 8px;">IA (edição de documentos)</div>
     <div class="form-group">
       <label class="form-label">Provedor de IA</label>
       <select class="form-select" id="s-ai-provider" onchange="toggleAIProvider(this.value)">
@@ -1025,7 +946,7 @@ function _validarLogin(){
     </div>
 
     <!-- Google -->
-    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin:14px 0 8px;">Google (Drive · Agenda)</div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);margin:14px 0 8px;">Google (Drive)</div>
     <div class="form-group">
       <label class="form-label">Google Client ID</label>
       <input type="text" class="form-input" id="s-gclientid" placeholder="000000000000-xxxxxxxx.apps.googleusercontent.com">
@@ -1400,9 +1321,11 @@ function _validarLogin(){
         </select>
       </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">Imóvel</label>
-      <select class="form-select" id="pt-imovel"><option value="">— Selecione o imóvel —</option></select>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Imóvel</label>
+        <select class="form-select" id="pt-imovel"><option value="">— Selecione o imóvel —</option></select>
+      </div>
+      <div class="form-group"><label class="form-label">Prazo para resolução</label><input type="date" class="form-input" id="pt-prazo"></div>
     </div>
     <div class="form-group">
       <label class="form-label">Situação / Assunto</label>
@@ -1419,6 +1342,16 @@ function _validarLogin(){
         <button class="btn btn-sm" onclick="adicionarUpdatePlantao()"><i class="fa-solid fa-plus"></i></button>
       </div>
       <div id="pt-updates-list"></div>
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:12px;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:8px;">Lembrar-me sobre</div>
+      <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+        <input type="text" id="pt-lembrete-texto" class="form-input" style="flex:1;min-width:160px;" placeholder="O que verificar...">
+        <input type="number" id="pt-lembrete-valor" class="form-input" style="width:70px;" value="1" min="1">
+        <select id="pt-lembrete-unidade" class="form-select" style="width:110px;"><option value="horas">horas</option><option value="minutos">minutos</option></select>
+        <button class="btn btn-sm btn-rose" onclick="plantaoAdicionarLembrete()"><i class="fa-solid fa-clock"></i> Agendar</button>
+      </div>
+      <div id="pt-lembretes-list"></div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="apagarPlantao()" style="color:var(--vermelha);border-color:var(--vermelha);margin-right:auto;"><i class="fa-solid fa-trash"></i> Apagar</button>
@@ -1668,42 +1601,87 @@ function _validarLogin(){
   </div>
 </div>
 <!-- Modal: Superhost -->
-<!-- Modal Conquistas -->
-<div class="modal-overlay" id="modal-conquista">
-  <div class="modal" style="max-width:520px;">
-    <h3 class="modal-title" id="modal-conquista-titulo">Nova Conquista</h3>
-    <div class="form-group">
-      <label class="form-label">Título *</label>
-      <input type="text" class="form-input" id="cq-titulo" placeholder="Ex: Implementação do Booking">
-    </div>
+<!-- Modal Limpeza -->
+<div class="modal-overlay" id="modal-limpeza">
+  <div class="modal" style="max-width:560px;">
+    <h3 class="modal-title" id="modal-limpeza-titulo">Nova Limpeza</h3>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-      <div class="form-group">
-        <label class="form-label">Data *</label>
-        <input type="date" class="form-input" id="cq-data">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Categoria</label>
-        <select class="form-select" id="cq-categoria">
-          <option value="financeiro">💰 Financeiro</option>
-          <option value="tecnologia">⚙️ Tecnologia</option>
-          <option value="processo">📋 Processo</option>
-          <option value="equipe">🤝 Equipe</option>
-          <option value="produto">🏠 Produto</option>
+      <div class="form-group"><label class="form-label">Hóspede</label><input type="text" class="form-input" id="lz-hospede" placeholder="Nome do hóspede"></div>
+      <div class="form-group"><label class="form-label">Status</label>
+        <select class="form-select" id="lz-status">
+          <option value="a_solicitar">A Solicitar</option>
+          <option value="solicitado">Solicitado</option>
+          <option value="realizada">Realizada</option>
         </select>
       </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">Impacto</label>
-      <input type="text" class="form-input" id="cq-impacto" placeholder="Ex: R$ 19.800 recuperados · +15% de receita · -2h/dia de trabalho manual">
+    <div class="form-group"><label class="form-label">Imóvel (nome externo)</label><input type="text" class="form-input" id="lz-imovel-externo" placeholder="Nome no Airbnb/Booking"></div>
+    <div class="form-group"><label class="form-label">Endereço</label><input type="text" class="form-input" id="lz-endereco" placeholder="Endereço do imóvel"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group"><label class="form-label">Responsável pela limpeza</label><input type="text" class="form-input" id="lz-responsavel" placeholder="Nome"></div>
+      <div class="form-group"><label class="form-label">Grupo de WhatsApp (link)</label><input type="text" class="form-input" id="lz-grupo-wpp" placeholder="https://chat.whatsapp.com/..."></div>
     </div>
-    <div class="form-group">
-      <label class="form-label">Descrição</label>
-      <textarea class="form-input" id="cq-descricao" rows="4" placeholder="Conte o que aconteceu, qual era o problema e como você resolveu..."></textarea>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group"><label class="form-label">Check-in</label><input type="date" class="form-input" id="lz-checkin"></div>
+      <div class="form-group"><label class="form-label">Check-out</label><input type="date" class="form-input" id="lz-checkout"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group"><label class="form-label">Data da limpeza</label><input type="date" class="form-input" id="lz-data-limpeza"></div>
+      <div class="form-group"><label class="form-label">Hora da limpeza</label><input type="time" class="form-input" id="lz-hora-limpeza"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Observações</label><textarea class="form-input" id="lz-obs" rows="2"></textarea></div>
+    <div class="modal-footer">
+      <button class="btn" id="lz-btn-apagar" onclick="deletarLimpeza()" style="margin-right:auto;display:none;"><i class="fa-solid fa-trash"></i> Apagar</button>
+      <button class="btn" onclick="closeModal('modal-limpeza')">Cancelar</button>
+      <button class="btn btn-rose" onclick="salvarLimpeza()"><i class="fa-solid fa-check"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Caução -->
+<div class="modal-overlay" id="modal-caucao">
+  <div class="modal" style="max-width:560px;">
+    <h3 class="modal-title" id="modal-caucao-titulo">Nova Caução</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group"><label class="form-label">Hóspede</label><input type="text" class="form-input" id="cc-hospede" placeholder="Nome do hóspede"></div>
+      <div class="form-group"><label class="form-label">Status</label>
+        <select class="form-select" id="cc-status">
+          <option value="aguardando">Aguardando Devolução</option>
+          <option value="analise">Em Análise (Irregularidade)</option>
+          <option value="devolvido">Devolvido</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label">Imóvel (nome externo)</label><input type="text" class="form-input" id="cc-imovel-externo" placeholder="Nome no Airbnb/Booking"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group"><label class="form-label">Valor do caução (R$)</label><input type="number" class="form-input" id="cc-valor" placeholder="0,00"></div>
+      <div class="form-group"><label class="form-label">Forma de pagamento</label>
+        <select class="form-select" id="cc-forma-pagamento" onchange="toggleCaucaoPix(this.value)">
+          <option value="pix">Pix</option>
+          <option value="cartao">Cartão</option>
+          <option value="dinheiro">Dinheiro</option>
+          <option value="outro">Outro</option>
+        </select>
+      </div>
+    </div>
+    <div id="cc-pix-group" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+      <div class="form-group"><label class="form-label">Banco</label><input type="text" class="form-input" id="cc-pix-banco"></div>
+      <div class="form-group"><label class="form-label">Chave Pix</label><input type="text" class="form-input" id="cc-pix-chave"></div>
+      <div class="form-group"><label class="form-label">Titular</label><input type="text" class="form-input" id="cc-pix-titular"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group"><label class="form-label">Data de check-out</label><input type="date" class="form-input" id="cc-checkout"></div>
+      <div class="form-group"><label class="form-label">Data prevista da devolução</label><input type="date" class="form-input" id="cc-data-devolucao"></div>
+    </div>
+    <div id="cc-irregularidade-box" style="display:none;background:var(--bg3);border-radius:var(--r-sm);padding:10px 12px;margin-bottom:14px;">
+      <div style="font-size:12px;font-weight:700;color:var(--vermelha);margin-bottom:4px;"><i class="fa-solid fa-triangle-exclamation"></i> Irregularidade identificada</div>
+      <div style="font-size:13px;" id="cc-valor-devolver">Valor a cobrar: aguardando avaliação em Manutenção.</div>
     </div>
     <div class="modal-footer">
-      <button class="btn" id="cq-btn-apagar" onclick="excluirConquistaModal()" style="margin-right:auto;display:none;"><i class="fa-solid fa-trash"></i> Apagar</button>
-      <button class="btn" onclick="closeModal('modal-conquista')">Cancelar</button>
-      <button class="btn btn-rose" onclick="salvarConquista()"><i class="fa-solid fa-check"></i> Salvar</button>
+      <button class="btn" id="cc-btn-irregularidade" onclick="marcarIrregularidadeCaucao()" style="margin-right:auto;"><i class="fa-solid fa-triangle-exclamation"></i> Irregularidade</button>
+      <button class="btn" id="cc-btn-apagar" onclick="deletarCaucao()" style="display:none;"><i class="fa-solid fa-trash"></i> Apagar</button>
+      <button class="btn" onclick="closeModal('modal-caucao')">Cancelar</button>
+      <button class="btn btn-rose" onclick="salvarCaucao()"><i class="fa-solid fa-check"></i> Salvar</button>
     </div>
   </div>
 </div>
@@ -1800,6 +1778,6 @@ function _validarLogin(){
   </div>
 </div>
 
-<script src="js/app.js?v=116"></script>
+<script src="js/app.js?v=125"></script>
 </body>
 </html>

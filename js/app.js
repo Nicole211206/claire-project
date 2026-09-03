@@ -4254,8 +4254,10 @@ function _mergeById(base, local, server){
 // a última a enviar apagava a mudança da outra ("a tarefa volta"). Aqui:
 //  • une os membros por att.id (nenhum membro some);
 //  • em cada membro, mescla os campos por 3-vias (mudou no local → local; senão → servidor);
-//  • mescla as demandas POR POSIÇÃO em 3-vias (mudou no local → local; senão → servidor)
-//    e o resultado tem o comprimento do MAIOR lado (nunca encolhe → nada é apagado).
+//  • mescla as demandas POR POSIÇÃO em 3-vias (mudou no local → local; senão → servidor),
+//    e uma posição que só existe de um lado só é mantida se o outro lado NÃO
+//    apagou de propósito (senão o item apagado voltava — mesmo bug do
+//    _mergePositional, corrigido aqui do mesmo jeito).
 function _mergeAtts(base, local, server){
   local  = Array.isArray(local)?local:[];
   server = Array.isArray(server)?server:[];
@@ -4270,8 +4272,14 @@ function _mergeAtts(base, local, server){
     const n=Math.max(lD.length,sD.length); const out=[];
     for(let i=0;i<n;i++){
       const b=bD[i], l=lD[i], s=sD[i];
-      if(l===undefined){ out.push(s); continue; }   // só no servidor → mantém
-      if(s===undefined){ out.push(l); continue; }   // só no local → mantém
+      if(l===undefined){
+        if(b!==undefined && JSON.stringify(s)===JSON.stringify(b)) continue; // local apagou de propósito
+        out.push(s); continue;   // só no servidor → mantém
+      }
+      if(s===undefined){
+        if(b!==undefined && JSON.stringify(l)===JSON.stringify(b)) continue; // servidor apagou de propósito
+        out.push(l); continue;   // só no local → mantém
+      }
       const bv = b===undefined?undefined:JSON.stringify(b);
       const localMudou = JSON.stringify(l)!==bv;
       out.push(_mergeItemUpdates(localMudou ? l : s, localMudou ? s : l)); // local mexeu → local; senão → servidor; comentários unidos
@@ -4308,16 +4316,28 @@ function _mergeAtts(base, local, server){
   return out;
 }
 // Mescla posicional 3-vias para arrays SEM id próprio (itens de manutenção,
-// subtarefas, fotos, links): por posição, se o local mudou em relação à base
-// mantém o local, senão adota o servidor. Posições que só existem de um lado
-// são preservadas (nunca encolhe).
+// subtarefas, fotos, links; camas/custos/plataformas do onboarding): por
+// posição, se o local mudou em relação à base mantém o local, senão adota o
+// servidor. Antes, uma posição que só existia de um lado era SEMPRE mantida
+// ("nunca encolhe") — então apagar um item no meio do array (o resto desliza
+// uma posição pra trás) fazia o item apagado reaparecer (às vezes até
+// duplicado) assim que o lado que ainda não tinha recebido a exclusão
+// sincronizasse. Aqui, mesma regra de tombstone das outras mesclagens: se a
+// posição já existia na base e o OUTRO lado não mudou o valor dela desde o
+// último sync, é porque este lado apagou de propósito — não ressuscita.
 function _mergePositional(bArr, lArr, sArr){
   bArr=Array.isArray(bArr)?bArr:[]; lArr=Array.isArray(lArr)?lArr:[]; sArr=Array.isArray(sArr)?sArr:[];
   const n=Math.max(lArr.length,sArr.length); const out=[];
   for(let i=0;i<n;i++){
     const b=bArr[i], l=lArr[i], s=sArr[i];
-    if(l===undefined){ out.push(s); continue; }
-    if(s===undefined){ out.push(l); continue; }
+    if(l===undefined){
+      if(b!==undefined && JSON.stringify(s)===JSON.stringify(b)) continue; // local apagou de propósito
+      out.push(s); continue;
+    }
+    if(s===undefined){
+      if(b!==undefined && JSON.stringify(l)===JSON.stringify(b)) continue; // servidor apagou de propósito
+      out.push(l); continue;
+    }
     const bv = b===undefined?undefined:JSON.stringify(b);
     const localMudou = JSON.stringify(l)!==bv;
     out.push(localMudou ? l : s);

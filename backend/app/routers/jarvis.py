@@ -250,6 +250,8 @@ def create_manutencao(body: dict = Body(...), db: Session = Depends(get_db)):
         "tarefasManut": [],
         "responsavel": "",
         "dataCriacao": iso_now(),
+        # quem criou (nome do usuário do onboarding) — aparece no card: "Criado por X · data/hora"
+        "criadoPor": body.get("criadoPor") or "",
     }
     manutencoes.insert(0, m)
     state["nx_manutencoes"] = manutencoes

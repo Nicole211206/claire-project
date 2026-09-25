@@ -3855,7 +3855,7 @@ function marcarIrregularidadeCaucao(id){
   if(!targetId){ showToast('Selecione uma caução primeiro.','peach'); return; }
   const c=caucaoItens.find(x=>x.id===targetId); if(!c) return;
   if(!c.manutencaoId){
-    const m={id:Date.now(),status:'solicitacao',pausado:false,origem:'hospede',imovelNome:c.imovelExterno||'',dataSolicitacao:new Date().toISOString().split('T')[0],dataPrazo:'',tipo:'dano',itens:[{desc:'',valor:0}],margemPercent:20,fotos:[],quemPaga:'hospede',fornecedor:{nome:'',contato:'',email:'',pix:''},precisaComprar:false,linksItens:[],ondeEntregar:'',obsCompra:'',pagarFornecedor:false,pagFornecedor:{valor:0,nome:'',email:'',pix:'',cpfCnpj:'',dataPagamento:'',fornCadId:null},repassarHostaway:false,valorPago:0,pagoPor:'hospede',valorGasto:0,obs:'Irregularidade identificada na devolução de caução de '+(c.hospede||'hóspede'),updates:[],lembretes:[],tarefasManut:[],responsavel:'',dataCriacao:new Date().toISOString(),hospede:{nome:c.hospede||'',plataforma:'',codigo:'',checkout:''}};
+    const m={id:Date.now(),status:'solicitacao',pausado:false,origem:'hospede',imovelNome:c.imovelExterno||'',dataSolicitacao:new Date().toISOString().split('T')[0],dataPrazo:'',tipo:'dano',itens:[{desc:'',valor:0}],margemPercent:20,fotos:[],quemPaga:'hospede',fornecedor:{nome:'',contato:'',email:'',pix:''},precisaComprar:false,linksItens:[],ondeEntregar:'',obsCompra:'',pagarFornecedor:false,pagFornecedor:{valor:0,nome:'',email:'',pix:'',cpfCnpj:'',dataPagamento:'',fornCadId:null},repassarHostaway:false,valorPago:0,pagoPor:'hospede',valorGasto:0,obs:'Irregularidade identificada na devolução de caução de '+(c.hospede||'hóspede'),updates:[],lembretes:[],tarefasManut:[],responsavel:'',dataCriacao:new Date().toISOString(),criadoPor:_manutCriadoPorAtual(),hospede:{nome:c.hospede||'',plataforma:'',codigo:'',checkout:''}};
     manutencoes.unshift(m);
     c.manutencaoId=m.id;
     c.irregularidade=true;
@@ -6425,8 +6425,20 @@ const MANUT_PAGADOR={proprietario:'Proprietário',hospede:'Hóspede',wecare:'WeC
 function manutSubtotal(m){ return (m.itens||[]).reduce(function(s,it){return s+(parseFloat(it.valor)||0);},0); }
 function manutTotalComMargem(m){ const sub=manutSubtotal(m); const margem=parseFloat(m.margemPercent); return sub*(1+((isNaN(margem)?20:margem)/100)); }
 
+// "Criado por <usuário> · <data e hora>" nos cards de manutenção (pedido da Nicole, 2026-09-25).
+// criadoPor = nome do usuário logado na Claire, ou o nome enviado pelo onboarding no
+// POST /api/manutencoes. Manutenção criada antes disso não tem criadoPor: o card mostra só a data.
+function _manutCriadoPorAtual(){ const u=getCurrentUser()||{}; return u.nome||u.email||''; }
+function manutCriadoHtml(m){
+  let quando='';
+  if(m.dataCriacao){ const d=new Date(m.dataCriacao); if(!isNaN(d)) quando=d.toLocaleDateString('pt-BR')+' às '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}); }
+  else if(m.dataSolicitacao){ const [a,mes,dia]=String(m.dataSolicitacao).split('-'); if(dia) quando=dia+'/'+mes+'/'+a; }
+  if(!m.criadoPor&&!quando) return '';
+  return '<div style="font-size:10px;color:var(--text3);margin-top:5px;"><i class="fa-regular fa-user"></i> '+
+    (m.criadoPor?'Criado por <strong>'+esc(m.criadoPor)+'</strong>'+(quando?' · '+quando:''):'Criado em '+quando)+'</div>';
+}
 function abrirNovaManutencao(){
-  const m={id:Date.now(),status:'solicitacao',pausado:false,origem:'proprietario',imovelNome:'',dataSolicitacao:new Date().toISOString().split('T')[0],dataPrazo:'',tipo:'dano',itens:[{desc:'',valor:0}],margemPercent:20,fotos:[],quemPaga:'proprietario',fornecedor:{nome:'',contato:'',email:'',pix:''},precisaComprar:false,linksItens:[],ondeEntregar:'',obsCompra:'',pagarFornecedor:false,pagFornecedor:{valor:0,nome:'',email:'',pix:'',cpfCnpj:'',dataPagamento:'',fornCadId:null},repassarHostaway:false,valorPago:0,pagoPor:'proprietario',valorGasto:0,obs:'',updates:[],lembretes:[],tarefasManut:[],responsavel:'',dataCriacao:new Date().toISOString()};
+  const m={id:Date.now(),status:'solicitacao',pausado:false,origem:'proprietario',imovelNome:'',dataSolicitacao:new Date().toISOString().split('T')[0],dataPrazo:'',tipo:'dano',itens:[{desc:'',valor:0}],margemPercent:20,fotos:[],quemPaga:'proprietario',fornecedor:{nome:'',contato:'',email:'',pix:''},precisaComprar:false,linksItens:[],ondeEntregar:'',obsCompra:'',pagarFornecedor:false,pagFornecedor:{valor:0,nome:'',email:'',pix:'',cpfCnpj:'',dataPagamento:'',fornCadId:null},repassarHostaway:false,valorPago:0,pagoPor:'proprietario',valorGasto:0,obs:'',updates:[],lembretes:[],tarefasManut:[],responsavel:'',dataCriacao:new Date().toISOString(),criadoPor:_manutCriadoPorAtual()};
   manutencoes.unshift(m); manutAtiva=m.id; manutAba='solicitacao';
   abrirManutModal(m.id); renderManutencaoKanban();
   if(typeof saveAll==='function') saveAll();
@@ -7234,7 +7246,7 @@ function renderManutencaoKanban(){
               '<div style="display:flex;justify-content:space-between;align-items:center;">'+
                 '<span style="font-size:9.5px;padding:1px 6px;border-radius:8px;background:var(--sky-light);color:var(--sky);font-weight:600;">'+(MANUT_PAGADOR[m.quemPaga]||m.quemPaga)+'</span>'+
                 '<span style="font-size:12px;font-weight:700;color:var(--sage);">R$ '+total.toFixed(2).replace('.',',')+'</span>'+
-              '</div></div>';
+              '</div>'+manutCriadoHtml(m)+'</div>';
           }).join('')+
         '</div>';
       }
@@ -7258,7 +7270,7 @@ function renderManutencaoKanban(){
           '<span style="font-size:9.5px;padding:1px 6px;border-radius:8px;background:var(--sky-light);color:var(--sky);font-weight:600;">'+(MANUT_PAGADOR[m.quemPaga]||m.quemPaga)+'</span>'+
           prazoStr+
           '<span style="font-size:12px;font-weight:700;color:var(--sage);">R$ '+total.toFixed(2).replace('.',',')+'</span>'+
-          '</div></div>';
+          '</div>'+manutCriadoHtml(m)+'</div>';
       }).join('')+
       '</div>';
   }).join('');

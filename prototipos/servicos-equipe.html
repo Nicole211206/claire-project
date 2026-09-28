@@ -40,6 +40,7 @@
   /* Relatório */
   #se-relatorio { font-size:13px; }
   #se-relatorio h3 { font-family:var(--font-display); font-size:15px; margin:16px 0 6px; display:flex; justify-content:space-between; }
+  #se-relatorio .rel-pagina + .rel-pagina { margin-top:28px; padding-top:20px; border-top:2px dashed var(--border2); }
   #se-relatorio .rel-total { margin-top:16px; padding-top:10px; border-top:2px solid var(--text); display:flex; justify-content:space-between; font-weight:700; font-size:15px; }
   @media (max-width:700px){
     .proto-wrap { padding:16px 12px 60px; }
@@ -57,6 +58,8 @@
     #se-relatorio, #se-relatorio * { visibility:visible; }
     #se-relatorio { position:absolute; left:0; top:0; width:100%; }
     .modal-overlay { background:none; }
+    .modal { max-height:none !important; overflow:visible !important; box-shadow:none !important; }
+    #se-relatorio .rel-pagina + .rel-pagina { border-top:none; margin-top:0; padding-top:0; break-before:page; page-break-before:always; }
   }
 </style>
 </head>
@@ -82,7 +85,7 @@
   <div class="tab-bar" style="margin-bottom:16px;flex-wrap:wrap;">
     <button class="tab-btn se-tab-btn active" data-tab="lancamentos" onclick="switchSETab('lancamentos')">Lançamentos</button>
     <button class="tab-btn se-tab-btn se-admin" data-tab="fechamento" onclick="switchSETab('fechamento')">Fechamento</button>
-    <button class="tab-btn se-tab-btn se-admin" data-tab="historico" onclick="switchSETab('historico')">Pagamentos</button>
+    <button class="tab-btn se-tab-btn" data-tab="historico" onclick="switchSETab('historico')">Pagamentos</button>
     <button class="tab-btn se-tab-btn se-admin" data-tab="tabela" onclick="switchSETab('tabela')">Tabela de Preços</button>
   </div>
 
@@ -127,7 +130,8 @@
     <div id="se-fc-membros"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px;">
       <button class="btn" onclick="exportarCSVFechamento()"><i class="fa-solid fa-file-csv"></i> Exportar CSV</button>
-      <button class="btn" onclick="abrirRelatorioFechamento()"><i class="fa-solid fa-file-lines"></i> Ver relatório</button>
+      <button class="btn" onclick="abrirRelatorioFechamento('geral')"><i class="fa-solid fa-file-lines"></i> Relatório geral</button>
+      <button class="btn" onclick="abrirRelatorioFechamento('separado')"><i class="fa-solid fa-copy"></i> Relatórios por pessoa</button>
       <button class="btn btn-sage" onclick="abrirConfirmarPagamento()"><i class="fa-solid fa-money-bill-wave"></i> Registrar pagamento</button>
     </div>
   </div>
@@ -135,7 +139,7 @@
   <!-- ── HISTÓRICO DE PAGAMENTOS ── -->
   <div class="se-tab-panel" id="se-tab-historico">
     <div class="card"><div style="overflow-x:auto;"><table class="data-table">
-      <thead><tr><th>Pago em</th><th>Período</th><th>Pessoas</th><th>Itens</th><th>Total</th><th></th></tr></thead>
+      <thead><tr><th>Pago em</th><th>Período</th><th id="se-hist-th-pessoas">Por pessoa</th><th></th></tr></thead>
       <tbody id="se-hist-tbody"></tbody>
     </table></div></div>
   </div>
@@ -178,8 +182,9 @@
 <!-- Modal: relatório -->
 <div class="modal-overlay" id="modal-se-relatorio">
   <div class="modal" style="width:720px;max-width:calc(100vw - 24px);max-height:90vh;overflow-y:auto;">
+    <select class="form-select" id="se-rel-modo" onchange="trocarModoRelatorio(this.value)" style="margin-bottom:14px;"></select>
     <div id="se-relatorio"></div>
-    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-se-relatorio')">Fechar</button><button class="btn" onclick="copiarResumoRelatorio()"><i class="fa-regular fa-copy"></i> Copiar resumo</button><button class="btn btn-rose" onclick="window.print()"><i class="fa-solid fa-print"></i> Imprimir / PDF</button></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-se-relatorio')">Fechar</button><button class="btn" id="se-rel-copiar" onclick="copiarResumoRelatorio()"><i class="fa-regular fa-copy"></i> Copiar resumo</button><button class="btn btn-rose" onclick="window.print()"><i class="fa-solid fa-print"></i> Imprimir / PDF</button></div>
   </div>
 </div>
 
@@ -532,6 +537,7 @@ function renderFechamento(){
       '<div class="se-membro-head" onclick="this.parentNode.classList.toggle(\'open\')">'+
         '<input type="checkbox" '+(fora?'':'checked')+' onclick="event.stopPropagation()" onchange="toggleMembroFechamento(\''+g.id+'\',this.checked)" title="Incluir neste pagamento">'+
         '<span class="nome">'+esc(g.nome)+' <span style="font-weight:400;font-size:12px;color:var(--text3);">· '+g.itens.length+' serviço(s)</span></span>'+
+        '<button class="btn btn-sm" onclick="event.stopPropagation();abrirRelatorioMembroFechamento(\''+g.id+'\')" title="Extrato só desta pessoa"><i class="fa-solid fa-file-lines"></i> Relatório</button>'+
         '<span class="total">'+brl(g.total)+'</span><i class="fa-solid fa-chevron-down" style="font-size:11px;color:var(--text3);"></i>'+
       '</div>'+
       '<div class="se-membro-itens"><table class="data-table"><tbody>'+
@@ -547,34 +553,99 @@ function _fcLabelPeriodo(ini,fim){
 }
 
 // ── relatório ──
-let _relTextoResumo='';
-function _montarRelatorio(grupos,titulo,subtitulo){
-  const total=grupos.reduce((t,g)=>t+g.total,0);
-  _relTextoResumo='*'+titulo+'*\n'+subtitulo+'\n\n'+grupos.map(g=>g.nome+': '+brl(g.total)+' ('+g.itens.length+' serviço'+(g.itens.length>1?'s':'')+')').join('\n')+'\n\n*Total: '+brl(total)+'*';
+// _relCtx guarda o que está aberto no modal pra trocar o modo (geral / separado /
+// uma pessoa) sem recalcular de onde veio (prévia do fechamento ou lote pago).
+let _relCtx=null; // {grupos, tipo:'previa'|'pago', periodo, pagoEm, obs}
+let _relModo='geral'; // 'geral' | 'separado' | membroId
+function _relCabecalho(titulo,linhas){
   return '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;border-bottom:1px solid var(--border2);padding-bottom:10px;">'+
-      '<div><div style="font-family:var(--font-display);font-size:19px;font-weight:700;">'+esc(titulo)+'</div><div style="color:var(--text2);font-size:12.5px;">'+esc(subtitulo)+'</div></div>'+
-      '<div style="text-align:right;font-size:11.5px;color:var(--text3);">WeCare Hosting<br>gerado em '+_df(_hoje())+'</div></div>'+
-    grupos.map(g=>'<h3><span>'+esc(g.nome)+'</span><span>'+brl(g.total)+'</span></h3>'+
-      '<table class="data-table"><thead><tr><th>Data</th><th>Serviço</th><th>Imóvel</th><th style="text-align:right;">Qtd</th><th style="text-align:right;">Valor</th></tr></thead><tbody>'+
-      g.itens.map(s=>'<tr><td style="white-space:nowrap;">'+_df(s.data)+'</td><td>'+esc(seNomeServico(s))+'</td><td>'+esc(s.imovelNome||'—')+'</td><td style="text-align:right;">'+(s.qtd||1)+'</td><td style="text-align:right;white-space:nowrap;">'+brl(seValorItem(s))+'</td></tr>').join('')+
-      '</tbody></table>').join('')+
+    '<div>'+titulo+linhas.map(l=>'<div style="color:var(--text2);font-size:12.5px;">'+l+'</div>').join('')+'</div>'+
+    '<div style="text-align:right;font-size:11.5px;color:var(--text3);">WeCare Hosting<br>gerado em '+_df(_hoje())+'</div></div>';
+}
+function _relTabela(g){
+  return '<table class="data-table" style="margin-top:12px;"><thead><tr><th>Data</th><th>Serviço</th><th>Imóvel</th><th style="text-align:right;">Qtd</th><th style="text-align:right;">Valor</th></tr></thead><tbody>'+
+    g.itens.map(s=>'<tr><td style="white-space:nowrap;">'+_df(s.data)+'</td><td>'+esc(seNomeServico(s))+(s.obs?'<div style="font-size:11px;color:var(--text3);">'+esc(s.obs)+'</div>':'')+'</td><td>'+esc(s.imovelNome||'—')+'</td><td style="text-align:right;">'+(s.qtd||1)+'</td><td style="text-align:right;white-space:nowrap;">'+brl(seValorItem(s))+'</td></tr>').join('')+
+    '</tbody></table>';
+}
+function _relStatusTxt(){
+  const c=_relCtx;
+  return c.tipo==='pago'?'Pago em '+_df(c.pagoEm)+(c.obs?' · '+esc(c.obs):''):'A pagar (prévia)';
+}
+// Extrato de uma pessoa só — é o que vai pra cada um
+function _relIndividual(g){
+  const c=_relCtx;
+  return '<div class="rel-pagina">'+
+    _relCabecalho('<div style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);font-weight:600;">Extrato de serviços extras</div><div style="font-family:var(--font-display);font-size:22px;font-weight:700;margin:2px 0 4px;">'+esc(g.nome)+'</div>',
+      ['Período: '+esc(c.periodo),_relStatusTxt()])+
+    _relTabela(g)+
+    '<div class="rel-total"><span>Total a receber</span><span>'+brl(g.total)+'</span></div>'+
+    (c.tipo==='pago'?'<div style="margin-top:40px;display:flex;gap:30px;font-size:12px;color:var(--text2);"><div style="flex:1;border-top:1px solid var(--text3);padding-top:4px;">Assinatura de '+esc(g.nome)+'</div><div style="width:140px;border-top:1px solid var(--text3);padding-top:4px;">Data</div></div>':'')+
+  '</div>';
+}
+function _relGeral(grupos){
+  const c=_relCtx, total=grupos.reduce((t,g)=>t+g.total,0);
+  return _relCabecalho('<div style="font-family:var(--font-display);font-size:19px;font-weight:700;">Serviços Extras — '+(c.tipo==='pago'?'pagamento':'prévia')+'</div>',['Período: '+esc(c.periodo),_relStatusTxt()])+
+    '<table class="data-table" style="margin-top:12px;"><thead><tr><th>Pessoa</th><th style="text-align:right;">Serviços</th><th style="text-align:right;">Total</th></tr></thead><tbody>'+
+    grupos.map(g=>'<tr><td style="font-weight:600;">'+esc(g.nome)+'</td><td style="text-align:right;">'+g.itens.length+'</td><td style="text-align:right;white-space:nowrap;">'+brl(g.total)+'</td></tr>').join('')+
+    '</tbody></table>'+
+    grupos.map(g=>'<h3><span>'+esc(g.nome)+'</span><span>'+brl(g.total)+'</span></h3>'+_relTabela(g)).join('')+
     '<div class="rel-total"><span>Total geral</span><span>'+brl(total)+'</span></div>';
 }
-function abrirRelatorioFechamento(){
+function _renderRelatorio(){
+  const c=_relCtx; if(!c) return;
+  const admin=_seIsAdmin();
+  // membro da equipe só enxerga o próprio extrato
+  const grupos=admin?c.grupos:c.grupos.filter(g=>g.id===_seUsuario().id);
+  if(!admin) _relModo=_seUsuario().id;
+  const sel=document.getElementById('se-rel-modo');
+  sel.style.display=admin?'':'none';
+  sel.innerHTML='<option value="geral">Geral (todos juntos)</option><option value="separado">Separado por pessoa (1 página cada)</option>'+
+    grupos.map(g=>'<option value="'+g.id+'">Só '+esc(g.nome)+' — '+brl(g.total)+'</option>').join('');
+  sel.value=_relModo;
+  let html;
+  if(_relModo==='geral') html=_relGeral(grupos);
+  else if(_relModo==='separado') html=grupos.map(_relIndividual).join('');
+  else { const g=grupos.find(x=>x.id===_relModo); html=g?_relIndividual(g):'<div class="se-vazio">Nada para esta pessoa.</div>'; }
+  document.getElementById('se-relatorio').innerHTML=html;
+  document.getElementById('se-rel-copiar').style.display=_relModo==='separado'?'none':'';
+}
+function trocarModoRelatorio(v){ _relModo=v; _renderRelatorio(); }
+function _abrirRelatorio(ctx,modo){
+  _relCtx=ctx; _relModo=modo||'geral'; _renderRelatorio();
+  document.getElementById('modal-se-relatorio').classList.add('open');
+}
+function abrirRelatorioFechamento(membroId){
   const grupos=_fcAgruparPorMembro(_fcItensAPagar());
   if(!grupos.length){ showToast('Nada a pagar neste período.'); return; }
   const p=_fcPeriodo();
-  document.getElementById('se-relatorio').innerHTML=_montarRelatorio(grupos,'Serviços Extras — prévia de pagamento','Período: '+_fcLabelPeriodo(p.ini,p.fim)+' · ainda não pago');
-  document.getElementById('modal-se-relatorio').classList.add('open');
+  _abrirRelatorio({grupos, tipo:'previa', periodo:_fcLabelPeriodo(p.ini,p.fim)}, membroId);
 }
-function abrirRelatorioPagamento(pagId){
+function abrirRelatorioMembroFechamento(membroId){
+  // abre mesmo se a pessoa estiver desmarcada deste pagamento
+  const p=_fcPeriodo();
+  const itens=servicosEquipe.filter(s=>seStatus(s)==='aprovado' && _noPeriodo(s,p) && (s.membroId===membroId || !_fcExcluidos.has(s.membroId)));
+  _abrirRelatorio({grupos:_fcAgruparPorMembro(itens), tipo:'previa', periodo:_fcLabelPeriodo(p.ini,p.fim)}, membroId);
+}
+function abrirRelatorioPagamento(pagId,membroId){
   const pg=servicosPagamentos.find(x=>x.id===pagId); if(!pg) return;
   const grupos=_fcAgruparPorMembro(servicosEquipe.filter(s=>s.pagamentoId===pagId));
-  document.getElementById('se-relatorio').innerHTML=_montarRelatorio(grupos,'Serviços Extras — comprovante de pagamento','Período: '+_fcLabelPeriodo(pg.ini,pg.fim)+' · pago em '+_df(pg.dataPagamento)+(pg.obs?' · '+pg.obs:''));
-  document.getElementById('modal-se-relatorio').classList.add('open');
+  _abrirRelatorio({grupos, tipo:'pago', periodo:_fcLabelPeriodo(pg.ini,pg.fim), pagoEm:pg.dataPagamento, obs:pg.obs}, membroId);
+}
+function _relTexto(){
+  const c=_relCtx; if(!c) return '';
+  const cab='Período: '+c.periodo+'\n'+(c.tipo==='pago'?'Pago em '+_df(c.pagoEm):'A pagar');
+  if(_relModo==='geral'){
+    const total=c.grupos.reduce((t,g)=>t+g.total,0);
+    return '*Serviços Extras*\n'+cab+'\n\n'+c.grupos.map(g=>g.nome+': '+brl(g.total)+' ('+g.itens.length+' serviço'+(g.itens.length>1?'s':'')+')').join('\n')+'\n\n*Total: '+brl(total)+'*';
+  }
+  const g=c.grupos.find(x=>x.id===_relModo); if(!g) return '';
+  return 'Oi, '+g.nome+'! Segue seu extrato de serviços extras 😊\n'+cab+'\n\n'+
+    g.itens.map(s=>'• '+_df(s.data)+' — '+seNomeServico(s)+(s.imovelNome?' ('+s.imovelNome+')':'')+((parseFloat(s.qtd)||1)>1?' · '+s.qtd+'×':'')+': '+brl(seValorItem(s))).join('\n')+
+    '\n\n*Total: '+brl(g.total)+'*';
 }
 function copiarResumoRelatorio(){
-  if(navigator.clipboard) navigator.clipboard.writeText(_relTextoResumo).then(()=>showToast('Resumo copiado — cole no WhatsApp'),()=>showToast('Não foi possível copiar'));
+  const t=_relTexto();
+  if(navigator.clipboard) navigator.clipboard.writeText(t).then(()=>showToast('Copiado — cole no WhatsApp'),()=>showToast('Não foi possível copiar'));
 }
 function exportarCSVFechamento(){
   const itens=_fcItensAPagar();
@@ -614,12 +685,24 @@ function confirmarPagamentoSE(){
 }
 function renderHistoricoPagamentos(){
   const tb=document.getElementById('se-hist-tbody');
-  if(!servicosPagamentos.length){ tb.innerHTML='<tr><td colspan="6" class="se-vazio">Nenhum pagamento registrado ainda.</td></tr>'; return; }
-  tb.innerHTML=servicosPagamentos.map(pg=>{
-    const pessoas=Object.keys(pg.totais||{}).map(_seNomeMembro).join(', ');
-    return '<tr><td style="white-space:nowrap;">'+_df(pg.dataPagamento)+'</td><td style="font-size:12.5px;">'+esc(_fcLabelPeriodo(pg.ini,pg.fim))+(pg.obs?'<div style="font-size:11px;color:var(--text3);">'+esc(pg.obs)+'</div>':'')+'</td>'+
-      '<td style="font-size:12.5px;">'+esc(pessoas)+'</td><td>'+(pg.itens||[]).length+'</td><td style="font-weight:600;color:var(--sage);white-space:nowrap;">'+brl(pg.total)+'</td>'+
-      '<td style="white-space:nowrap;text-align:right;"><button class="se-icon-btn" onclick="abrirRelatorioPagamento('+pg.id+')" title="Ver relatório"><i class="fa-solid fa-file-lines"></i></button><button class="se-icon-btn no" onclick="desfazerPagamento('+pg.id+')" title="Desfazer pagamento"><i class="fa-solid fa-rotate-left"></i></button></td></tr>';
+  const admin=_seIsAdmin(), eu=_seUsuario().id;
+  // membro da equipe vê só os lotes em que recebeu, com o valor dele
+  const lotes=admin?servicosPagamentos:servicosPagamentos.filter(pg=>(pg.totais||{})[eu]!=null);
+  document.getElementById('se-hist-th-pessoas').textContent=admin?'Por pessoa':'Você recebeu';
+  if(!lotes.length){ tb.innerHTML='<tr><td colspan="4" class="se-vazio">Nenhum pagamento registrado ainda.</td></tr>'; return; }
+  tb.innerHTML=lotes.map(pg=>{
+    const ids=admin?Object.keys(pg.totais||{}).sort((a,b)=>_seNomeMembro(a).localeCompare(_seNomeMembro(b))):[eu];
+    const pessoas=ids.map(id=>'<div style="display:flex;align-items:center;gap:8px;padding:2px 0;">'+
+      '<span style="flex:1;font-size:12.5px;">'+esc(_seNomeMembro(id))+'</span>'+
+      '<b style="font-size:12.5px;white-space:nowrap;">'+brl(pg.totais[id])+'</b>'+
+      '<button class="se-icon-btn" onclick="abrirRelatorioPagamento('+pg.id+',\''+id+'\')" title="Extrato de '+esc(_seNomeMembro(id))+'"><i class="fa-solid fa-file-lines"></i></button></div>').join('');
+    const acoes=admin?'<button class="btn btn-sm" onclick="abrirRelatorioPagamento('+pg.id+',\'separado\')" title="Todos os extratos, 1 página cada"><i class="fa-solid fa-copy"></i> Todos</button>'+
+      '<div style="margin-top:6px;font-size:12px;color:var(--text3);">Total <b style="color:var(--sage);">'+brl(pg.total)+'</b></div>'+
+      '<button class="se-icon-btn no" onclick="desfazerPagamento('+pg.id+')" title="Desfazer pagamento" style="margin-top:4px;"><i class="fa-solid fa-rotate-left"></i> desfazer</button>':'';
+    return '<tr><td style="white-space:nowrap;vertical-align:top;">'+_df(pg.dataPagamento)+'</td>'+
+      '<td style="font-size:12.5px;vertical-align:top;">'+esc(_fcLabelPeriodo(pg.ini,pg.fim))+(pg.obs?'<div style="font-size:11px;color:var(--text3);">'+esc(pg.obs)+'</div>':'')+'</td>'+
+      '<td style="min-width:200px;">'+pessoas+'</td>'+
+      '<td style="text-align:right;vertical-align:top;white-space:nowrap;">'+acoes+'</td></tr>';
   }).join('');
 }
 function desfazerPagamento(id){

@@ -333,7 +333,7 @@ const MODULOS_LISTA=[
   {id:'projetos',label:'Projetos'},{id:'plantao',label:'Passagem de Turno'},
   {id:'turnos',label:'Turnos'},
   {id:'extras',label:'Extras'},
-  {id:'servicosequipe',label:'Serviços da Equipe'},
+  {id:'servicosequipe',label:'Serviços Adicionais'},
   {id:'controle',label:'Controle'},
   {id:'manual',label:'Manual'}
 ];
@@ -673,7 +673,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
 });
 
 // ═══════════════════ NAV ═══════════════════
-const PT={overview:'Visão Geral',kpis:'Meus KPIs',performance:'Acompanhamento de Performance',tasks:'Tarefas',limpezacaucao:'Limpeza & Caução',equipe:'Equipe',drive:'Google Drive',onboarding:'Onboarding de Imóveis',notes:'Anotações',focus:'Foco',projetos:'Projetos',compras:'Registro de Compras',manutencao:'Manutenção',reunioes:'Reuniões e Transcrições',avaliacoes:'Acompanhamento',usuarios:'Usuários e Acessos',extras:'Serviços Extras',servicosequipe:'Serviços da Equipe',controle:'Controle',manual:'Manual'};
+const PT={overview:'Visão Geral',kpis:'Meus KPIs',performance:'Acompanhamento de Performance',tasks:'Tarefas',limpezacaucao:'Limpeza & Caução',equipe:'Equipe',drive:'Google Drive',onboarding:'Onboarding de Imóveis',notes:'Anotações',focus:'Foco',projetos:'Projetos',compras:'Registro de Compras',manutencao:'Manutenção',reunioes:'Reuniões e Transcrições',avaliacoes:'Acompanhamento',usuarios:'Usuários e Acessos',extras:'Serviços Extras',servicosequipe:'Serviços Adicionais',controle:'Controle',manual:'Manual'};
 function showPanel(id,btn){
   if(id==='equipe'){
     const u0=getCurrentUser();
@@ -4022,7 +4022,7 @@ function renderServicosEquipePanel(){
   const semVinculo=!admin && !eu;
   document.getElementById('se-btn-lancar').style.display=semVinculo?'none':'';
   document.getElementById('se-aviso-vinculo').innerHTML=semVinculo
-    ?'<div class="se-aviso"><i class="fa-solid fa-circle-info"></i> Seu login ainda não está ligado a uma pessoa do cadastro de Serviços da Equipe. Peça pra admin incluir seu e-mail no seu cadastro (aba Pessoas).</div>':'';
+    ?'<div class="se-aviso"><i class="fa-solid fa-circle-info"></i> Seu login ainda não está ligado a uma pessoa do cadastro de Serviços Adicionais. Peça pra admin incluir seu e-mail no seu cadastro (aba Pessoas).</div>':'';
   if(!document.getElementById('se-f-mes').value) document.getElementById('se-f-mes').value=_seHoje().substring(0,7);
   if(!admin && ['fechamento','pessoas','tabela'].includes(_seTab)) _seTab='lancamentos';
   switchSETab(_seTab);
@@ -4059,10 +4059,12 @@ function renderServicosEquipe(){
   const mes=document.getElementById('se-f-mes').value;
   const membro=admin?document.getElementById('se-f-membro').value:u.id;
   const st=document.getElementById('se-f-status').value;
+  const onb=document.getElementById('se-f-onb').value;
 
   let lista=servicosEquipe.filter(s=>(!mes||seMesVig(s)===mes) && (!membro||s.membroId===membro));
   const base=lista;
   if(st) lista=lista.filter(s=>seStatus(s)===st);
+  if(onb) lista=lista.filter(s=>!!s.onboarding===(onb==='sim'));
   lista.sort((a,b)=>(b.data||'').localeCompare(a.data||'')||b.id-a.id);
 
   const soma=f=>base.filter(f).reduce((t,s)=>t+seValorItem(s),0);
@@ -4102,7 +4104,7 @@ function renderServicosEquipe(){
     return '<tr>'+chk+
       '<td style="white-space:nowrap;font-size:12.5px;">'+_seDf(s.data)+'<div style="font-size:10.5px;color:var(--text3);line-height:1.4;">vig. '+_seMesCurto(seMesVig(s))+(status==='pago'?'':'<br>paga '+_seDf(sePrevisao(s)))+'</div></td>'+
       (admin?'<td style="font-weight:600;font-size:13px;">'+_seEsc(_seNomeMembro(s.membroId))+'</td>':'')+
-      '<td>'+_seEsc(seNomeServico(s))+obs+recusa+'</td>'+
+      '<td>'+_seEsc(seNomeServico(s))+(s.onboarding?' <span class="se-tag-onb">Onboarding</span>':'')+obs+recusa+'</td>'+
       '<td class="se-hide-mobile" style="font-size:12px;">'+_seEsc(s.imovelNome||'—')+'</td>'+
       '<td style="white-space:nowrap;font-weight:600;">'+_seBrl(seValorItem(s))+qtdTxt+'</td>'+
       '<td><span class="se-status '+status+'">'+stLabel[status]+'</span></td>'+
@@ -4179,6 +4181,7 @@ function abrirNovoServico(){
   document.getElementById('se-data').value=_seHoje();
   _seMesVigManual=false; _sePrevManual=false; document.getElementById('se-mesvig').value=_seHoje().substring(0,7); _seAtualizarPrevisao();
   document.getElementById('se-imovel').value=''; document.getElementById('se-obs').value=''; document.getElementById('se-desc').value='';
+  document.getElementById('se-onboarding').checked=false;
   document.getElementById('se-qtd').value=1;
   document.getElementById('se-tipo').selectedIndex=0; _seAoTrocarTipo();
   document.getElementById('modal-servico-equipe').classList.add('open');
@@ -4194,6 +4197,7 @@ function abrirEditarServico(id){
   document.getElementById('se-desc-wrap').style.display=s.tipoId==='outro'?'':'none';
   document.getElementById('se-desc').value=s.descricao||'';
   document.getElementById('se-imovel').value=s.imovelNome||'';
+  document.getElementById('se-onboarding').checked=!!s.onboarding;
   document.getElementById('se-qtd').value=s.qtd||1;
   document.getElementById('se-valor').value=s.valorUnit;
   document.getElementById('se-obs').value=s.obs||'';
@@ -4214,7 +4218,7 @@ function salvarServicoEquipe(){
   const membroId=_seIsAdmin()?document.getElementById('se-membro').value:u.id;
   if(!membroId||membroId==='__nova__'){ showToast('Escolha quem fez o serviço.','peach'); return; }
   const tipo=servicosTipos.find(x=>x.id===tipoId);
-  const campos={data, mesVigente, dataPrevista:_sePrevManual?document.getElementById('se-prev').value:'', membroId, tipoId, tipoNome:tipo?tipo.nome:'', descricao:desc, imovelNome:document.getElementById('se-imovel').value.trim(),
+  const campos={data, mesVigente, dataPrevista:_sePrevManual?document.getElementById('se-prev').value:'', membroId, tipoId, tipoNome:tipo?tipo.nome:'', descricao:desc, imovelNome:document.getElementById('se-imovel').value.trim(), onboarding:document.getElementById('se-onboarding').checked,
     qtd:Math.max(1,parseFloat(document.getElementById('se-qtd').value)||1), valorUnit:valor, obs:document.getElementById('se-obs').value.trim()};
   if(_seEditId){
     const s=servicosEquipe.find(x=>x.id===_seEditId); if(!s) return;
@@ -4347,11 +4351,12 @@ function renderFechamento(){
   const todos=_fcAgruparPorMembro(servicosEquipe.filter(s=>seStatus(s)==='aprovado' && _noPeriodo(s,p)));
   const incluidos=todos.filter(g=>!_fcExcluidos.has(g.id));
   const total=incluidos.reduce((t,g)=>t+g.total,0);
+  const totalOnb=incluidos.flatMap(g=>g.itens).filter(x=>x.onboarding).reduce((t,x)=>t+seValorItem(x),0);
   const prev=_fcPrevisao(incluidos.flatMap(g=>g.itens));
   const prevData=prev.data||(p.modo==='vigencia'?sePrevisaoPadrao(p.mes):'');
   const atrasado=total>0 && prevData && prevData<_seHoje();
   document.getElementById('se-fc-resumo').innerHTML=[
-    {l:'Total a pagar',v:_seBrl(total),c:'sage',i:'fa-sack-dollar'},
+    {l:'Total a pagar',v:_seBrl(total),c:'sage',i:'fa-sack-dollar',sub:totalOnb>0?_seBrl(totalOnb)+' de onboarding':''},
     {l:'Previsão de pagamento'+(prev.varias?' (a mais cedo)':''),v:prevData?_seDf(prevData):'—',c:atrasado?'rose':'peach',i:'fa-calendar-day',sub:atrasado?'<span style="color:var(--vermelha);">atrasado</span>':(p.modo==='vigencia'?'dia '+dia+' do mês seguinte':'')},
     {l:'Pessoas · lançamentos',v:incluidos.length+' · '+incluidos.reduce((t,g)=>t+g.itens.length,0),c:'lav',i:'fa-users'},
   ].map(x=>'<div class="metric-card '+x.c+'"><div class="metric-icon '+x.c+'"><i class="fa-solid '+x.i+'"></i></div><div class="metric-value" style="font-size:22px;">'+x.v+'</div><div class="metric-label">'+x.l+'</div>'+(x.sub?'<div class="metric-delta neutral">'+x.sub+'</div>':'')+'</div>').join('');
@@ -4371,7 +4376,7 @@ function renderFechamento(){
         g.itens.map(s=>{
           const difPrev=s.dataPrevista&&s.dataPrevista!==prevData?' <span style="font-size:10.5px;color:var(--peach);" title="Previsão alterada neste lançamento"><i class="fa-regular fa-calendar"></i> paga '+_seDf(s.dataPrevista)+'</span>':'';
           const difVig=p.modo!=='vigencia'?' <span style="font-size:10.5px;color:var(--text3);">· vig. '+_seMesCurto(seMesVig(s))+'</span>':'';
-          return '<tr><td style="font-size:12px;white-space:nowrap;width:80px;">'+_seDf(s.data)+'</td><td style="font-size:12.5px;">'+_seEsc(seNomeServico(s))+(s.imovelNome?' <span style="color:var(--text3);">· '+_seEsc(s.imovelNome)+'</span>':'')+difVig+difPrev+'</td><td style="text-align:right;white-space:nowrap;font-size:12.5px;">'+((parseFloat(s.qtd)||1)>1?'<span style="color:var(--text3);font-size:11px;">'+s.qtd+' × '+_seBrl(s.valorUnit)+' =</span> ':'')+'<b>'+_seBrl(seValorItem(s))+'</b></td></tr>';
+          return '<tr><td style="font-size:12px;white-space:nowrap;width:80px;">'+_seDf(s.data)+'</td><td style="font-size:12.5px;">'+_seEsc(seNomeServico(s))+(s.onboarding?' <span class="se-tag-onb">Onboarding</span>':'')+(s.imovelNome?' <span style="color:var(--text3);">· '+_seEsc(s.imovelNome)+'</span>':'')+difVig+difPrev+'</td><td style="text-align:right;white-space:nowrap;font-size:12.5px;">'+((parseFloat(s.qtd)||1)>1?'<span style="color:var(--text3);font-size:11px;">'+s.qtd+' × '+_seBrl(s.valorUnit)+' =</span> ':'')+'<b>'+_seBrl(seValorItem(s))+'</b></td></tr>';
         }).join('')+
       '</tbody></table></div></div>';
   }).join('');
@@ -4395,7 +4400,7 @@ function _relCabecalho(titulo,linhas){
 }
 function _relTabela(g){
   return '<table class="data-table" style="margin-top:12px;"><thead><tr><th>Data</th><th>Serviço</th><th>Imóvel</th><th style="text-align:right;">Qtd</th><th style="text-align:right;">Valor</th></tr></thead><tbody>'+
-    g.itens.map(s=>'<tr><td style="white-space:nowrap;">'+_seDf(s.data)+'</td><td>'+_seEsc(seNomeServico(s))+(s.obs?'<div style="font-size:11px;color:var(--text3);">'+_seEsc(s.obs)+'</div>':'')+'</td><td>'+_seEsc(s.imovelNome||'—')+'</td><td style="text-align:right;">'+(s.qtd||1)+'</td><td style="text-align:right;white-space:nowrap;">'+_seBrl(seValorItem(s))+'</td></tr>').join('')+
+    g.itens.map(s=>'<tr><td style="white-space:nowrap;">'+_seDf(s.data)+'</td><td>'+_seEsc(seNomeServico(s))+(s.onboarding?' <span class="se-tag-onb">Onboarding</span>':'')+(s.obs?'<div style="font-size:11px;color:var(--text3);">'+_seEsc(s.obs)+'</div>':'')+'</td><td>'+_seEsc(s.imovelNome||'—')+'</td><td style="text-align:right;">'+(s.qtd||1)+'</td><td style="text-align:right;white-space:nowrap;">'+_seBrl(seValorItem(s))+'</td></tr>').join('')+
     '</tbody></table>';
 }
 // g = extrato de uma pessoa: a previsão é a dos itens dela, não a do lote todo
@@ -4407,7 +4412,7 @@ function _relStatusTxt(g){
 function _relIndividual(g){
   const c=_relCtx;
   return '<div class="rel-pagina">'+
-    _relCabecalho('<div style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);font-weight:600;">Extrato de serviços extras</div><div style="font-family:var(--font-display);font-size:22px;font-weight:700;margin:2px 0 4px;">'+_seEsc(g.nome)+'</div>',
+    _relCabecalho('<div style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);font-weight:600;">Extrato de serviços adicionais</div><div style="font-family:var(--font-display);font-size:22px;font-weight:700;margin:2px 0 4px;">'+_seEsc(g.nome)+'</div>',
       [_seEsc(c.periodo),_relStatusTxt(g)])+
     _relTabela(g)+
     '<div class="rel-total"><span>Total a receber</span><span>'+_seBrl(g.total)+'</span></div>'+
@@ -4428,7 +4433,7 @@ function _relDadosPag(id){
 }
 function _relGeral(grupos){
   const c=_relCtx, total=grupos.reduce((t,g)=>t+g.total,0);
-  return _relCabecalho('<div style="font-family:var(--font-display);font-size:19px;font-weight:700;">Serviços Extras — '+(c.tipo==='pago'?'pagamento':'prévia')+'</div>',[_seEsc(c.periodo),_relStatusTxt()])+
+  return _relCabecalho('<div style="font-family:var(--font-display);font-size:19px;font-weight:700;">Serviços Adicionais — '+(c.tipo==='pago'?'pagamento':'prévia')+'</div>',[_seEsc(c.periodo),_relStatusTxt()])+
     '<table class="data-table" style="margin-top:12px;"><thead><tr><th>Pessoa</th><th>Pagamento</th><th style="text-align:right;">Serviços</th><th style="text-align:right;">Total</th></tr></thead><tbody>'+
     grupos.map(g=>'<tr><td style="font-weight:600;">'+_seEsc(g.nome)+'</td><td style="font-size:12px;">'+_seEsc(_sePixTxt(_sePessoa(g.id))||'—')+'</td><td style="text-align:right;">'+g.itens.length+'</td><td style="text-align:right;white-space:nowrap;">'+_seBrl(g.total)+'</td></tr>').join('')+
     '</tbody></table>'+
@@ -4490,11 +4495,11 @@ function _relTexto(){
   const cab=c.periodo+'\n'+(c.tipo==='pago'?'Pago em '+_seDf(c.pagoEm):'Previsão de pagamento: '+(prev?_seDf(prev):'a definir'));
   if(_relModo==='geral'){
     const total=c.grupos.reduce((t,g)=>t+g.total,0);
-    return '*Serviços Extras*\n'+cab+'\n\n'+c.grupos.map(g=>g.nome+': '+_seBrl(g.total)+' ('+g.itens.length+' serviço'+(g.itens.length>1?'s':'')+')').join('\n')+'\n\n*Total: '+_seBrl(total)+'*';
+    return '*Serviços Adicionais*\n'+cab+'\n\n'+c.grupos.map(g=>g.nome+': '+_seBrl(g.total)+' ('+g.itens.length+' serviço'+(g.itens.length>1?'s':'')+')').join('\n')+'\n\n*Total: '+_seBrl(total)+'*';
   }
   const g=c.grupos.find(x=>x.id===_relModo); if(!g) return '';
-  return 'Oi, '+g.nome+'! Segue seu extrato de serviços extras 😊\n'+cab+'\n\n'+
-    g.itens.map(s=>'• '+_seDf(s.data)+' — '+seNomeServico(s)+(s.imovelNome?' ('+s.imovelNome+')':'')+((parseFloat(s.qtd)||1)>1?' · '+s.qtd+'×':'')+': '+_seBrl(seValorItem(s))).join('\n')+
+  return 'Oi, '+g.nome+'! Segue seu extrato de serviços adicionais 😊\n'+cab+'\n\n'+
+    g.itens.map(s=>'• '+_seDf(s.data)+' — '+seNomeServico(s)+(s.onboarding?' [Onboarding]':'')+(s.imovelNome?' ('+s.imovelNome+')':'')+((parseFloat(s.qtd)||1)>1?' · '+s.qtd+'×':'')+': '+_seBrl(seValorItem(s))).join('\n')+
     '\n\n*Total: '+_seBrl(g.total)+'*'+
     (_sePixTxt(_sePessoa(g.id))?'\n'+(c.tipo==='pago'?'Enviado para ':'Vai para ')+_sePixTxt(_sePessoa(g.id)):'');
 }
@@ -4512,13 +4517,13 @@ function copiarResumoRelatorio(){
 function exportarCSVFechamento(){
   const itens=_fcItensAPagar();
   if(!itens.length){ showToast('Nada a pagar neste período.','peach'); return; }
-  const linhas=[['Membro','Dados pagamento','Data','Serviço','Imóvel','Qtd','Valor unitário','Total','Obs']];
+  const linhas=[['Membro','Dados pagamento','Data','Serviço','Onboarding','Imóvel','Qtd','Valor unitário','Total','Obs']];
   itens.slice().sort((a,b)=>_seNomeMembro(a.membroId).localeCompare(_seNomeMembro(b.membroId))||a.data.localeCompare(b.data)).forEach(s=>{
-    linhas.push([_seNomeMembro(s.membroId),_sePixTxt(_sePessoa(s.membroId)),_seDf(s.data),seNomeServico(s),s.imovelNome||'',s.qtd||1,String(s.valorUnit).replace('.',','),String(seValorItem(s).toFixed(2)).replace('.',','),s.obs||'']);
+    linhas.push([_seNomeMembro(s.membroId),_sePixTxt(_sePessoa(s.membroId)),_seDf(s.data),seNomeServico(s),s.onboarding?'Sim':'Não',s.imovelNome||'',s.qtd||1,String(s.valorUnit).replace('.',','),String(seValorItem(s).toFixed(2)).replace('.',','),s.obs||'']);
   });
   const csv='﻿'+linhas.map(l=>l.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(';')).join('\n');
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
-  const p=_fcPeriodo(); a.download='servicos-equipe_'+(p.modo==='vigencia'?'vigencia-'+p.mes:p.modo==='datas'?(p.ini||'inicio')+'_'+(p.fim||'hoje'):'em-aberto')+'.csv'; a.click();
+  const p=_fcPeriodo(); a.download='servicos-adicionais_'+(p.modo==='vigencia'?'vigencia-'+p.mes:p.modo==='datas'?(p.ini||'inicio')+'_'+(p.fim||'hoje'):'em-aberto')+'.csv'; a.click();
 }
 
 // ── pagamento em lote ──
@@ -8777,7 +8782,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 126;
+const APP_VERSION = 127;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

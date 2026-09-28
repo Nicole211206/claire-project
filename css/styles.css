@@ -563,6 +563,7 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; margin:
 .se-membro-itens { border-top:1px solid var(--border); padding:4px 14px 10px; display:none; }
 .se-membro-card.open .se-membro-itens { display:block; }
 .se-aviso { background:var(--peach-light); border:1px solid var(--peach-mid); color:#9a6440; border-radius:var(--r-sm); padding:9px 13px; font-size:12.5px; margin-bottom:12px; }
+.se-tag-onb { display:inline-block; font-size:10px; font-weight:700; letter-spacing:.3px; text-transform:uppercase; padding:1px 7px; border-radius:20px; background:var(--lav-light); color:var(--lavender); border:1px solid var(--lav-mid); vertical-align:middle; }
 .se-vazio { text-align:center; padding:26px; color:var(--text3); font-size:13px; }
 .se-tab-panel { display:none; }
 .se-tab-panel.active { display:block; }

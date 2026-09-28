@@ -1,4 +1,6 @@
-# Serviços da Equipe — handoff
+# Serviços Adicionais — handoff
+
+> Na tela o nome é **Serviços Adicionais** (renomeado em v127 pra não confundir com o módulo Extras antigo, que se chama "Serviços Extras" na tela dele). Por dentro continua `servicosequipe` / `nx_servicos_*` — não renomear as chaves, senão perde o que já está salvo.
 
 Módulo novo (v126, branch `develop`) pra equipe lançar serviços extras feitos, a admin aprovar e pagar tudo de uma vez por mês de vigência. A lógica veio do protótipo `prototipos/servicos-equipe.html` (standalone, dados só no navegador — bom pra testar fluxo sem tocar em banco nenhum).
 
@@ -11,7 +13,7 @@ Módulo novo (v126, branch `develop`) pra equipe lançar serviços extras feitos
 
 ## Fluxo
 
-1. Qualquer pessoa ligada ao cadastro lança um serviço (data, mês de vigência, tipo da tabela de preços ou "Outro", imóvel, qtd, valor). Entra como **pendente**. Lançado pela admin já entra **aprovado**.
+1. Qualquer pessoa ligada ao cadastro lança um serviço (data, mês de vigência, tipo da tabela de preços ou "Outro", imóvel, qtd, valor, e se é de **onboarding** — vira uma tag, um filtro na lista, uma coluna no CSV e o subtotal "de onboarding" no fechamento). Entra como **pendente**. Lançado pela admin já entra **aprovado**.
 2. A admin aprova/recusa (com motivo; a pessoa vê o motivo e, se editar, volta pra pendente).
 3. **Fechamento**: escolhe o mês de vigência → total por pessoa, com PIX → relatório geral / um extrato por pessoa (impressão/PDF, WhatsApp) → **Registrar pagamento** marca tudo como pago num lote (dá pra desfazer em Pagamentos).
 4. **Previsão de pagamento** = dia X (padrão 15) do mês seguinte à vigência. Configurável na aba Tabela de Preços. `dataPrevista` só é gravada quando a admin muda na mão; vazia = segue a regra.
@@ -20,7 +22,7 @@ Módulo novo (v126, branch `develop`) pra equipe lançar serviços extras feitos
 
 | Chave | Conteúdo |
 |---|---|
-| `nx_servicos_equipe` | lançamentos `{id, data, mesVigente, dataPrevista, membroId, tipoId, tipoNome, descricao, imovelNome, qtd, valorUnit, obs, status, motivoRecusa, criadoPor, criadoEm, aprovadoPor, aprovadoEm, pagamentoId}` |
+| `nx_servicos_equipe` | lançamentos `{id, data, mesVigente, dataPrevista, membroId, tipoId, tipoNome, descricao, imovelNome, onboarding, qtd, valorUnit, obs, status, motivoRecusa, criadoPor, criadoEm, aprovadoPor, aprovadoEm, pagamentoId}` |
 | `nx_servicos_pessoas` | cadastro `{id, nome, funcao, telefone, documento, email, attId, pixTipo, pixChave, banco, agencia, conta, obs, ativo}` |
 | `nx_servicos_tipos` | tabela de preços `{id, nome, valor, unidade}` (começa vazia) |
 | `nx_servicos_pagamentos` | lotes `{id, dataPagamento, periodo:{modo,mes\|ini,fim}, dataPrevista, itens:[ids], totais:{pessoaId:valor}, total, obs, criadoEm}` |

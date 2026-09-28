@@ -4131,8 +4131,54 @@ function _sePreencherSelects(){
   sm.onchange=function(){ if(sm.value==='__nova__'){ sm.value=lista[0]?lista[0].id:''; abrirNovaPessoa(true); } };
   sm.disabled=!_seIsAdmin(); if(!_seIsAdmin()) sm.value=u.id;
   document.getElementById('se-tipo').innerHTML=servicosTipos.map(t=>'<option value="'+t.id+'">'+_seEsc(t.nome)+' — '+_seBrl(t.valor)+(t.unidade?' '+_seEsc(t.unidade):'')+'</option>').join('')+'<option value="outro">Outro (descrever)</option>';
-  const imoveis=[...new Set(servicosEquipe.map(s=>s.imovelNome).filter(Boolean))].sort();
-  document.getElementById('se-imoveis-list').innerHTML=imoveis.map(n=>'<option value="'+_seEsc(n)+'">').join('');
+}
+// ── campo Imóvel: digita livre, mas sugere do catálogo (mesma fonte dos outros
+// módulos) + imóveis em onboarding (mesmo critério de Compras: tudo menos 'perdido').
+// Escolher um imóvel em onboarding já marca a tag Onboarding.
+let _seAcItens=[], _seAcIdx=-1;
+function _seSemAcento(t){ return String(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(); }
+function _seImoveisOpcoes(){
+  const vistos=new Set(), out=[];
+  const add=(nome,onb)=>{ nome=(nome||'').trim(); if(!nome) return; const k=_seSemAcento(nome); if(vistos.has(k)) return; vistos.add(k); out.push({nome,onb}); };
+  (typeof imovelsCatalog!=='undefined'?imovelsCatalog:[]).forEach(im=>add(im.nome,false));
+  (typeof imoveis!=='undefined'?imoveis:[]).filter(im=>im&&im.status!=='perdido').forEach(im=>add(im.nome,true));
+  // nomes já digitados em lançamentos antigos (imóvel fora do catálogo)
+  servicosEquipe.forEach(s=>add(s.imovelNome,false));
+  return out;
+}
+function _seImovelBuscar(){
+  const inp=document.getElementById('se-imovel'), box=document.getElementById('se-imovel-sug');
+  const q=_seSemAcento(inp.value).trim();
+  const todos=_seImoveisOpcoes();
+  // várias palavras: todas precisam aparecer (ex: "float sp")
+  const partes=q.split(/\s+/).filter(Boolean);
+  _seAcItens=(partes.length?todos.filter(o=>{ const n=_seSemAcento(o.nome); return partes.every(p=>n.includes(p)); }):todos).slice(0,40);
+  _seAcIdx=-1;
+  if(!todos.length){ box.classList.remove('open'); return; }
+  box.innerHTML=_seAcItens.length
+    ? _seAcItens.map((o,i)=>{ const m=o.nome.match(/^(WC-\d+)\s*-\s*(.*)$/);
+        return '<div class="se-ac-item" data-i="'+i+'" onmousedown="event.preventDefault();_seImovelEscolher('+i+')">'+(m?'<span style="flex:1;">'+_seEsc(m[2])+'</span><span class="cod">'+_seEsc(m[1])+'</span>':'<span style="flex:1;">'+_seEsc(o.nome)+'</span>')+(o.onb?'<span class="se-tag-onb">Onboarding</span>':'')+'</div>'; }).join('')
+    : '<div class="se-ac-vazio">Nenhum imóvel encontrado — fica o que você digitou.</div>';
+  box.classList.add('open');
+}
+function _seImovelEscolher(i){
+  const o=_seAcItens[i]; if(!o) return;
+  document.getElementById('se-imovel').value=o.nome;
+  if(o.onb) document.getElementById('se-onboarding').checked=true;
+  _seImovelFechar();
+}
+function _seImovelFechar(){ const b=document.getElementById('se-imovel-sug'); if(b) b.classList.remove('open'); _seAcIdx=-1; }
+function _seImovelTecla(e){
+  const box=document.getElementById('se-imovel-sug');
+  if(!box.classList.contains('open')){ if(e.key==='ArrowDown') _seImovelBuscar(); return; }
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+    e.preventDefault(); if(!_seAcItens.length) return;
+    _seAcIdx=(_seAcIdx+(e.key==='ArrowDown'?1:-1)+_seAcItens.length)%_seAcItens.length;
+    box.querySelectorAll('.se-ac-item').forEach(el=>el.classList.toggle('ativo',+el.dataset.i===_seAcIdx));
+    const at=box.querySelector('.se-ac-item.ativo'); if(at) at.scrollIntoView({block:'nearest'});
+  } else if(e.key==='Enter'){
+    if(_seAcIdx>=0){ e.preventDefault(); _seImovelEscolher(_seAcIdx); } else _seImovelFechar();
+  } else if(e.key==='Escape'){ e.stopPropagation(); _seImovelFechar(); }
 }
 function _seAoTrocarTipo(){
   const v=document.getElementById('se-tipo').value;
@@ -8782,7 +8828,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 127;
+const APP_VERSION = 128;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

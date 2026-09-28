@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Serviços da Equipe — protótipo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<link rel="stylesheet" href="../css/styles.css?v=3">
+<style>
+  /* Protótipo sem sidebar: o body do Claire é flex por causa do menu lateral */
+  body { display:block; }
+  .proto-wrap { max-width:1100px; margin:0 auto; padding:24px 20px 60px; }
+  .proto-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; background:var(--gold-light); border:1px dashed var(--gold); border-radius:var(--r-sm); padding:8px 14px; margin-bottom:20px; font-size:12.5px; color:var(--text2); }
+  .se-status { font-size:10.5px; padding:2px 9px; border-radius:20px; font-weight:600; white-space:nowrap; }
+  .se-status.pendente { background:var(--peach-light); color:var(--peach); }
+  .se-status.aprovado { background:var(--sky-light); color:var(--sky); }
+  .se-status.recusado { background:var(--vermelha-bg); color:var(--vermelha); }
+  .se-status.pago     { background:var(--sage-light); color:var(--sage); }
+  .se-icon-btn { background:none; border:none; color:var(--text3); cursor:pointer; font-size:12.5px; padding:3px 6px; border-radius:6px; }
+  .se-icon-btn:hover { background:var(--bg3); color:var(--text); }
+  .se-icon-btn.ok:hover { color:var(--sage); }
+  .se-icon-btn.no:hover { color:var(--vermelha); }
+  .se-filtros { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; align-items:center; }
+  .se-filtros .form-input, .se-filtros .form-select { width:auto; padding:6px 10px; font-size:13px; }
+  .se-chip { border:1px solid var(--border2); background:var(--bg2); border-radius:20px; padding:5px 12px; font-size:12.5px; cursor:pointer; font-family:inherit; color:var(--text2); }
+  .se-chip.active { background:var(--rose); border-color:var(--rose); color:#fff; }
+  .se-membro-card { border:1px solid var(--border); border-radius:var(--r-sm); margin-bottom:10px; background:var(--bg2); }
+  .se-membro-head { display:flex; align-items:center; gap:10px; padding:10px 14px; cursor:pointer; }
+  .se-membro-head .nome { font-weight:600; flex:1; }
+  .se-membro-head .total { font-family:var(--font-display); font-weight:700; font-size:17px; color:var(--sage); }
+  .se-membro-itens { border-top:1px solid var(--border); padding:4px 14px 10px; display:none; }
+  .se-membro-card.open .se-membro-itens { display:block; }
+  .se-aviso { background:var(--peach-light); border:1px solid var(--peach-mid); color:#9a6440; border-radius:var(--r-sm); padding:9px 13px; font-size:12.5px; margin-bottom:12px; }
+  .se-vazio { text-align:center; padding:26px; color:var(--text3); font-size:13px; }
+  .se-tab-panel { display:none; }
+  .se-tab-panel.active { display:block; }
+  /* Relatório */
+  #se-relatorio { font-size:13px; }
+  #se-relatorio h3 { font-family:var(--font-display); font-size:15px; margin:16px 0 6px; display:flex; justify-content:space-between; }
+  #se-relatorio .rel-total { margin-top:16px; padding-top:10px; border-top:2px solid var(--text); display:flex; justify-content:space-between; font-weight:700; font-size:15px; }
+  @media (max-width:700px){
+    .proto-wrap { padding:16px 12px 60px; }
+    .form-row { grid-template-columns:1fr; }
+    .se-hide-mobile { display:none; }
+    .metrics-grid { grid-template-columns:repeat(3,1fr) !important; gap:6px !important; }
+    .metric-card { padding:10px !important; }
+    .metric-card .metric-icon { display:none; }
+    .metric-card .metric-value { font-size:14px !important; }
+    .metric-card .metric-label { font-size:9px; letter-spacing:0; }
+    .data-table th, .data-table td { padding:8px 6px; }
+  }
+  @media print {
+    body * { visibility:hidden; }
+    #se-relatorio, #se-relatorio * { visibility:visible; }
+    #se-relatorio { position:absolute; left:0; top:0; width:100%; }
+    .modal-overlay { background:none; }
+  }
+</style>
+</head>
+<body>
+<div class="proto-wrap">
+
+  <!-- Só no protótipo: no Claire isso vem do login (getCurrentUser/isAdmin) -->
+  <div class="proto-bar">
+    <span><i class="fa-solid fa-flask"></i> <b>Protótipo local</b> — dados ficam só neste navegador</span>
+    <span>Vendo como:
+      <select class="form-select" id="se-usuario" onchange="trocarUsuarioProto(this.value)" style="width:auto;display:inline-block;padding:4px 8px;font-size:12.5px;"></select>
+    </span>
+  </div>
+
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
+    <div>
+      <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Serviços da Equipe</h2>
+      <p style="color:var(--text3);font-size:13px;margin-top:2px;">Lance os serviços extras feitos · aprovação da Nicole · fechamento e pagamento em lote</p>
+    </div>
+    <button class="btn btn-rose" onclick="abrirNovoServico()"><i class="fa-solid fa-plus"></i> Lançar Serviço</button>
+  </div>
+
+  <div class="tab-bar" style="margin-bottom:16px;flex-wrap:wrap;">
+    <button class="tab-btn se-tab-btn active" data-tab="lancamentos" onclick="switchSETab('lancamentos')">Lançamentos</button>
+    <button class="tab-btn se-tab-btn se-admin" data-tab="fechamento" onclick="switchSETab('fechamento')">Fechamento</button>
+    <button class="tab-btn se-tab-btn se-admin" data-tab="historico" onclick="switchSETab('historico')">Pagamentos</button>
+    <button class="tab-btn se-tab-btn se-admin" data-tab="tabela" onclick="switchSETab('tabela')">Tabela de Preços</button>
+  </div>
+
+  <!-- ── LANÇAMENTOS ── -->
+  <div class="se-tab-panel active" id="se-tab-lancamentos">
+    <div class="metrics-grid" id="se-resumo" style="margin-bottom:16px;"></div>
+    <div class="se-filtros">
+      <input type="month" class="form-input" id="se-f-mes" onchange="renderServicosEquipe()" title="Mês">
+      <select class="form-select se-admin" id="se-f-membro" onchange="renderServicosEquipe()"></select>
+      <select class="form-select" id="se-f-status" onchange="renderServicosEquipe()">
+        <option value="">Todos os status</option>
+        <option value="pendente">Pendente</option>
+        <option value="aprovado">Aprovado (a pagar)</option>
+        <option value="pago">Pago</option>
+        <option value="recusado">Recusado</option>
+      </select>
+      <button class="btn btn-sm btn-sage se-admin" id="se-btn-aprovar-lote" onclick="aprovarSelecionados()" style="display:none;"><i class="fa-solid fa-check-double"></i> Aprovar selecionados</button>
+    </div>
+    <div class="card"><div style="overflow-x:auto;"><table class="data-table">
+      <thead><tr>
+        <th class="se-admin" style="width:28px;"><input type="checkbox" id="se-sel-todos" onchange="selecionarTodosPendentes(this.checked)" title="Selecionar pendentes"></th>
+        <th>Data</th><th class="se-admin">Membro</th><th>Serviço</th><th class="se-hide-mobile">Imóvel</th><th>Valor</th><th>Status</th><th></th>
+      </tr></thead>
+      <tbody id="se-tbody"></tbody>
+    </table></div></div>
+  </div>
+
+  <!-- ── FECHAMENTO ── -->
+  <div class="se-tab-panel" id="se-tab-fechamento">
+    <div class="card" style="margin-bottom:16px;"><div class="card-body">
+      <div class="form-label" style="margin-bottom:8px;">Período</div>
+      <div class="se-filtros" id="se-presets"></div>
+      <div class="se-filtros" style="margin-bottom:0;">
+        <label style="font-size:12px;color:var(--text3);">De</label>
+        <input type="date" class="form-input" id="se-fc-ini" onchange="_fcPreset='custom';renderFechamento()">
+        <label style="font-size:12px;color:var(--text3);">até</label>
+        <input type="date" class="form-input" id="se-fc-fim" onchange="_fcPreset='custom';renderFechamento()">
+      </div>
+    </div></div>
+    <div id="se-fc-aviso"></div>
+    <div class="metrics-grid" id="se-fc-resumo" style="margin-bottom:16px;"></div>
+    <div id="se-fc-membros"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px;">
+      <button class="btn" onclick="exportarCSVFechamento()"><i class="fa-solid fa-file-csv"></i> Exportar CSV</button>
+      <button class="btn" onclick="abrirRelatorioFechamento()"><i class="fa-solid fa-file-lines"></i> Ver relatório</button>
+      <button class="btn btn-sage" onclick="abrirConfirmarPagamento()"><i class="fa-solid fa-money-bill-wave"></i> Registrar pagamento</button>
+    </div>
+  </div>
+
+  <!-- ── HISTÓRICO DE PAGAMENTOS ── -->
+  <div class="se-tab-panel" id="se-tab-historico">
+    <div class="card"><div style="overflow-x:auto;"><table class="data-table">
+      <thead><tr><th>Pago em</th><th>Período</th><th>Pessoas</th><th>Itens</th><th>Total</th><th></th></tr></thead>
+      <tbody id="se-hist-tbody"></tbody>
+    </table></div></div>
+  </div>
+
+  <!-- ── TABELA DE PREÇOS ── -->
+  <div class="se-tab-panel" id="se-tab-tabela">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <p style="font-size:13px;color:var(--text3);">Valor padrão que já vem preenchido ao lançar. Dá pra ajustar em cada lançamento.</p>
+      <button class="btn btn-sm btn-rose" onclick="adicionarTipoServico()"><i class="fa-solid fa-plus"></i> Novo tipo</button>
+    </div>
+    <div class="card"><div style="overflow-x:auto;"><table class="data-table">
+      <thead><tr><th>Serviço</th><th style="width:160px;">Valor padrão (R$)</th><th style="width:130px;">Unidade</th><th style="width:60px;"></th></tr></thead>
+      <tbody id="se-tabela-tbody"></tbody>
+    </table></div></div>
+  </div>
+
+</div>
+
+<!-- Modal: lançar/editar serviço -->
+<div class="modal-overlay" id="modal-servico-equipe">
+  <div class="modal" style="width:520px;max-width:calc(100vw - 24px);">
+    <div class="modal-title" id="se-modal-title">Lançar Serviço</div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Data em que fez</label><input type="date" class="form-input" id="se-data"></div>
+      <div class="form-group"><label class="form-label">Quem fez</label><select class="form-select" id="se-membro"></select></div>
+    </div>
+    <div class="form-group"><label class="form-label">Serviço</label><select class="form-select" id="se-tipo" onchange="_seAoTrocarTipo()"></select></div>
+    <div class="form-group" id="se-desc-wrap" style="display:none;"><label class="form-label">Qual serviço?</label><input type="text" class="form-input" id="se-desc" placeholder="Descreva o serviço"></div>
+    <div class="form-group"><label class="form-label">Imóvel (opcional)</label><input type="text" class="form-input" id="se-imovel" list="se-imoveis-list" placeholder="Ex: Apto 302 Leblon"><datalist id="se-imoveis-list"></datalist></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Quantidade</label><input type="number" class="form-input" id="se-qtd" min="1" step="1" value="1" oninput="_seAtualizarTotal()"></div>
+      <div class="form-group"><label class="form-label">Valor unitário (R$)</label><input type="number" class="form-input" id="se-valor" min="0" step="0.01" oninput="_seAtualizarTotal()"></div>
+    </div>
+    <div id="se-total-preview" style="font-size:13px;color:var(--text2);margin:-4px 0 12px;"></div>
+    <div class="form-group"><label class="form-label">Observações</label><textarea class="form-input" id="se-obs" rows="2" placeholder="Detalhes úteis pra aprovação"></textarea></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-servico-equipe')">Cancelar</button><button class="btn btn-rose" onclick="salvarServicoEquipe()"><i class="fa-solid fa-check"></i> Salvar</button></div>
+  </div>
+</div>
+
+<!-- Modal: relatório -->
+<div class="modal-overlay" id="modal-se-relatorio">
+  <div class="modal" style="width:720px;max-width:calc(100vw - 24px);max-height:90vh;overflow-y:auto;">
+    <div id="se-relatorio"></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-se-relatorio')">Fechar</button><button class="btn" onclick="copiarResumoRelatorio()"><i class="fa-regular fa-copy"></i> Copiar resumo</button><button class="btn btn-rose" onclick="window.print()"><i class="fa-solid fa-print"></i> Imprimir / PDF</button></div>
+  </div>
+</div>
+
+<!-- Modal: confirmar pagamento -->
+<div class="modal-overlay" id="modal-se-pagar">
+  <div class="modal" style="width:460px;max-width:calc(100vw - 24px);">
+    <div class="modal-title">Registrar pagamento</div>
+    <div id="se-pagar-resumo" style="font-size:13px;margin-bottom:14px;"></div>
+    <div class="form-group"><label class="form-label">Data do pagamento</label><input type="date" class="form-input" id="se-pagar-data"></div>
+    <div class="form-group"><label class="form-label">Observação (opcional)</label><input type="text" class="form-input" id="se-pagar-obs" placeholder="Ex: PIX enviado"></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-se-pagar')">Cancelar</button><button class="btn btn-sage" onclick="confirmarPagamentoSE()"><i class="fa-solid fa-check"></i> Confirmar pagamento</button></div>
+  </div>
+</div>
+
+<!-- Modal: recusar -->
+<div class="modal-overlay" id="modal-se-recusar">
+  <div class="modal" style="width:420px;max-width:calc(100vw - 24px);">
+    <div class="modal-title">Recusar lançamento</div>
+    <div class="form-group"><label class="form-label">Motivo</label><textarea class="form-input" id="se-recusar-motivo" rows="3" placeholder="A pessoa vai ver esse motivo"></textarea></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-se-recusar')">Cancelar</button><button class="btn btn-rose" onclick="confirmarRecusaSE()">Recusar</button></div>
+  </div>
+</div>
+
+<div id="se-toast" style="position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:9px 18px;border-radius:20px;font-size:13px;display:none;z-index:999;"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   SERVIÇOS DA EQUIPE — protótipo standalone
+   Na integração com o Claire:
+   - servicosEquipe / servicosTipos / servicosPagamentos viram chaves de
+     sync (nx_servicos_equipe, nx_servicos_tipos, nx_servicos_pagamentos)
+     e entram em _MERGE_POR_ID_KEYS + backend/app/merge.py.
+   - _seUsuario()/_seIsAdmin() trocam por getCurrentUser()/isAdmin(), e o
+     membro logado vem de u.attId.
+   - SE_MEMBROS vem de ATTS (+ outrosMembros).
+   - esc/brl/showToast/closeModal já existem no app.js.
+   ═══════════════════════════════════════════════════════════════ */
+
+// ── helpers (já existem no app.js) ──
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function brl(v){ return 'R$ '+(parseFloat(v)||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+let _toastT=null;
+function showToast(msg){ const t=document.getElementById('se-toast'); t.textContent=msg; t.style.display='block'; clearTimeout(_toastT); _toastT=setTimeout(()=>t.style.display='none',2200); }
+function _hoje(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function _df(d){ return d?d.split('-').reverse().join('/'):'—'; }
+
+// ── dados ──
+const SE_MEMBROS=[
+  {id:'patricia',name:'Patrícia'},{id:'sara',name:'Sara'},{id:'lisarb',name:'Lisarb'},{id:'lais',name:'Laís'},
+];
+// {id, data:'YYYY-MM-DD', membroId, tipoId, descricao, imovelNome, qtd, valorUnit, obs,
+//  status:'pendente'|'aprovado'|'recusado', motivoRecusa, criadoPor, criadoEm,
+//  aprovadoPor, aprovadoEm, pagamentoId}
+let servicosEquipe=[];
+// {id, nome, valor, unidade} — id 'outro' é reservado pra serviço livre
+let servicosTipos=[];
+// {id, dataPagamento, ini, fim, itens:[ids], totais:{membroId:valor}, total, obs, criadoEm}
+let servicosPagamentos=[];
+
+const SE_TIPOS_EXEMPLO=[
+  {id:1,nome:'Check-in presencial',valor:50,unidade:'por check-in'},
+  {id:2,nome:'Vistoria de saída',valor:40,unidade:'por vistoria'},
+  {id:3,nome:'Plantão extra',valor:120,unidade:'por turno'},
+  {id:4,nome:'Compra/entrega de enxoval',valor:35,unidade:'por ida'},
+];
+
+function _seLoad(){
+  try{
+    servicosEquipe=JSON.parse(localStorage.getItem('proto_servicos_equipe')||'[]');
+    servicosPagamentos=JSON.parse(localStorage.getItem('proto_servicos_pagamentos')||'[]');
+    const t=localStorage.getItem('proto_servicos_tipos');
+    servicosTipos=t?JSON.parse(t):SE_TIPOS_EXEMPLO.slice();
+  }catch(e){ servicosTipos=SE_TIPOS_EXEMPLO.slice(); }
+}
+function _seSave(){
+  try{
+    localStorage.setItem('proto_servicos_equipe',JSON.stringify(servicosEquipe));
+    localStorage.setItem('proto_servicos_tipos',JSON.stringify(servicosTipos));
+    localStorage.setItem('proto_servicos_pagamentos',JSON.stringify(servicosPagamentos));
+  }catch(e){ showToast('Não foi possível salvar neste navegador'); }
+}
+
+// ── usuário (simulado no protótipo) ──
+let _seUserId='admin';
+function _seIsAdmin(){ return _seUserId==='admin'; }
+function _seUsuario(){ return _seIsAdmin()?{id:'admin',nome:'Nicole'}:{id:_seUserId,nome:_seNomeMembro(_seUserId)}; }
+function _seNomeMembro(id){ const m=SE_MEMBROS.find(x=>x.id===id); return m?m.name:id; }
+function trocarUsuarioProto(id){
+  _seUserId=id; try{ localStorage.setItem('proto_servicos_user',id); }catch(e){}
+  document.querySelectorAll('.se-admin').forEach(el=>el.style.display=_seIsAdmin()?'':'none');
+  if(!_seIsAdmin()) switchSETab('lancamentos');
+  renderServicosEquipe();
+}
+
+// ── cálculo ──
+function seValorItem(s){ return (parseFloat(s.qtd)||1)*(parseFloat(s.valorUnit)||0); }
+function seStatus(s){ return s.pagamentoId?'pago':(s.status||'pendente'); }
+function seNomeServico(s){
+  if(s.tipoId==='outro'||!s.tipoId) return s.descricao||'Outro';
+  const t=servicosTipos.find(x=>x.id===s.tipoId);
+  return (t?t.nome:(s.tipoNome||'Serviço'))+(s.descricao?' — '+s.descricao:'');
+}
+
+// ── abas ──
+let _seTab='lancamentos';
+function switchSETab(tab){
+  _seTab=tab;
+  document.querySelectorAll('.se-tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+  document.querySelectorAll('.se-tab-panel').forEach(p=>p.classList.toggle('active',p.id==='se-tab-'+tab));
+  if(tab==='fechamento') renderFechamento();
+  else if(tab==='historico') renderHistoricoPagamentos();
+  else if(tab==='tabela') renderTabelaPrecos();
+  else renderServicosEquipe();
+}
+
+// ── lançamentos ──
+let _seSelecionados=new Set();
+function renderServicosEquipe(){
+  const u=_seUsuario(), admin=_seIsAdmin();
+  const fm=document.getElementById('se-f-membro');
+  if(fm && !fm.options.length) fm.innerHTML='<option value="">Toda a equipe</option>'+SE_MEMBROS.map(m=>'<option value="'+m.id+'">'+esc(m.name)+'</option>').join('');
+  const mes=document.getElementById('se-f-mes').value;
+  const membro=admin?document.getElementById('se-f-membro').value:u.id;
+  const st=document.getElementById('se-f-status').value;
+
+  let lista=servicosEquipe.filter(s=>(!mes||(s.data||'').startsWith(mes)) && (!membro||s.membroId===membro));
+  const base=lista;
+  if(st) lista=lista.filter(s=>seStatus(s)===st);
+  lista.sort((a,b)=>(b.data||'').localeCompare(a.data||'')||b.id-a.id);
+
+  const soma=f=>base.filter(f).reduce((t,s)=>t+seValorItem(s),0);
+  const qtd=f=>base.filter(f).length;
+  const cards=[
+    {l:'Pendentes de aprovação',v:brl(soma(s=>seStatus(s)==='pendente')),sub:qtd(s=>seStatus(s)==='pendente')+' lançamento(s)',c:'peach',i:'fa-hourglass-half'},
+    {l:'Aprovado a pagar',v:brl(soma(s=>seStatus(s)==='aprovado')),sub:qtd(s=>seStatus(s)==='aprovado')+' lançamento(s)',c:'sky',i:'fa-circle-check'},
+    {l:'Pago',v:brl(soma(s=>seStatus(s)==='pago')),sub:qtd(s=>seStatus(s)==='pago')+' lançamento(s)',c:'sage',i:'fa-money-bill-wave'},
+  ];
+  document.getElementById('se-resumo').innerHTML=cards.map(x=>'<div class="metric-card '+x.c+'"><div class="metric-icon '+x.c+'"><i class="fa-solid '+x.i+'"></i></div><div class="metric-value" style="font-size:22px;">'+x.v+'</div><div class="metric-label">'+x.l+'</div><div class="metric-delta neutral">'+x.sub+'</div></div>').join('');
+
+  // seleção só vale pra pendentes visíveis
+  const idsPend=new Set(lista.filter(s=>seStatus(s)==='pendente').map(s=>s.id));
+  _seSelecionados=new Set([..._seSelecionados].filter(id=>idsPend.has(id)));
+  const btnLote=document.getElementById('se-btn-aprovar-lote');
+  btnLote.style.display=admin&&_seSelecionados.size?'':'none';
+  btnLote.innerHTML='<i class="fa-solid fa-check-double"></i> Aprovar selecionados ('+_seSelecionados.size+')';
+  document.getElementById('se-sel-todos').checked=idsPend.size>0&&_seSelecionados.size===idsPend.size;
+
+  const stLabel={pendente:'Pendente',aprovado:'Aprovado',recusado:'Recusado',pago:'Pago'};
+  const tb=document.getElementById('se-tbody');
+  if(!lista.length){
+    tb.innerHTML='<tr><td colspan="8" class="se-vazio">'+(servicosEquipe.length?'Nenhum lançamento com esses filtros.':'Nenhum serviço lançado ainda. Clique em "Lançar Serviço".')+'</td></tr>';
+    return;
+  }
+  tb.innerHTML=lista.map(s=>{
+    const status=seStatus(s);
+    const podeEditar=status!=='pago' && (admin || (s.membroId===u.id && status!=='aprovado'));
+    let acoes='';
+    if(admin && status==='pendente') acoes+='<button class="se-icon-btn ok" onclick="aprovarServico('+s.id+')" title="Aprovar"><i class="fa-solid fa-check"></i></button><button class="se-icon-btn no" onclick="abrirRecusarServico('+s.id+')" title="Recusar"><i class="fa-solid fa-xmark"></i></button>';
+    if(admin && (status==='aprovado'||status==='recusado')) acoes+='<button class="se-icon-btn" onclick="voltarPendente('+s.id+')" title="Voltar para pendente"><i class="fa-solid fa-rotate-left"></i></button>';
+    if(podeEditar) acoes+='<button class="se-icon-btn" onclick="abrirEditarServico('+s.id+')" title="Editar"><i class="fa-solid fa-pen"></i></button><button class="se-icon-btn" onclick="deletarServico('+s.id+')" title="Apagar"><i class="fa-solid fa-trash"></i></button>';
+    const qtdTxt=(parseFloat(s.qtd)||1)>1?'<div style="font-size:10.5px;color:var(--text3);">'+s.qtd+' × '+brl(s.valorUnit)+'</div>':'';
+    const obs=s.obs?'<div style="font-size:11px;color:var(--text3);margin-top:2px;">'+esc(s.obs)+'</div>':'';
+    const recusa=status==='recusado'&&s.motivoRecusa?'<div style="font-size:11px;color:var(--vermelha);margin-top:2px;"><i class="fa-solid fa-circle-info"></i> '+esc(s.motivoRecusa)+'</div>':'';
+    const chk=admin?'<td>'+(status==='pendente'?'<input type="checkbox" data-id="'+s.id+'" '+(_seSelecionados.has(s.id)?'checked':'')+' onchange="toggleSelServico('+s.id+',this.checked)">':'')+'</td>':'';
+    return '<tr>'+chk+
+      '<td style="white-space:nowrap;font-size:12.5px;">'+_df(s.data)+'</td>'+
+      (admin?'<td style="font-weight:600;font-size:13px;">'+esc(_seNomeMembro(s.membroId))+'</td>':'')+
+      '<td>'+esc(seNomeServico(s))+obs+recusa+'</td>'+
+      '<td class="se-hide-mobile" style="font-size:12px;">'+esc(s.imovelNome||'—')+'</td>'+
+      '<td style="white-space:nowrap;font-weight:600;">'+brl(seValorItem(s))+qtdTxt+'</td>'+
+      '<td><span class="se-status '+status+'">'+stLabel[status]+'</span></td>'+
+      '<td style="white-space:nowrap;text-align:right;">'+acoes+'</td></tr>';
+  }).join('');
+}
+function toggleSelServico(id,on){ on?_seSelecionados.add(id):_seSelecionados.delete(id); renderServicosEquipe(); }
+function selecionarTodosPendentes(on){
+  _seSelecionados=new Set();
+  if(on) document.querySelectorAll('#se-tbody input[data-id]').forEach(c=>_seSelecionados.add(+c.dataset.id));
+  renderServicosEquipe();
+}
+
+// ── modal de lançamento ──
+let _seEditId=null;
+function _sePreencherSelects(){
+  const u=_seUsuario();
+  const sm=document.getElementById('se-membro');
+  sm.innerHTML=SE_MEMBROS.map(m=>'<option value="'+m.id+'">'+esc(m.name)+'</option>').join('');
+  sm.disabled=!_seIsAdmin(); if(!_seIsAdmin()) sm.value=u.id;
+  document.getElementById('se-tipo').innerHTML=servicosTipos.map(t=>'<option value="'+t.id+'">'+esc(t.nome)+' — '+brl(t.valor)+(t.unidade?' '+esc(t.unidade):'')+'</option>').join('')+'<option value="outro">Outro (descrever)</option>';
+  const imoveis=[...new Set(servicosEquipe.map(s=>s.imovelNome).filter(Boolean))].sort();
+  document.getElementById('se-imoveis-list').innerHTML=imoveis.map(n=>'<option value="'+esc(n)+'">').join('');
+}
+function _seAoTrocarTipo(){
+  const v=document.getElementById('se-tipo').value;
+  document.getElementById('se-desc-wrap').style.display=v==='outro'?'':'none';
+  document.getElementById('se-desc').placeholder=v==='outro'?'Descreva o serviço':'';
+  if(v!=='outro'){ const t=servicosTipos.find(x=>String(x.id)===v); if(t) document.getElementById('se-valor').value=t.valor; }
+  else document.getElementById('se-valor').value='';
+  _seAtualizarTotal();
+}
+function _seAtualizarTotal(){
+  const q=parseFloat(document.getElementById('se-qtd').value)||1, v=parseFloat(document.getElementById('se-valor').value)||0;
+  document.getElementById('se-total-preview').innerHTML=q>1?'Total: <b>'+brl(q*v)+'</b>':'';
+}
+function abrirNovoServico(){
+  _seEditId=null; _sePreencherSelects();
+  document.getElementById('se-modal-title').textContent='Lançar Serviço';
+  document.getElementById('se-data').value=_hoje();
+  document.getElementById('se-imovel').value=''; document.getElementById('se-obs').value=''; document.getElementById('se-desc').value='';
+  document.getElementById('se-qtd').value=1;
+  document.getElementById('se-tipo').selectedIndex=0; _seAoTrocarTipo();
+  document.getElementById('modal-servico-equipe').classList.add('open');
+}
+function abrirEditarServico(id){
+  const s=servicosEquipe.find(x=>x.id===id); if(!s) return;
+  _seEditId=id; _sePreencherSelects();
+  document.getElementById('se-modal-title').textContent='Editar Serviço';
+  document.getElementById('se-data').value=s.data||'';
+  document.getElementById('se-membro').value=s.membroId;
+  document.getElementById('se-tipo').value=String(s.tipoId||'outro');
+  document.getElementById('se-desc-wrap').style.display=s.tipoId==='outro'?'':'none';
+  document.getElementById('se-desc').value=s.descricao||'';
+  document.getElementById('se-imovel').value=s.imovelNome||'';
+  document.getElementById('se-qtd').value=s.qtd||1;
+  document.getElementById('se-valor').value=s.valorUnit;
+  document.getElementById('se-obs').value=s.obs||'';
+  _seAtualizarTotal();
+  document.getElementById('modal-servico-equipe').classList.add('open');
+}
+function salvarServicoEquipe(){
+  const tipoV=document.getElementById('se-tipo').value;
+  const tipoId=tipoV==='outro'?'outro':+tipoV;
+  const desc=document.getElementById('se-desc').value.trim();
+  const data=document.getElementById('se-data').value;
+  const valor=parseFloat(document.getElementById('se-valor').value);
+  if(!data){ showToast('Informe a data.'); return; }
+  if(tipoId==='outro'&&!desc){ showToast('Descreva o serviço.'); return; }
+  if(isNaN(valor)||valor<0){ showToast('Informe o valor.'); return; }
+  const u=_seUsuario();
+  const membroId=_seIsAdmin()?document.getElementById('se-membro').value:u.id;
+  const tipo=servicosTipos.find(x=>x.id===tipoId);
+  const campos={data, membroId, tipoId, tipoNome:tipo?tipo.nome:'', descricao:desc, imovelNome:document.getElementById('se-imovel').value.trim(),
+    qtd:Math.max(1,parseFloat(document.getElementById('se-qtd').value)||1), valorUnit:valor, obs:document.getElementById('se-obs').value.trim()};
+  if(_seEditId){
+    const s=servicosEquipe.find(x=>x.id===_seEditId); if(!s) return;
+    Object.assign(s,campos);
+    // membro editou um recusado → volta pra fila de aprovação
+    if(!_seIsAdmin() && s.status==='recusado'){ s.status='pendente'; s.motivoRecusa=''; }
+  } else {
+    // lançado pela admin já entra aprovado; pela equipe entra pendente
+    const admin=_seIsAdmin();
+    servicosEquipe.unshift(Object.assign({id:Date.now(), status:admin?'aprovado':'pendente', motivoRecusa:'', criadoPor:u.id, criadoEm:new Date().toISOString(),
+      aprovadoPor:admin?u.id:'', aprovadoEm:admin?new Date().toISOString():'', pagamentoId:null},campos));
+  }
+  _seSave(); closeModal('modal-servico-equipe'); renderServicosEquipe();
+  showToast(_seEditId?'Lançamento atualizado':(_seIsAdmin()?'Serviço lançado e aprovado':'Serviço lançado — aguardando aprovação'));
+}
+function deletarServico(id){
+  if(!confirm('Apagar este lançamento?')) return;
+  servicosEquipe=servicosEquipe.filter(x=>x.id!==id); _seSave(); renderServicosEquipe();
+}
+
+// ── aprovação ──
+function aprovarServico(id){
+  const s=servicosEquipe.find(x=>x.id===id); if(!s) return;
+  s.status='aprovado'; s.motivoRecusa=''; s.aprovadoPor=_seUsuario().id; s.aprovadoEm=new Date().toISOString();
+  _seSave(); renderServicosEquipe(); showToast('Aprovado');
+}
+function aprovarSelecionados(){
+  const n=_seSelecionados.size; if(!n) return;
+  _seSelecionados.forEach(id=>{ const s=servicosEquipe.find(x=>x.id===id); if(s&&seStatus(s)==='pendente'){ s.status='aprovado'; s.aprovadoPor=_seUsuario().id; s.aprovadoEm=new Date().toISOString(); } });
+  _seSelecionados.clear(); _seSave(); renderServicosEquipe(); showToast(n+' lançamento(s) aprovado(s)');
+}
+let _seRecusarId=null;
+function abrirRecusarServico(id){ _seRecusarId=id; document.getElementById('se-recusar-motivo').value=''; document.getElementById('modal-se-recusar').classList.add('open'); }
+function confirmarRecusaSE(){
+  const s=servicosEquipe.find(x=>x.id===_seRecusarId); if(!s) return;
+  s.status='recusado'; s.motivoRecusa=document.getElementById('se-recusar-motivo').value.trim(); s.aprovadoPor=''; s.aprovadoEm='';
+  _seSave(); closeModal('modal-se-recusar'); renderServicosEquipe();
+}
+function voltarPendente(id){
+  const s=servicosEquipe.find(x=>x.id===id); if(!s||s.pagamentoId) return;
+  s.status='pendente'; s.motivoRecusa=''; s.aprovadoPor=''; s.aprovadoEm='';
+  _seSave(); renderServicosEquipe();
+}
+
+// ── fechamento ──
+let _fcPreset='mes_atual';
+let _fcExcluidos=new Set(); // membros desmarcados neste fechamento
+function _fimDoMes(y,m){ return new Date(y,m+1,0).getDate(); }
+function _fmt(y,m,d){ return y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0'); }
+function _sePresets(){
+  const d=new Date(), y=d.getFullYear(), m=d.getMonth();
+  const py=m===0?y-1:y, pm=m===0?11:m-1;
+  const nomeMes=(yy,mm)=>new Date(yy,mm,1).toLocaleDateString('pt-BR',{month:'long'});
+  return [
+    {id:'mes_atual',     l:'Este mês ('+nomeMes(y,m)+')',      ini:_fmt(y,m,1),   fim:_fmt(y,m,_fimDoMes(y,m))},
+    {id:'mes_passado',   l:'Mês passado ('+nomeMes(py,pm)+')', ini:_fmt(py,pm,1), fim:_fmt(py,pm,_fimDoMes(py,pm))},
+    {id:'q1',            l:'1ª quinzena',                      ini:_fmt(y,m,1),   fim:_fmt(y,m,15)},
+    {id:'q2',            l:'2ª quinzena',                      ini:_fmt(y,m,16),  fim:_fmt(y,m,_fimDoMes(y,m))},
+    {id:'tudo_aberto',   l:'Tudo em aberto',                   ini:'',            fim:''},
+  ];
+}
+function aplicarPresetFechamento(id){
+  _fcPreset=id;
+  const p=_sePresets().find(x=>x.id===id);
+  document.getElementById('se-fc-ini').value=p?p.ini:'';
+  document.getElementById('se-fc-fim').value=p?p.fim:'';
+  renderFechamento();
+}
+function _fcPeriodo(){ return {ini:document.getElementById('se-fc-ini').value, fim:document.getElementById('se-fc-fim').value}; }
+function _noPeriodo(s,p){ return (!p.ini||s.data>=p.ini) && (!p.fim||s.data<=p.fim); }
+function _fcItensAPagar(){
+  const p=_fcPeriodo();
+  return servicosEquipe.filter(s=>seStatus(s)==='aprovado' && _noPeriodo(s,p) && !_fcExcluidos.has(s.membroId));
+}
+function _fcAgruparPorMembro(itens){
+  const g={};
+  itens.forEach(s=>{ (g[s.membroId]=g[s.membroId]||[]).push(s); });
+  return Object.keys(g).map(id=>({id, nome:_seNomeMembro(id), itens:g[id].sort((a,b)=>a.data.localeCompare(b.data)), total:g[id].reduce((t,s)=>t+seValorItem(s),0)}))
+    .sort((a,b)=>a.nome.localeCompare(b.nome));
+}
+function renderFechamento(){
+  if(!document.getElementById('se-fc-ini').value && !document.getElementById('se-fc-fim').value && _fcPreset!=='tudo_aberto' && _fcPreset!=='custom'){
+    const p=_sePresets().find(x=>x.id===_fcPreset); if(p){ document.getElementById('se-fc-ini').value=p.ini; document.getElementById('se-fc-fim').value=p.fim; }
+  }
+  document.getElementById('se-presets').innerHTML=_sePresets().map(p=>'<button class="se-chip '+(_fcPreset===p.id?'active':'')+'" onclick="aplicarPresetFechamento(\''+p.id+'\')">'+esc(p.l)+'</button>').join('');
+
+  const p=_fcPeriodo();
+  const pend=servicosEquipe.filter(s=>seStatus(s)==='pendente' && _noPeriodo(s,p));
+  document.getElementById('se-fc-aviso').innerHTML=pend.length
+    ?'<div class="se-aviso"><i class="fa-solid fa-triangle-exclamation"></i> '+pend.length+' lançamento(s) neste período ainda <b>aguardando aprovação</b> ('+brl(pend.reduce((t,s)=>t+seValorItem(s),0))+'). Eles não entram no pagamento até serem aprovados. <a href="#" onclick="irParaPendentes();return false;" style="color:inherit;font-weight:600;">Revisar agora →</a></div>':'';
+
+  // todos os membros com algo aprovado no período (inclusive desmarcados)
+  const todos=_fcAgruparPorMembro(servicosEquipe.filter(s=>seStatus(s)==='aprovado' && _noPeriodo(s,p)));
+  const incluidos=todos.filter(g=>!_fcExcluidos.has(g.id));
+  const total=incluidos.reduce((t,g)=>t+g.total,0);
+  document.getElementById('se-fc-resumo').innerHTML=[
+    {l:'Total a pagar',v:brl(total),c:'sage',i:'fa-sack-dollar'},
+    {l:'Pessoas',v:incluidos.length,c:'lav',i:'fa-users'},
+    {l:'Lançamentos',v:incluidos.reduce((t,g)=>t+g.itens.length,0),c:'sky',i:'fa-list'},
+  ].map(x=>'<div class="metric-card '+x.c+'"><div class="metric-icon '+x.c+'"><i class="fa-solid '+x.i+'"></i></div><div class="metric-value" style="font-size:22px;">'+x.v+'</div><div class="metric-label">'+x.l+'</div></div>').join('');
+
+  const box=document.getElementById('se-fc-membros');
+  if(!todos.length){ box.innerHTML='<div class="card"><div class="se-vazio">Nada aprovado e em aberto neste período.</div></div>'; return; }
+  box.innerHTML=todos.map(g=>{
+    const fora=_fcExcluidos.has(g.id);
+    return '<div class="se-membro-card" id="se-fc-m-'+g.id+'" style="'+(fora?'opacity:.45;':'')+'">'+
+      '<div class="se-membro-head" onclick="this.parentNode.classList.toggle(\'open\')">'+
+        '<input type="checkbox" '+(fora?'':'checked')+' onclick="event.stopPropagation()" onchange="toggleMembroFechamento(\''+g.id+'\',this.checked)" title="Incluir neste pagamento">'+
+        '<span class="nome">'+esc(g.nome)+' <span style="font-weight:400;font-size:12px;color:var(--text3);">· '+g.itens.length+' serviço(s)</span></span>'+
+        '<span class="total">'+brl(g.total)+'</span><i class="fa-solid fa-chevron-down" style="font-size:11px;color:var(--text3);"></i>'+
+      '</div>'+
+      '<div class="se-membro-itens"><table class="data-table"><tbody>'+
+        g.itens.map(s=>'<tr><td style="font-size:12px;white-space:nowrap;width:80px;">'+_df(s.data)+'</td><td style="font-size:12.5px;">'+esc(seNomeServico(s))+(s.imovelNome?' <span style="color:var(--text3);">· '+esc(s.imovelNome)+'</span>':'')+'</td><td style="text-align:right;white-space:nowrap;font-size:12.5px;">'+((parseFloat(s.qtd)||1)>1?'<span style="color:var(--text3);font-size:11px;">'+s.qtd+' × '+brl(s.valorUnit)+' =</span> ':'')+'<b>'+brl(seValorItem(s))+'</b></td></tr>').join('')+
+      '</tbody></table></div></div>';
+  }).join('');
+}
+function toggleMembroFechamento(id,on){ on?_fcExcluidos.delete(id):_fcExcluidos.add(id); renderFechamento(); }
+function irParaPendentes(){ document.getElementById('se-f-status').value='pendente'; document.getElementById('se-f-mes').value=''; switchSETab('lancamentos'); }
+function _fcLabelPeriodo(ini,fim){
+  if(!ini&&!fim) return 'Tudo em aberto';
+  return (ini?_df(ini):'início')+' a '+(fim?_df(fim):'hoje');
+}
+
+// ── relatório ──
+let _relTextoResumo='';
+function _montarRelatorio(grupos,titulo,subtitulo){
+  const total=grupos.reduce((t,g)=>t+g.total,0);
+  _relTextoResumo='*'+titulo+'*\n'+subtitulo+'\n\n'+grupos.map(g=>g.nome+': '+brl(g.total)+' ('+g.itens.length+' serviço'+(g.itens.length>1?'s':'')+')').join('\n')+'\n\n*Total: '+brl(total)+'*';
+  return '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;border-bottom:1px solid var(--border2);padding-bottom:10px;">'+
+      '<div><div style="font-family:var(--font-display);font-size:19px;font-weight:700;">'+esc(titulo)+'</div><div style="color:var(--text2);font-size:12.5px;">'+esc(subtitulo)+'</div></div>'+
+      '<div style="text-align:right;font-size:11.5px;color:var(--text3);">WeCare Hosting<br>gerado em '+_df(_hoje())+'</div></div>'+
+    grupos.map(g=>'<h3><span>'+esc(g.nome)+'</span><span>'+brl(g.total)+'</span></h3>'+
+      '<table class="data-table"><thead><tr><th>Data</th><th>Serviço</th><th>Imóvel</th><th style="text-align:right;">Qtd</th><th style="text-align:right;">Valor</th></tr></thead><tbody>'+
+      g.itens.map(s=>'<tr><td style="white-space:nowrap;">'+_df(s.data)+'</td><td>'+esc(seNomeServico(s))+'</td><td>'+esc(s.imovelNome||'—')+'</td><td style="text-align:right;">'+(s.qtd||1)+'</td><td style="text-align:right;white-space:nowrap;">'+brl(seValorItem(s))+'</td></tr>').join('')+
+      '</tbody></table>').join('')+
+    '<div class="rel-total"><span>Total geral</span><span>'+brl(total)+'</span></div>';
+}
+function abrirRelatorioFechamento(){
+  const grupos=_fcAgruparPorMembro(_fcItensAPagar());
+  if(!grupos.length){ showToast('Nada a pagar neste período.'); return; }
+  const p=_fcPeriodo();
+  document.getElementById('se-relatorio').innerHTML=_montarRelatorio(grupos,'Serviços Extras — prévia de pagamento','Período: '+_fcLabelPeriodo(p.ini,p.fim)+' · ainda não pago');
+  document.getElementById('modal-se-relatorio').classList.add('open');
+}
+function abrirRelatorioPagamento(pagId){
+  const pg=servicosPagamentos.find(x=>x.id===pagId); if(!pg) return;
+  const grupos=_fcAgruparPorMembro(servicosEquipe.filter(s=>s.pagamentoId===pagId));
+  document.getElementById('se-relatorio').innerHTML=_montarRelatorio(grupos,'Serviços Extras — comprovante de pagamento','Período: '+_fcLabelPeriodo(pg.ini,pg.fim)+' · pago em '+_df(pg.dataPagamento)+(pg.obs?' · '+pg.obs:''));
+  document.getElementById('modal-se-relatorio').classList.add('open');
+}
+function copiarResumoRelatorio(){
+  if(navigator.clipboard) navigator.clipboard.writeText(_relTextoResumo).then(()=>showToast('Resumo copiado — cole no WhatsApp'),()=>showToast('Não foi possível copiar'));
+}
+function exportarCSVFechamento(){
+  const itens=_fcItensAPagar();
+  if(!itens.length){ showToast('Nada a pagar neste período.'); return; }
+  const linhas=[['Membro','Data','Serviço','Imóvel','Qtd','Valor unitário','Total','Obs']];
+  itens.slice().sort((a,b)=>_seNomeMembro(a.membroId).localeCompare(_seNomeMembro(b.membroId))||a.data.localeCompare(b.data)).forEach(s=>{
+    linhas.push([_seNomeMembro(s.membroId),_df(s.data),seNomeServico(s),s.imovelNome||'',s.qtd||1,String(s.valorUnit).replace('.',','),String(seValorItem(s).toFixed(2)).replace('.',','),s.obs||'']);
+  });
+  const csv='﻿'+linhas.map(l=>l.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(';')).join('\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  const p=_fcPeriodo(); a.download='servicos-equipe_'+(p.ini||'inicio')+'_'+(p.fim||'hoje')+'.csv'; a.click();
+}
+
+// ── pagamento em lote ──
+function abrirConfirmarPagamento(){
+  const grupos=_fcAgruparPorMembro(_fcItensAPagar());
+  if(!grupos.length){ showToast('Nada a pagar neste período.'); return; }
+  const total=grupos.reduce((t,g)=>t+g.total,0);
+  document.getElementById('se-pagar-resumo').innerHTML=grupos.map(g=>'<div style="display:flex;justify-content:space-between;padding:3px 0;"><span>'+esc(g.nome)+'</span><b>'+brl(g.total)+'</b></div>').join('')+
+    '<div style="display:flex;justify-content:space-between;padding-top:8px;margin-top:6px;border-top:1px solid var(--border2);font-size:14px;"><span>Total</span><b style="color:var(--sage);">'+brl(total)+'</b></div>'+
+    '<div style="font-size:11.5px;color:var(--text3);margin-top:8px;">Todos esses lançamentos vão ficar marcados como <b>Pago</b>. Dá pra desfazer depois em Pagamentos.</div>';
+  document.getElementById('se-pagar-data').value=_hoje(); document.getElementById('se-pagar-obs').value='';
+  document.getElementById('modal-se-pagar').classList.add('open');
+}
+function confirmarPagamentoSE(){
+  const itens=_fcItensAPagar(); if(!itens.length) return;
+  const p=_fcPeriodo();
+  const grupos=_fcAgruparPorMembro(itens);
+  const pg={id:Date.now(), dataPagamento:document.getElementById('se-pagar-data').value||_hoje(), ini:p.ini, fim:p.fim,
+    itens:itens.map(s=>s.id), totais:Object.fromEntries(grupos.map(g=>[g.id,+g.total.toFixed(2)])),
+    total:+grupos.reduce((t,g)=>t+g.total,0).toFixed(2), obs:document.getElementById('se-pagar-obs').value.trim(), criadoEm:new Date().toISOString()};
+  itens.forEach(s=>{ s.pagamentoId=pg.id; });
+  servicosPagamentos.unshift(pg);
+  _seSave(); closeModal('modal-se-pagar'); renderFechamento();
+  showToast('Pagamento registrado: '+brl(pg.total));
+  abrirRelatorioPagamento(pg.id);
+}
+function renderHistoricoPagamentos(){
+  const tb=document.getElementById('se-hist-tbody');
+  if(!servicosPagamentos.length){ tb.innerHTML='<tr><td colspan="6" class="se-vazio">Nenhum pagamento registrado ainda.</td></tr>'; return; }
+  tb.innerHTML=servicosPagamentos.map(pg=>{
+    const pessoas=Object.keys(pg.totais||{}).map(_seNomeMembro).join(', ');
+    return '<tr><td style="white-space:nowrap;">'+_df(pg.dataPagamento)+'</td><td style="font-size:12.5px;">'+esc(_fcLabelPeriodo(pg.ini,pg.fim))+(pg.obs?'<div style="font-size:11px;color:var(--text3);">'+esc(pg.obs)+'</div>':'')+'</td>'+
+      '<td style="font-size:12.5px;">'+esc(pessoas)+'</td><td>'+(pg.itens||[]).length+'</td><td style="font-weight:600;color:var(--sage);white-space:nowrap;">'+brl(pg.total)+'</td>'+
+      '<td style="white-space:nowrap;text-align:right;"><button class="se-icon-btn" onclick="abrirRelatorioPagamento('+pg.id+')" title="Ver relatório"><i class="fa-solid fa-file-lines"></i></button><button class="se-icon-btn no" onclick="desfazerPagamento('+pg.id+')" title="Desfazer pagamento"><i class="fa-solid fa-rotate-left"></i></button></td></tr>';
+  }).join('');
+}
+function desfazerPagamento(id){
+  if(!confirm('Desfazer este pagamento? Os lançamentos voltam para "Aprovado (a pagar)".')) return;
+  servicosEquipe.forEach(s=>{ if(s.pagamentoId===id) s.pagamentoId=null; });
+  servicosPagamentos=servicosPagamentos.filter(x=>x.id!==id);
+  _seSave(); renderHistoricoPagamentos(); showToast('Pagamento desfeito');
+}
+
+// ── tabela de preços ──
+function renderTabelaPrecos(){
+  const tb=document.getElementById('se-tabela-tbody');
+  if(!servicosTipos.length){ tb.innerHTML='<tr><td colspan="4" class="se-vazio">Nenhum tipo cadastrado.</td></tr>'; return; }
+  tb.innerHTML=servicosTipos.map(t=>'<tr>'+
+    '<td><input class="form-input" value="'+esc(t.nome)+'" onchange="setTipoCampo('+t.id+',\'nome\',this.value)" style="padding:6px 9px;font-size:13px;"></td>'+
+    '<td><input type="number" class="form-input" value="'+t.valor+'" min="0" step="0.01" onchange="setTipoCampo('+t.id+',\'valor\',this.value)" style="padding:6px 9px;font-size:13px;"></td>'+
+    '<td><input class="form-input" value="'+esc(t.unidade||'')+'" placeholder="ex: por turno" onchange="setTipoCampo('+t.id+',\'unidade\',this.value)" style="padding:6px 9px;font-size:13px;"></td>'+
+    '<td><button class="se-icon-btn no" onclick="removerTipoServico('+t.id+')" title="Remover"><i class="fa-solid fa-trash"></i></button></td></tr>').join('');
+}
+function setTipoCampo(id,campo,v){
+  const t=servicosTipos.find(x=>x.id===id); if(!t) return;
+  t[campo]=campo==='valor'?(parseFloat(v)||0):v.trim(); _seSave(); showToast('Tabela atualizada');
+}
+function adicionarTipoServico(){ servicosTipos.push({id:Date.now(),nome:'Novo serviço',valor:0,unidade:''}); _seSave(); renderTabelaPrecos(); }
+function removerTipoServico(id){
+  // lançamentos antigos guardam tipoNome, então continuam legíveis
+  if(!confirm('Remover este tipo? Lançamentos já feitos continuam com o nome.')) return;
+  servicosTipos=servicosTipos.filter(x=>x.id!==id); _seSave(); renderTabelaPrecos();
+}
+
+// ── init ──
+document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('open'); }));
+_seLoad();
+(function(){
+  const su=document.getElementById('se-usuario');
+  su.innerHTML='<option value="admin">Nicole (admin)</option>'+SE_MEMBROS.map(m=>'<option value="'+m.id+'">'+esc(m.name)+' (equipe)</option>').join('');
+  let u='admin'; try{ u=localStorage.getItem('proto_servicos_user')||'admin'; }catch(e){}
+  su.value=u;
+  document.getElementById('se-f-mes').value=_hoje().substring(0,7);
+  trocarUsuarioProto(u);
+})();
+</script>
+</body>
+</html>

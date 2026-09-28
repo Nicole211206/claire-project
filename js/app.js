@@ -266,6 +266,11 @@ let salarioMesSel=''; // mês selecionado na aba Salário (YYYY-MM) — vazio = 
 let salPagos={}; // { 'attId_2026-06': true }
 let outrosMembros=[]; // {id, nome, cargo, fixo, comissao}
 let extras=[]; // {id, data, descricao, imovelNome, cobrado, gasto, obs}
+// Cadastro de quem pode receber por serviço extra. Inativos saem dos selects
+// mas continuam nos lançamentos/pagamentos antigos (por isso não se apaga quem já tem histórico).
+// {id, nome, funcao, telefone, documento, pixTipo, pixChave, banco, agencia, conta, obs, ativo,
+//  attId (liga à atendente em ATTS), email (liga a um login que não é atendente)}
+let servicosPessoas=[];
 let projetos=[];
 let transcricoes=[];
 let transcricaoAtiva=null;
@@ -328,6 +333,7 @@ const MODULOS_LISTA=[
   {id:'projetos',label:'Projetos'},{id:'plantao',label:'Passagem de Turno'},
   {id:'turnos',label:'Turnos'},
   {id:'extras',label:'Extras'},
+  {id:'servicosequipe',label:'Serviços da Equipe'},
   {id:'controle',label:'Controle'},
   {id:'manual',label:'Manual'}
 ];
@@ -335,7 +341,7 @@ function getMinhaAtt(){ const u=getCurrentUser(); if(!u||!u.attId) return null; 
 function getCurrentUser(){ try{ return JSON.parse(sessionStorage.getItem('nx_currentuser')||'null'); }catch(e){ return null; } }
 function _autorAtual(){ try{ const u=getCurrentUser(); return u?(u.nome||u.email||''):''; }catch(e){ return ''; } }
 function isAdmin(){ const u=getCurrentUser(); return u && u.perfil==='admin'; }
-function podeAcessar(modId){ const u=getCurrentUser(); if(!u) return false; if(u.perfil==='admin') return true; if(modId==='tasks'&&u.attId) return true; return (u.modulos||[]).includes(modId); }
+function podeAcessar(modId){ const u=getCurrentUser(); if(!u) return false; if(u.perfil==='admin') return true; if(modId==='tasks'&&u.attId) return true; if(modId==='servicosequipe'&&u.attId) return true; return (u.modulos||[]).includes(modId); }
 function attsDoUsuario(){
   const u=getCurrentUser();
   if(!u) return [];
@@ -501,7 +507,7 @@ function aplicarPresetPerfil(perfil){
   grp.style.opacity='1';
   let preset=[];
   if(perfil==='coordenacao') preset=['team','onboarding','compras','overview'];
-  else if(perfil==='atendente') preset=['tasks','turnos','overview'];
+  else if(perfil==='atendente') preset=['tasks','turnos','overview','servicosequipe'];
   _renderModulosChecks(preset);
 }
 
@@ -667,7 +673,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
 });
 
 // ═══════════════════ NAV ═══════════════════
-const PT={overview:'Visão Geral',kpis:'Meus KPIs',performance:'Acompanhamento de Performance',tasks:'Tarefas',limpezacaucao:'Limpeza & Caução',equipe:'Equipe',drive:'Google Drive',onboarding:'Onboarding de Imóveis',notes:'Anotações',focus:'Foco',projetos:'Projetos',compras:'Registro de Compras',manutencao:'Manutenção',reunioes:'Reuniões e Transcrições',avaliacoes:'Acompanhamento',usuarios:'Usuários e Acessos',extras:'Serviços Extras',controle:'Controle',manual:'Manual'};
+const PT={overview:'Visão Geral',kpis:'Meus KPIs',performance:'Acompanhamento de Performance',tasks:'Tarefas',limpezacaucao:'Limpeza & Caução',equipe:'Equipe',drive:'Google Drive',onboarding:'Onboarding de Imóveis',notes:'Anotações',focus:'Foco',projetos:'Projetos',compras:'Registro de Compras',manutencao:'Manutenção',reunioes:'Reuniões e Transcrições',avaliacoes:'Acompanhamento',usuarios:'Usuários e Acessos',extras:'Serviços Extras',servicosequipe:'Serviços da Equipe',controle:'Controle',manual:'Manual'};
 function showPanel(id,btn){
   if(id==='equipe'){
     const u0=getCurrentUser();
@@ -692,6 +698,7 @@ function showPanel(id,btn){
   if(id==='equipe'){ setupEquipeTabs(); }
   if(id==='kpis'){renderKPIs();}
   if(id==='extras'){renderExtras();}
+  if(id==='servicosequipe'){renderServicosEquipePanel();}
   if(id==='controle'){
     verificarTarefasDespesas();
     if(typeof _controleTab==='undefined'||_controleTab==='despesas') renderDespesasFixas();
@@ -3950,6 +3957,735 @@ function renderCaucaoKanban(){
   }).join('');
 }
 
+// ═══════════════════ SERVIÇOS DA EQUIPE ═══════════════════
+// Serviços extras feitos pela equipe → aprovação da admin → fechamento por mês
+// de vigência → pagamento em lote + extrato por pessoa. Veio do protótipo
+// prototipos/servicos-equipe.html (mesma lógica; lá os dados ficam só no
+// navegador, aqui sincronizam pelas chaves nx_servicos_*).
+// Helpers próprios: o brl() global arredonda pra reais inteiros (pagamento
+// precisa de centavos) e o esc() global não escapa aspas (aqui entra em atributos).
+function _seEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function _seBrl(v){ return 'R$ '+(parseFloat(v)||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function _seHoje(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function _seDf(d){ return d?d.split('-').reverse().join('/'):'—'; }
+
+// ── dados ──
+const SE_PIX_TIPOS={cpf:'CPF',cnpj:'CNPJ',telefone:'Telefone',email:'E-mail',aleatoria:'Chave aleatória'};
+function _sePessoasAtivas(){ return servicosPessoas.filter(p=>p.ativo!==false).sort((a,b)=>a.nome.localeCompare(b.nome)); }
+function _sePessoa(id){ return servicosPessoas.find(x=>x.id===id); }
+// {id, data:'YYYY-MM-DD', membroId, tipoId, descricao, imovelNome, qtd, valorUnit, obs,
+//  status:'pendente'|'aprovado'|'recusado', motivoRecusa, criadoPor, criadoEm,
+//  aprovadoPor, aprovadoEm, pagamentoId}
+let servicosEquipe=[];
+// {id, nome, valor, unidade} — id 'outro' é reservado pra serviço livre
+let servicosTipos=[];
+// {id, dataPagamento, periodo:{modo,mes|ini,fim}, dataPrevista, itens:[ids], totais:{membroId:valor}, total, obs, criadoEm}
+let servicosPagamentos=[];
+// {diaPagamento} — dia do mês seguinte à vigência em que se paga (sincroniza como número em nx_servicos_diapag)
+let servicosConfig={diaPagamento:15};
+
+// ── usuário ──
+// Quem está logado é "dono" de uma pessoa do cadastro pelo attId (atendente)
+// ou pelo e-mail de login. Admin vê e aprova tudo; o resto só lança/vê o seu.
+function _seIsAdmin(){ return isAdmin(); }
+function _seMinhaPessoa(){
+  const u=getCurrentUser(); if(!u) return null;
+  const email=(u.email||'').toLowerCase();
+  return servicosPessoas.find(p=>p.ativo!==false && ((u.attId && p.attId===u.attId) || (email && (p.email||'').toLowerCase()===email)))||null;
+}
+function _seUsuario(){
+  const u=getCurrentUser()||{}, p=_seMinhaPessoa();
+  return {id:p?p.id:'', nome:p?p.nome:(u.nome||u.email||''), email:u.email||''};
+}
+function _seNomeMembro(id){ const m=_sePessoa(id); return m?m.nome:id; }
+// Atendentes viram pessoas do cadastro automaticamente (id determinístico,
+// assim dois aparelhos semeando ao mesmo tempo geram o MESMO registro). Quem
+// foi excluída de propósito tem tombstone e não volta.
+function _seSemearPessoasDasAtendentes(){
+  if(!_seIsAdmin() || !Array.isArray(ATTS)) return false;
+  const tomb=new Set((tombstones||[]).map(t=>t.id));
+  let mudou=false;
+  ATTS.forEach(a=>{
+    if(!a||!a.id) return;
+    const id='pes_'+a.id;
+    if(servicosPessoas.some(p=>p.id===id||p.attId===a.id) || tomb.has(id)) return;
+    servicosPessoas.push({id, attId:a.id, nome:a.name||a.id, funcao:'Atendente', telefone:'', documento:'', email:'', pixTipo:'', pixChave:'', banco:'', agencia:'', conta:'', obs:'', ativo:true});
+    mudou=true;
+  });
+  return mudou;
+}
+// Ponto de entrada (showPanel): acerta o que cada perfil vê e desenha a aba atual.
+function renderServicosEquipePanel(){
+  if(_seSemearPessoasDasAtendentes()) saveAll();
+  const admin=_seIsAdmin(), eu=_seMinhaPessoa();
+  document.querySelectorAll('#panel-servicosequipe .se-admin').forEach(el=>el.style.display=admin?'':'none');
+  const semVinculo=!admin && !eu;
+  document.getElementById('se-btn-lancar').style.display=semVinculo?'none':'';
+  document.getElementById('se-aviso-vinculo').innerHTML=semVinculo
+    ?'<div class="se-aviso"><i class="fa-solid fa-circle-info"></i> Seu login ainda não está ligado a uma pessoa do cadastro de Serviços da Equipe. Peça pra admin incluir seu e-mail no seu cadastro (aba Pessoas).</div>':'';
+  if(!document.getElementById('se-f-mes').value) document.getElementById('se-f-mes').value=_seHoje().substring(0,7);
+  if(!admin && ['fechamento','pessoas','tabela'].includes(_seTab)) _seTab='lancamentos';
+  switchSETab(_seTab);
+}
+
+// ── cálculo ──
+function seValorItem(s){ return (parseFloat(s.qtd)||1)*(parseFloat(s.valorUnit)||0); }
+function seStatus(s){ return s.pagamentoId?'pago':(s.status||'pendente'); }
+function seNomeServico(s){
+  if(s.tipoId==='outro'||!s.tipoId) return s.descricao||'Outro';
+  const t=servicosTipos.find(x=>x.id===s.tipoId);
+  return (t?t.nome:(s.tipoNome||'Serviço'))+(s.descricao?' — '+s.descricao:'');
+}
+
+// ── abas ──
+let _seTab='lancamentos';
+function switchSETab(tab){
+  _seTab=tab;
+  document.querySelectorAll('.se-tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+  document.querySelectorAll('.se-tab-panel').forEach(p=>p.classList.toggle('active',p.id==='se-tab-'+tab));
+  if(tab==='fechamento') renderFechamento();
+  else if(tab==='historico') renderHistoricoPagamentos();
+  else if(tab==='tabela') renderTabelaPrecos();
+  else if(tab==='pessoas') renderPessoas();
+  else renderServicosEquipe();
+}
+
+// ── lançamentos ──
+let _seSelecionados=new Set();
+function renderServicosEquipe(){
+  const u=_seUsuario(), admin=_seIsAdmin();
+  const fm=document.getElementById('se-f-membro');
+  if(fm){ const v=fm.value; fm.innerHTML='<option value="">Toda a equipe</option>'+servicosPessoas.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(m=>'<option value="'+m.id+'">'+_seEsc(m.nome)+(m.ativo===false?' (inativo)':'')+'</option>').join(''); fm.value=v; }
+  const mes=document.getElementById('se-f-mes').value;
+  const membro=admin?document.getElementById('se-f-membro').value:u.id;
+  const st=document.getElementById('se-f-status').value;
+
+  let lista=servicosEquipe.filter(s=>(!mes||seMesVig(s)===mes) && (!membro||s.membroId===membro));
+  const base=lista;
+  if(st) lista=lista.filter(s=>seStatus(s)===st);
+  lista.sort((a,b)=>(b.data||'').localeCompare(a.data||'')||b.id-a.id);
+
+  const soma=f=>base.filter(f).reduce((t,s)=>t+seValorItem(s),0);
+  const qtd=f=>base.filter(f).length;
+  const cards=[
+    {l:'Pendentes de aprovação',v:_seBrl(soma(s=>seStatus(s)==='pendente')),sub:qtd(s=>seStatus(s)==='pendente')+' lançamento(s)',c:'peach',i:'fa-hourglass-half'},
+    {l:'Aprovado a pagar',v:_seBrl(soma(s=>seStatus(s)==='aprovado')),sub:qtd(s=>seStatus(s)==='aprovado')+' lançamento(s)',c:'sky',i:'fa-circle-check'},
+    {l:'Pago',v:_seBrl(soma(s=>seStatus(s)==='pago')),sub:qtd(s=>seStatus(s)==='pago')+' lançamento(s)',c:'sage',i:'fa-money-bill-wave'},
+  ];
+  document.getElementById('se-resumo').innerHTML=cards.map(x=>'<div class="metric-card '+x.c+'"><div class="metric-icon '+x.c+'"><i class="fa-solid '+x.i+'"></i></div><div class="metric-value" style="font-size:22px;">'+x.v+'</div><div class="metric-label">'+x.l+'</div><div class="metric-delta neutral">'+x.sub+'</div></div>').join('');
+
+  // seleção só vale pra pendentes visíveis
+  const idsPend=new Set(lista.filter(s=>seStatus(s)==='pendente').map(s=>s.id));
+  _seSelecionados=new Set([..._seSelecionados].filter(id=>idsPend.has(id)));
+  const btnLote=document.getElementById('se-btn-aprovar-lote');
+  btnLote.style.display=admin&&_seSelecionados.size?'':'none';
+  btnLote.innerHTML='<i class="fa-solid fa-check-double"></i> Aprovar selecionados ('+_seSelecionados.size+')';
+  document.getElementById('se-sel-todos').checked=idsPend.size>0&&_seSelecionados.size===idsPend.size;
+
+  const stLabel={pendente:'Pendente',aprovado:'Aprovado',recusado:'Recusado',pago:'Pago'};
+  const tb=document.getElementById('se-tbody');
+  if(!lista.length){
+    tb.innerHTML='<tr><td colspan="8" class="se-vazio">'+(servicosEquipe.length?'Nenhum lançamento com esses filtros.':'Nenhum serviço lançado ainda. Clique em "Lançar Serviço".')+'</td></tr>';
+    return;
+  }
+  tb.innerHTML=lista.map(s=>{
+    const status=seStatus(s);
+    const podeEditar=status!=='pago' && (admin || (s.membroId===u.id && status!=='aprovado'));
+    let acoes='';
+    if(admin && status==='pendente') acoes+='<button class="se-icon-btn ok" onclick="aprovarServico('+s.id+')" title="Aprovar"><i class="fa-solid fa-check"></i></button><button class="se-icon-btn no" onclick="abrirRecusarServico('+s.id+')" title="Recusar"><i class="fa-solid fa-xmark"></i></button>';
+    if(admin && (status==='aprovado'||status==='recusado')) acoes+='<button class="se-icon-btn" onclick="voltarPendente('+s.id+')" title="Voltar para pendente"><i class="fa-solid fa-rotate-left"></i></button>';
+    if(podeEditar) acoes+='<button class="se-icon-btn" onclick="abrirEditarServico('+s.id+')" title="Editar"><i class="fa-solid fa-pen"></i></button><button class="se-icon-btn" onclick="deletarServico('+s.id+')" title="Apagar"><i class="fa-solid fa-trash"></i></button>';
+    const qtdTxt=(parseFloat(s.qtd)||1)>1?'<div style="font-size:10.5px;color:var(--text3);">'+s.qtd+' × '+_seBrl(s.valorUnit)+'</div>':'';
+    const obs=s.obs?'<div style="font-size:11px;color:var(--text3);margin-top:2px;">'+_seEsc(s.obs)+'</div>':'';
+    const recusa=status==='recusado'&&s.motivoRecusa?'<div style="font-size:11px;color:var(--vermelha);margin-top:2px;"><i class="fa-solid fa-circle-info"></i> '+_seEsc(s.motivoRecusa)+'</div>':'';
+    const chk=admin?'<td>'+(status==='pendente'?'<input type="checkbox" data-id="'+s.id+'" '+(_seSelecionados.has(s.id)?'checked':'')+' onchange="toggleSelServico('+s.id+',this.checked)">':'')+'</td>':'';
+    return '<tr>'+chk+
+      '<td style="white-space:nowrap;font-size:12.5px;">'+_seDf(s.data)+'<div style="font-size:10.5px;color:var(--text3);line-height:1.4;">vig. '+_seMesCurto(seMesVig(s))+(status==='pago'?'':'<br>paga '+_seDf(sePrevisao(s)))+'</div></td>'+
+      (admin?'<td style="font-weight:600;font-size:13px;">'+_seEsc(_seNomeMembro(s.membroId))+'</td>':'')+
+      '<td>'+_seEsc(seNomeServico(s))+obs+recusa+'</td>'+
+      '<td class="se-hide-mobile" style="font-size:12px;">'+_seEsc(s.imovelNome||'—')+'</td>'+
+      '<td style="white-space:nowrap;font-weight:600;">'+_seBrl(seValorItem(s))+qtdTxt+'</td>'+
+      '<td><span class="se-status '+status+'">'+stLabel[status]+'</span></td>'+
+      '<td style="white-space:nowrap;text-align:right;">'+acoes+'</td></tr>';
+  }).join('');
+}
+function toggleSelServico(id,on){ on?_seSelecionados.add(id):_seSelecionados.delete(id); renderServicosEquipe(); }
+function selecionarTodosPendentes(on){
+  _seSelecionados=new Set();
+  if(on) document.querySelectorAll('#se-tbody input[data-id]').forEach(c=>_seSelecionados.add(+c.dataset.id));
+  renderServicosEquipe();
+}
+
+// ── modal de lançamento ──
+let _seEditId=null;
+function _sePreencherSelects(){
+  const u=_seUsuario();
+  const sm=document.getElementById('se-membro');
+  // editando lançamento de alguém que foi inativado: mantém a pessoa na lista
+  const atual=_seEditId?(servicosEquipe.find(x=>x.id===_seEditId)||{}).membroId:null;
+  const lista=_sePessoasAtivas(); const pa=atual&&!lista.some(p=>p.id===atual)?_sePessoa(atual):null; if(pa) lista.push(pa);
+  sm.innerHTML=lista.map(m=>'<option value="'+m.id+'">'+_seEsc(m.nome)+'</option>').join('')+
+    (_seIsAdmin()?'<option value="__nova__">+ Cadastrar nova pessoa…</option>':'');
+  sm.onchange=function(){ if(sm.value==='__nova__'){ sm.value=lista[0]?lista[0].id:''; abrirNovaPessoa(true); } };
+  sm.disabled=!_seIsAdmin(); if(!_seIsAdmin()) sm.value=u.id;
+  document.getElementById('se-tipo').innerHTML=servicosTipos.map(t=>'<option value="'+t.id+'">'+_seEsc(t.nome)+' — '+_seBrl(t.valor)+(t.unidade?' '+_seEsc(t.unidade):'')+'</option>').join('')+'<option value="outro">Outro (descrever)</option>';
+  const imoveis=[...new Set(servicosEquipe.map(s=>s.imovelNome).filter(Boolean))].sort();
+  document.getElementById('se-imoveis-list').innerHTML=imoveis.map(n=>'<option value="'+_seEsc(n)+'">').join('');
+}
+function _seAoTrocarTipo(){
+  const v=document.getElementById('se-tipo').value;
+  document.getElementById('se-desc-wrap').style.display=v==='outro'?'':'none';
+  document.getElementById('se-desc').placeholder=v==='outro'?'Descreva o serviço':'';
+  if(v!=='outro'){ const t=servicosTipos.find(x=>String(x.id)===v); if(t) document.getElementById('se-valor').value=t.valor; }
+  else document.getElementById('se-valor').value='';
+  _seAtualizarTotal();
+}
+function _seAtualizarTotal(){
+  const q=parseFloat(document.getElementById('se-qtd').value)||1, v=parseFloat(document.getElementById('se-valor').value)||0;
+  document.getElementById('se-total-preview').innerHTML=q>1?'Total: <b>'+_seBrl(q*v)+'</b>':'';
+}
+// vigência acompanha a data do serviço até alguém mexer nela; previsão acompanha a vigência
+// até alguém mexer nela (e aí vira dataPrevista gravada no lançamento)
+let _seMesVigManual=false, _sePrevManual=false;
+function _seAoTrocarData(){
+  const d=document.getElementById('se-data').value;
+  if(!_seMesVigManual && d) document.getElementById('se-mesvig').value=d.substring(0,7);
+  _seAtualizarPrevisao();
+}
+function _seAtualizarPrevisao(){
+  const padrao=sePrevisaoPadrao(document.getElementById('se-mesvig').value);
+  if(!_sePrevManual) document.getElementById('se-prev').value=padrao;
+  _sePrevHint();
+}
+function _seAoEditarPrevisao(){
+  const padrao=sePrevisaoPadrao(document.getElementById('se-mesvig').value);
+  _sePrevManual=document.getElementById('se-prev').value!==padrao && !!document.getElementById('se-prev').value;
+  if(!document.getElementById('se-prev').value) document.getElementById('se-prev').value=padrao;
+  _sePrevHint();
+}
+function _sePrevHint(){
+  const padrao=sePrevisaoPadrao(document.getElementById('se-mesvig').value);
+  const h=document.getElementById('se-prev-hint');
+  h.innerHTML=_sePrevManual
+    ?'<span style="color:var(--peach);">alterada · padrão seria '+_seDf(padrao)+'</span> <a href="#" onclick="_sePrevManual=false;_seAtualizarPrevisao();return false;" style="color:var(--text2);">voltar</a>'
+    :'dia '+(servicosConfig.diaPagamento||15)+' do mês seguinte';
+  document.getElementById('se-prev').disabled=!_seIsAdmin();
+}
+function abrirNovoServico(){
+  if(!_seIsAdmin() && !_seMinhaPessoa()){ showToast('Seu login não está ligado a uma pessoa do cadastro.','peach'); return; }
+  if(_seIsAdmin() && !_sePessoasAtivas().length){ showToast('Cadastre uma pessoa primeiro (aba Pessoas).','peach'); switchSETab('pessoas'); return; }
+  _seEditId=null; _sePreencherSelects();
+  document.getElementById('se-modal-title').textContent='Lançar Serviço';
+  document.getElementById('se-data').value=_seHoje();
+  _seMesVigManual=false; _sePrevManual=false; document.getElementById('se-mesvig').value=_seHoje().substring(0,7); _seAtualizarPrevisao();
+  document.getElementById('se-imovel').value=''; document.getElementById('se-obs').value=''; document.getElementById('se-desc').value='';
+  document.getElementById('se-qtd').value=1;
+  document.getElementById('se-tipo').selectedIndex=0; _seAoTrocarTipo();
+  document.getElementById('modal-servico-equipe').classList.add('open');
+}
+function abrirEditarServico(id){
+  const s=servicosEquipe.find(x=>x.id===id); if(!s) return;
+  _seEditId=id; _sePreencherSelects();
+  document.getElementById('se-modal-title').textContent='Editar Serviço';
+  document.getElementById('se-data').value=s.data||'';
+  _seMesVigManual=true; _sePrevManual=!!s.dataPrevista; document.getElementById('se-mesvig').value=seMesVig(s); document.getElementById('se-prev').value=sePrevisao(s); _sePrevHint();
+  document.getElementById('se-membro').value=s.membroId;
+  document.getElementById('se-tipo').value=String(s.tipoId||'outro');
+  document.getElementById('se-desc-wrap').style.display=s.tipoId==='outro'?'':'none';
+  document.getElementById('se-desc').value=s.descricao||'';
+  document.getElementById('se-imovel').value=s.imovelNome||'';
+  document.getElementById('se-qtd').value=s.qtd||1;
+  document.getElementById('se-valor').value=s.valorUnit;
+  document.getElementById('se-obs').value=s.obs||'';
+  _seAtualizarTotal();
+  document.getElementById('modal-servico-equipe').classList.add('open');
+}
+function salvarServicoEquipe(){
+  const tipoV=document.getElementById('se-tipo').value;
+  const tipoId=tipoV==='outro'?'outro':+tipoV;
+  const desc=document.getElementById('se-desc').value.trim();
+  const data=document.getElementById('se-data').value;
+  const valor=parseFloat(document.getElementById('se-valor').value);
+  if(!data){ showToast('Informe a data.','peach'); return; }
+  const mesVigente=document.getElementById('se-mesvig').value||data.substring(0,7);
+  if(tipoId==='outro'&&!desc){ showToast('Descreva o serviço.','peach'); return; }
+  if(isNaN(valor)||valor<0){ showToast('Informe o valor.','peach'); return; }
+  const u=_seUsuario();
+  const membroId=_seIsAdmin()?document.getElementById('se-membro').value:u.id;
+  if(!membroId||membroId==='__nova__'){ showToast('Escolha quem fez o serviço.','peach'); return; }
+  const tipo=servicosTipos.find(x=>x.id===tipoId);
+  const campos={data, mesVigente, dataPrevista:_sePrevManual?document.getElementById('se-prev').value:'', membroId, tipoId, tipoNome:tipo?tipo.nome:'', descricao:desc, imovelNome:document.getElementById('se-imovel').value.trim(),
+    qtd:Math.max(1,parseFloat(document.getElementById('se-qtd').value)||1), valorUnit:valor, obs:document.getElementById('se-obs').value.trim()};
+  if(_seEditId){
+    const s=servicosEquipe.find(x=>x.id===_seEditId); if(!s) return;
+    Object.assign(s,campos);
+    // membro editou um recusado → volta pra fila de aprovação
+    if(!_seIsAdmin() && s.status==='recusado'){ s.status='pendente'; s.motivoRecusa=''; }
+  } else {
+    // lançado pela admin já entra aprovado; pela equipe entra pendente
+    const admin=_seIsAdmin();
+    servicosEquipe.unshift(Object.assign({id:Date.now(), status:admin?'aprovado':'pendente', motivoRecusa:'', criadoPor:u.email||u.nome, criadoEm:new Date().toISOString(),
+      aprovadoPor:admin?(u.email||u.nome):'', aprovadoEm:admin?new Date().toISOString():'', pagamentoId:null},campos));
+  }
+  saveAll(); closeModal('modal-servico-equipe'); renderServicosEquipe();
+  showToast(_seEditId?'Lançamento atualizado':(_seIsAdmin()?'Serviço lançado e aprovado':'Serviço lançado — aguardando aprovação'));
+}
+function deletarServico(id){
+  if(!confirm('Apagar este lançamento?')) return;
+  servicosEquipe=servicosEquipe.filter(x=>x.id!==id); saveAll(); renderServicosEquipe();
+}
+
+// ── aprovação ──
+function aprovarServico(id){
+  const s=servicosEquipe.find(x=>x.id===id); if(!s) return;
+  s.status='aprovado'; s.motivoRecusa=''; s.aprovadoPor=_seUsuario().email; s.aprovadoEm=new Date().toISOString();
+  saveAll(); renderServicosEquipe(); showToast('Aprovado');
+}
+function aprovarSelecionados(){
+  const n=_seSelecionados.size; if(!n) return;
+  _seSelecionados.forEach(id=>{ const s=servicosEquipe.find(x=>x.id===id); if(s&&seStatus(s)==='pendente'){ s.status='aprovado'; s.aprovadoPor=_seUsuario().email; s.aprovadoEm=new Date().toISOString(); } });
+  _seSelecionados.clear(); saveAll(); renderServicosEquipe(); showToast(n+' lançamento(s) aprovado(s)');
+}
+let _seRecusarId=null;
+function abrirRecusarServico(id){ _seRecusarId=id; document.getElementById('se-recusar-motivo').value=''; document.getElementById('modal-se-recusar').classList.add('open'); }
+function confirmarRecusaSE(){
+  const s=servicosEquipe.find(x=>x.id===_seRecusarId); if(!s) return;
+  s.status='recusado'; s.motivoRecusa=document.getElementById('se-recusar-motivo').value.trim(); s.aprovadoPor=''; s.aprovadoEm='';
+  saveAll(); closeModal('modal-se-recusar'); renderServicosEquipe();
+}
+function voltarPendente(id){
+  const s=servicosEquipe.find(x=>x.id===id); if(!s||s.pagamentoId) return;
+  s.status='pendente'; s.motivoRecusa=''; s.aprovadoPor=''; s.aprovadoEm='';
+  saveAll(); renderServicosEquipe();
+}
+
+// ── vigência e previsão de pagamento ──
+// Regra da casa: trabalha no mês de vigência, recebe no dia X do mês seguinte.
+// dataPrevista no lançamento só é preenchida quando alguém muda na mão;
+// vazia = segue a regra (assim mudar o dia na configuração vale pra tudo em aberto).
+function _seFimDoMes(y,m){ return new Date(y,m+1,0).getDate(); }
+function _seFmt(y,m,d){ return y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0'); }
+function _seMesAdd(mes,n){ const y=+mes.substring(0,4), m=+mes.substring(5,7)-1+n; const d=new Date(y,m,1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function _seMesNome(mes){ if(!mes) return '—'; const t=new Date(+mes.substring(0,4),+mes.substring(5,7)-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'}); return t.replace(' de ','/'); }
+function _seMesCurto(mes){ if(!mes) return '—'; return new Date(+mes.substring(0,4),+mes.substring(5,7)-1,1).toLocaleDateString('pt-BR',{month:'short'}).replace('.','')+'/'+mes.substring(2,4); }
+function sePrevisaoPadrao(mesVig){
+  if(!mesVig) return '';
+  const prox=_seMesAdd(mesVig,1), y=+prox.substring(0,4), m=+prox.substring(5,7)-1;
+  return _seFmt(y,m,Math.min(servicosConfig.diaPagamento||15,_seFimDoMes(y,m)));
+}
+function seMesVig(s){ return s.mesVigente || (s.data||'').substring(0,7); }
+function sePrevisao(s){ return s.dataPrevista || sePrevisaoPadrao(seMesVig(s)); }
+
+// ── fechamento ──
+// modo 'vigencia' (padrão: fecha um mês de vigência) | 'datas' (intervalo pela data do serviço) | 'tudo'
+let _fcModo='vigencia', _fcMes='';
+let _fcExcluidos=new Set(); // membros desmarcados neste fechamento
+function _fcMesPadrao(){
+  // até o dia de pagamento, o que está pra pagar é a vigência do mês passado
+  const h=_seHoje(), mesAtual=h.substring(0,7);
+  return +h.substring(8,10)<=(servicosConfig.diaPagamento||15)?_seMesAdd(mesAtual,-1):mesAtual;
+}
+function setFcModo(modo){
+  _fcModo=modo;
+  if(modo==='datas' && !document.getElementById('se-fc-ini').value){
+    const d=new Date(), y=d.getFullYear(), m=d.getMonth();
+    document.getElementById('se-fc-ini').value=_seFmt(y,m,1); document.getElementById('se-fc-fim').value=_seFmt(y,m,_seFimDoMes(y,m));
+  }
+  renderFechamento();
+}
+function setFcMes(mes){ _fcModo='vigencia'; _fcMes=mes; renderFechamento(); }
+function _fcPeriodo(){
+  if(_fcModo==='vigencia') return {modo:'vigencia', mes:_fcMes};
+  if(_fcModo==='datas') return {modo:'datas', ini:document.getElementById('se-fc-ini').value, fim:document.getElementById('se-fc-fim').value};
+  return {modo:'tudo'};
+}
+function _noPeriodo(s,p){
+  if(p.modo==='vigencia') return seMesVig(s)===p.mes;
+  if(p.modo==='datas') return (!p.ini||s.data>=p.ini) && (!p.fim||s.data<=p.fim);
+  return true;
+}
+function _fcLabelPeriodo(p){
+  if(!p) return '—';
+  if(p.modo==='vigencia') return 'Vigência '+_seMesNome(p.mes);
+  if(p.modo==='datas'||p.ini||p.fim) return 'Serviços de '+(p.ini?_seDf(p.ini):'início')+' a '+(p.fim?_seDf(p.fim):'hoje');
+  return 'Tudo em aberto';
+}
+// previsão do grupo: se todos os itens têm a mesma, é ela; senão a mais cedo (e avisa)
+function _fcPrevisao(itens){
+  const ds=[...new Set(itens.map(sePrevisao).filter(Boolean))].sort();
+  return {data:ds[0]||'', varias:ds.length>1};
+}
+function _fcItensAPagar(){
+  const p=_fcPeriodo();
+  return servicosEquipe.filter(s=>seStatus(s)==='aprovado' && _noPeriodo(s,p) && !_fcExcluidos.has(s.membroId));
+}
+function _fcAgruparPorMembro(itens){
+  const g={};
+  itens.forEach(s=>{ (g[s.membroId]=g[s.membroId]||[]).push(s); });
+  return Object.keys(g).map(id=>({id, nome:_seNomeMembro(id), itens:g[id].sort((a,b)=>a.data.localeCompare(b.data)), total:g[id].reduce((t,s)=>t+seValorItem(s),0)}))
+    .sort((a,b)=>a.nome.localeCompare(b.nome));
+}
+function renderFechamento(){
+  if(!_fcMes) _fcMes=_fcMesPadrao();
+  const dia=servicosConfig.diaPagamento||15;
+  // atalhos: 3 últimas vigências + atual, cada uma já dizendo quando paga
+  const mesAtual=_seHoje().substring(0,7);
+  const chips=[-2,-1,0].map(n=>_seMesAdd(mesAtual,n)).map(m=>'<button class="se-chip '+(_fcModo==='vigencia'&&_fcMes===m?'active':'')+'" onclick="setFcMes(\''+m+'\')">'+_seEsc(_seMesCurto(m))+' <span style="opacity:.75;">· paga '+_seDf(sePrevisaoPadrao(m)).substring(0,5)+'</span></button>').join('');
+  document.getElementById('se-presets').innerHTML=chips+
+    '<input type="month" class="form-input" value="'+(_fcModo==='vigencia'?_fcMes:'')+'" onchange="setFcMes(this.value)" title="Outro mês de vigência" style="width:auto;padding:5px 9px;font-size:12.5px;">'+
+    '<span style="flex:1;"></span>'+
+    '<button class="se-chip '+(_fcModo==='datas'?'active':'')+'" onclick="setFcModo(\'datas\')">Por datas</button>'+
+    '<button class="se-chip '+(_fcModo==='tudo'?'active':'')+'" onclick="setFcModo(\'tudo\')">Tudo em aberto</button>';
+  document.getElementById('se-fc-datas').style.display=_fcModo==='datas'?'':'none';
+
+  const p=_fcPeriodo();
+  const pend=servicosEquipe.filter(s=>seStatus(s)==='pendente' && _noPeriodo(s,p));
+  document.getElementById('se-fc-aviso').innerHTML=pend.length
+    ?'<div class="se-aviso"><i class="fa-solid fa-triangle-exclamation"></i> '+pend.length+' lançamento(s) neste período ainda <b>aguardando aprovação</b> ('+_seBrl(pend.reduce((t,s)=>t+seValorItem(s),0))+'). Eles não entram no pagamento até serem aprovados. <a href="#" onclick="irParaPendentes();return false;" style="color:inherit;font-weight:600;">Revisar agora →</a></div>':'';
+
+  // todos os membros com algo aprovado no período (inclusive desmarcados)
+  const todos=_fcAgruparPorMembro(servicosEquipe.filter(s=>seStatus(s)==='aprovado' && _noPeriodo(s,p)));
+  const incluidos=todos.filter(g=>!_fcExcluidos.has(g.id));
+  const total=incluidos.reduce((t,g)=>t+g.total,0);
+  const prev=_fcPrevisao(incluidos.flatMap(g=>g.itens));
+  const prevData=prev.data||(p.modo==='vigencia'?sePrevisaoPadrao(p.mes):'');
+  const atrasado=total>0 && prevData && prevData<_seHoje();
+  document.getElementById('se-fc-resumo').innerHTML=[
+    {l:'Total a pagar',v:_seBrl(total),c:'sage',i:'fa-sack-dollar'},
+    {l:'Previsão de pagamento'+(prev.varias?' (a mais cedo)':''),v:prevData?_seDf(prevData):'—',c:atrasado?'rose':'peach',i:'fa-calendar-day',sub:atrasado?'<span style="color:var(--vermelha);">atrasado</span>':(p.modo==='vigencia'?'dia '+dia+' do mês seguinte':'')},
+    {l:'Pessoas · lançamentos',v:incluidos.length+' · '+incluidos.reduce((t,g)=>t+g.itens.length,0),c:'lav',i:'fa-users'},
+  ].map(x=>'<div class="metric-card '+x.c+'"><div class="metric-icon '+x.c+'"><i class="fa-solid '+x.i+'"></i></div><div class="metric-value" style="font-size:22px;">'+x.v+'</div><div class="metric-label">'+x.l+'</div>'+(x.sub?'<div class="metric-delta neutral">'+x.sub+'</div>':'')+'</div>').join('');
+
+  const box=document.getElementById('se-fc-membros');
+  if(!todos.length){ box.innerHTML='<div class="card"><div class="se-vazio">Nada aprovado e em aberto '+(p.modo==='vigencia'?'na vigência de '+_seMesNome(p.mes):'neste período')+'.</div></div>'; return; }
+  box.innerHTML=todos.map(g=>{
+    const fora=_fcExcluidos.has(g.id);
+    return '<div class="se-membro-card" id="se-fc-m-'+g.id+'" style="'+(fora?'opacity:.45;':'')+'">'+
+      '<div class="se-membro-head" onclick="this.parentNode.classList.toggle(\'open\')">'+
+        '<input type="checkbox" '+(fora?'':'checked')+' onclick="event.stopPropagation()" onchange="toggleMembroFechamento(\''+g.id+'\',this.checked)" title="Incluir neste pagamento">'+
+        '<span class="nome">'+_seEsc(g.nome)+' <span style="font-weight:400;font-size:12px;color:var(--text3);">· '+g.itens.length+' serviço(s)</span><div style="font-weight:400;">'+_seDadosPagHTML(g.id,true)+'</div></span>'+
+        '<button class="btn btn-sm" onclick="event.stopPropagation();abrirRelatorioMembroFechamento(\''+g.id+'\')" title="Extrato só desta pessoa"><i class="fa-solid fa-file-lines"></i> Relatório</button>'+
+        '<span class="total">'+_seBrl(g.total)+'</span><i class="fa-solid fa-chevron-down" style="font-size:11px;color:var(--text3);"></i>'+
+      '</div>'+
+      '<div class="se-membro-itens"><table class="data-table"><tbody>'+
+        g.itens.map(s=>{
+          const difPrev=s.dataPrevista&&s.dataPrevista!==prevData?' <span style="font-size:10.5px;color:var(--peach);" title="Previsão alterada neste lançamento"><i class="fa-regular fa-calendar"></i> paga '+_seDf(s.dataPrevista)+'</span>':'';
+          const difVig=p.modo!=='vigencia'?' <span style="font-size:10.5px;color:var(--text3);">· vig. '+_seMesCurto(seMesVig(s))+'</span>':'';
+          return '<tr><td style="font-size:12px;white-space:nowrap;width:80px;">'+_seDf(s.data)+'</td><td style="font-size:12.5px;">'+_seEsc(seNomeServico(s))+(s.imovelNome?' <span style="color:var(--text3);">· '+_seEsc(s.imovelNome)+'</span>':'')+difVig+difPrev+'</td><td style="text-align:right;white-space:nowrap;font-size:12.5px;">'+((parseFloat(s.qtd)||1)>1?'<span style="color:var(--text3);font-size:11px;">'+s.qtd+' × '+_seBrl(s.valorUnit)+' =</span> ':'')+'<b>'+_seBrl(seValorItem(s))+'</b></td></tr>';
+        }).join('')+
+      '</tbody></table></div></div>';
+  }).join('');
+}
+function toggleMembroFechamento(id,on){ on?_fcExcluidos.delete(id):_fcExcluidos.add(id); renderFechamento(); }
+function irParaPendentes(){
+  document.getElementById('se-f-status').value='pendente';
+  document.getElementById('se-f-mes').value=_fcModo==='vigencia'?_fcMes:'';
+  switchSETab('lancamentos');
+}
+
+// ── relatório ──
+// _relCtx guarda o que está aberto no modal pra trocar o modo (geral / separado /
+// uma pessoa) sem recalcular de onde veio (prévia do fechamento ou lote pago).
+let _relCtx=null; // {grupos, tipo:'previa'|'pago', periodo, pagoEm, obs}
+let _relModo='geral'; // 'geral' | 'separado' | membroId
+function _relCabecalho(titulo,linhas){
+  return '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;border-bottom:1px solid var(--border2);padding-bottom:10px;">'+
+    '<div>'+titulo+linhas.map(l=>'<div style="color:var(--text2);font-size:12.5px;">'+l+'</div>').join('')+'</div>'+
+    '<div style="text-align:right;font-size:11.5px;color:var(--text3);">WeCare Hosting<br>gerado em '+_seDf(_seHoje())+'</div></div>';
+}
+function _relTabela(g){
+  return '<table class="data-table" style="margin-top:12px;"><thead><tr><th>Data</th><th>Serviço</th><th>Imóvel</th><th style="text-align:right;">Qtd</th><th style="text-align:right;">Valor</th></tr></thead><tbody>'+
+    g.itens.map(s=>'<tr><td style="white-space:nowrap;">'+_seDf(s.data)+'</td><td>'+_seEsc(seNomeServico(s))+(s.obs?'<div style="font-size:11px;color:var(--text3);">'+_seEsc(s.obs)+'</div>':'')+'</td><td>'+_seEsc(s.imovelNome||'—')+'</td><td style="text-align:right;">'+(s.qtd||1)+'</td><td style="text-align:right;white-space:nowrap;">'+_seBrl(seValorItem(s))+'</td></tr>').join('')+
+    '</tbody></table>';
+}
+// g = extrato de uma pessoa: a previsão é a dos itens dela, não a do lote todo
+function _relStatusTxt(g){
+  const c=_relCtx, prev=g?_fcPrevisao(g.itens).data:c.previsao;
+  return c.tipo==='pago'?'Pago em '+_seDf(c.pagoEm)+(c.obs?' · '+_seEsc(c.obs):''):'<b>Previsão de pagamento: '+(prev?_seDf(prev):'a definir')+'</b>';
+}
+// Extrato de uma pessoa só — é o que vai pra cada um
+function _relIndividual(g){
+  const c=_relCtx;
+  return '<div class="rel-pagina">'+
+    _relCabecalho('<div style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);font-weight:600;">Extrato de serviços extras</div><div style="font-family:var(--font-display);font-size:22px;font-weight:700;margin:2px 0 4px;">'+_seEsc(g.nome)+'</div>',
+      [_seEsc(c.periodo),_relStatusTxt(g)])+
+    _relTabela(g)+
+    '<div class="rel-total"><span>Total a receber</span><span>'+_seBrl(g.total)+'</span></div>'+
+    _relDadosPag(g.id)+
+    (c.tipo==='pago'?'<div style="margin-top:40px;display:flex;gap:30px;font-size:12px;color:var(--text2);"><div style="flex:1;border-top:1px solid var(--text3);padding-top:4px;">Assinatura de '+_seEsc(g.nome)+'</div><div style="width:140px;border-top:1px solid var(--text3);padding-top:4px;">Data</div></div>':'')+
+  '</div>';
+}
+function _relDadosPag(id){
+  const p=_sePessoa(id); if(!p) return '';
+  const linhas=[];
+  if(p.documento) linhas.push(['CPF/CNPJ',p.documento]);
+  if(p.pixChave) linhas.push(['PIX'+(p.pixTipo?' ('+SE_PIX_TIPOS[p.pixTipo]+')':''),p.pixChave]);
+  if(p.banco||p.conta) linhas.push(['Conta',[p.banco,p.agencia?'ag. '+p.agencia:'',p.conta?'cc '+p.conta:''].filter(Boolean).join(' · ')]);
+  if(!linhas.length) return '';
+  return '<div style="margin-top:14px;background:var(--bg3);border-radius:var(--r-sm);padding:10px 13px;font-size:12.5px;">'+
+    '<div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);font-weight:600;margin-bottom:4px;">Dados para pagamento</div>'+
+    linhas.map(l=>'<div><span style="color:var(--text3);">'+_seEsc(l[0])+':</span> '+_seEsc(l[1])+'</div>').join('')+'</div>';
+}
+function _relGeral(grupos){
+  const c=_relCtx, total=grupos.reduce((t,g)=>t+g.total,0);
+  return _relCabecalho('<div style="font-family:var(--font-display);font-size:19px;font-weight:700;">Serviços Extras — '+(c.tipo==='pago'?'pagamento':'prévia')+'</div>',[_seEsc(c.periodo),_relStatusTxt()])+
+    '<table class="data-table" style="margin-top:12px;"><thead><tr><th>Pessoa</th><th>Pagamento</th><th style="text-align:right;">Serviços</th><th style="text-align:right;">Total</th></tr></thead><tbody>'+
+    grupos.map(g=>'<tr><td style="font-weight:600;">'+_seEsc(g.nome)+'</td><td style="font-size:12px;">'+_seEsc(_sePixTxt(_sePessoa(g.id))||'—')+'</td><td style="text-align:right;">'+g.itens.length+'</td><td style="text-align:right;white-space:nowrap;">'+_seBrl(g.total)+'</td></tr>').join('')+
+    '</tbody></table>'+
+    grupos.map(g=>'<h3><span>'+_seEsc(g.nome)+'</span><span>'+_seBrl(g.total)+'</span></h3>'+_relTabela(g)).join('')+
+    '<div class="rel-total"><span>Total geral</span><span>'+_seBrl(total)+'</span></div>';
+}
+function _renderRelatorio(){
+  const c=_relCtx; if(!c) return;
+  const admin=_seIsAdmin();
+  // membro da equipe só enxerga o próprio extrato
+  const grupos=admin?c.grupos:c.grupos.filter(g=>g.id===_seUsuario().id);
+  if(!admin) _relModo=_seUsuario().id;
+  const sel=document.getElementById('se-rel-modo');
+  sel.style.display=admin?'':'none';
+  sel.innerHTML='<option value="geral">Geral (todos juntos)</option><option value="separado">Separado por pessoa (1 página cada)</option>'+
+    grupos.map(g=>'<option value="'+g.id+'">Só '+_seEsc(g.nome)+' — '+_seBrl(g.total)+'</option>').join('');
+  sel.value=_relModo;
+  let html;
+  if(_relModo==='geral') html=_relGeral(grupos);
+  else if(_relModo==='separado') html=grupos.map(_relIndividual).join('');
+  else { const g=grupos.find(x=>x.id===_relModo); html=g?_relIndividual(g):'<div class="se-vazio">Nada para esta pessoa.</div>'; }
+  document.getElementById('se-relatorio').innerHTML=html;
+  document.getElementById('se-rel-copiar').style.display=_relModo==='separado'?'none':'';
+  // WhatsApp direto pra pessoa: só no extrato individual, pela admin, com telefone cadastrado
+  const p=_sePessoa(_relModo);
+  document.getElementById('se-rel-whats').style.display=admin&&p&&p.telefone?'':'none';
+}
+function enviarWhatsRelatorio(){
+  const p=_sePessoa(_relModo); if(!p||!p.telefone) return;
+  const num=p.telefone.replace(/\D/g,'').replace(/^55/,'');
+  window.open('https://wa.me/55'+num+'?text='+encodeURIComponent(_relTexto()),'_blank');
+}
+function trocarModoRelatorio(v){ _relModo=v; _renderRelatorio(); }
+function _abrirRelatorio(ctx,modo){
+  _relCtx=ctx; _relModo=modo||'geral'; _renderRelatorio();
+  document.getElementById('modal-se-relatorio').classList.add('open');
+}
+function abrirRelatorioFechamento(membroId){
+  const grupos=_fcAgruparPorMembro(_fcItensAPagar());
+  if(!grupos.length){ showToast('Nada a pagar neste período.','peach'); return; }
+  const p=_fcPeriodo();
+  _abrirRelatorio({grupos, tipo:'previa', periodo:_fcLabelPeriodo(p), previsao:_fcPrevisao(grupos.flatMap(g=>g.itens)).data}, membroId);
+}
+function abrirRelatorioMembroFechamento(membroId){
+  // abre mesmo se a pessoa estiver desmarcada deste pagamento
+  const p=_fcPeriodo();
+  const itens=servicosEquipe.filter(s=>seStatus(s)==='aprovado' && _noPeriodo(s,p) && (s.membroId===membroId || !_fcExcluidos.has(s.membroId)));
+  _abrirRelatorio({grupos:_fcAgruparPorMembro(itens), tipo:'previa', periodo:_fcLabelPeriodo(p), previsao:_fcPrevisao(itens).data}, membroId);
+}
+function abrirRelatorioPagamento(pagId,membroId){
+  const pg=servicosPagamentos.find(x=>x.id===pagId); if(!pg) return;
+  const grupos=_fcAgruparPorMembro(servicosEquipe.filter(s=>s.pagamentoId===pagId));
+  _abrirRelatorio({grupos, tipo:'pago', periodo:_fcLabelPeriodo(pg.periodo), pagoEm:pg.dataPagamento, obs:pg.obs}, membroId);
+}
+function _relTexto(){
+  const c=_relCtx; if(!c) return '';
+  const gSel=c.grupos.find(x=>x.id===_relModo);
+  const prev=gSel?_fcPrevisao(gSel.itens).data:c.previsao;
+  const cab=c.periodo+'\n'+(c.tipo==='pago'?'Pago em '+_seDf(c.pagoEm):'Previsão de pagamento: '+(prev?_seDf(prev):'a definir'));
+  if(_relModo==='geral'){
+    const total=c.grupos.reduce((t,g)=>t+g.total,0);
+    return '*Serviços Extras*\n'+cab+'\n\n'+c.grupos.map(g=>g.nome+': '+_seBrl(g.total)+' ('+g.itens.length+' serviço'+(g.itens.length>1?'s':'')+')').join('\n')+'\n\n*Total: '+_seBrl(total)+'*';
+  }
+  const g=c.grupos.find(x=>x.id===_relModo); if(!g) return '';
+  return 'Oi, '+g.nome+'! Segue seu extrato de serviços extras 😊\n'+cab+'\n\n'+
+    g.itens.map(s=>'• '+_seDf(s.data)+' — '+seNomeServico(s)+(s.imovelNome?' ('+s.imovelNome+')':'')+((parseFloat(s.qtd)||1)>1?' · '+s.qtd+'×':'')+': '+_seBrl(seValorItem(s))).join('\n')+
+    '\n\n*Total: '+_seBrl(g.total)+'*'+
+    (_sePixTxt(_sePessoa(g.id))?'\n'+(c.tipo==='pago'?'Enviado para ':'Vai para ')+_sePixTxt(_sePessoa(g.id)):'');
+}
+function _seImprimirRelatorio(){
+  document.body.classList.add('se-imprimindo');
+  const tirar=()=>{ document.body.classList.remove('se-imprimindo'); window.removeEventListener('afterprint',tirar); };
+  window.addEventListener('afterprint',tirar);
+  window.print();
+  setTimeout(tirar,1500);
+}
+function copiarResumoRelatorio(){
+  const t=_relTexto();
+  if(navigator.clipboard) navigator.clipboard.writeText(t).then(()=>showToast('Copiado — cole no WhatsApp'),()=>showToast('Não foi possível copiar'));
+}
+function exportarCSVFechamento(){
+  const itens=_fcItensAPagar();
+  if(!itens.length){ showToast('Nada a pagar neste período.','peach'); return; }
+  const linhas=[['Membro','Dados pagamento','Data','Serviço','Imóvel','Qtd','Valor unitário','Total','Obs']];
+  itens.slice().sort((a,b)=>_seNomeMembro(a.membroId).localeCompare(_seNomeMembro(b.membroId))||a.data.localeCompare(b.data)).forEach(s=>{
+    linhas.push([_seNomeMembro(s.membroId),_sePixTxt(_sePessoa(s.membroId)),_seDf(s.data),seNomeServico(s),s.imovelNome||'',s.qtd||1,String(s.valorUnit).replace('.',','),String(seValorItem(s).toFixed(2)).replace('.',','),s.obs||'']);
+  });
+  const csv='﻿'+linhas.map(l=>l.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(';')).join('\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  const p=_fcPeriodo(); a.download='servicos-equipe_'+(p.modo==='vigencia'?'vigencia-'+p.mes:p.modo==='datas'?(p.ini||'inicio')+'_'+(p.fim||'hoje'):'em-aberto')+'.csv'; a.click();
+}
+
+// ── pagamento em lote ──
+function abrirConfirmarPagamento(){
+  const grupos=_fcAgruparPorMembro(_fcItensAPagar());
+  if(!grupos.length){ showToast('Nada a pagar neste período.','peach'); return; }
+  const total=grupos.reduce((t,g)=>t+g.total,0);
+  document.getElementById('se-pagar-resumo').innerHTML=grupos.map(g=>'<div style="padding:5px 0;border-bottom:1px solid var(--border);"><div style="display:flex;justify-content:space-between;"><span>'+_seEsc(g.nome)+'</span><b>'+_seBrl(g.total)+'</b></div><div>'+_seDadosPagHTML(g.id,true)+'</div></div>').join('')+
+    '<div style="display:flex;justify-content:space-between;padding-top:8px;margin-top:6px;border-top:1px solid var(--border2);font-size:14px;"><span>Total</span><b style="color:var(--sage);">'+_seBrl(total)+'</b></div>'+
+    '<div style="font-size:11.5px;color:var(--text3);margin-top:8px;">Todos esses lançamentos vão ficar marcados como <b>Pago</b>. Dá pra desfazer depois em Pagamentos.</div>';
+  const prev=_fcPrevisao(grupos.flatMap(g=>g.itens)).data;
+  document.getElementById('se-pagar-data').value=prev&&prev>_seHoje()?prev:_seHoje(); document.getElementById('se-pagar-obs').value='';
+  document.getElementById('se-pagar-prev').textContent=prev?'Previsto para '+_seDf(prev):'';
+  document.getElementById('modal-se-pagar').classList.add('open');
+}
+function confirmarPagamentoSE(){
+  const itens=_fcItensAPagar(); if(!itens.length) return;
+  const p=_fcPeriodo();
+  const grupos=_fcAgruparPorMembro(itens);
+  const pg={id:Date.now(), dataPagamento:document.getElementById('se-pagar-data').value||_seHoje(), periodo:p, dataPrevista:_fcPrevisao(itens).data,
+    itens:itens.map(s=>s.id), totais:Object.fromEntries(grupos.map(g=>[g.id,+g.total.toFixed(2)])),
+    total:+grupos.reduce((t,g)=>t+g.total,0).toFixed(2), obs:document.getElementById('se-pagar-obs').value.trim(), criadoEm:new Date().toISOString()};
+  itens.forEach(s=>{ s.pagamentoId=pg.id; });
+  servicosPagamentos.unshift(pg);
+  saveAll(); closeModal('modal-se-pagar'); renderFechamento();
+  showToast('Pagamento registrado: '+_seBrl(pg.total));
+  abrirRelatorioPagamento(pg.id);
+}
+function renderHistoricoPagamentos(){
+  const tb=document.getElementById('se-hist-tbody');
+  const admin=_seIsAdmin(), eu=_seUsuario().id;
+  // membro da equipe vê só os lotes em que recebeu, com o valor dele
+  const lotes=admin?servicosPagamentos:servicosPagamentos.filter(pg=>(pg.totais||{})[eu]!=null);
+  document.getElementById('se-hist-th-pessoas').textContent=admin?'Por pessoa':'Você recebeu';
+  if(!lotes.length){ tb.innerHTML='<tr><td colspan="4" class="se-vazio">Nenhum pagamento registrado ainda.</td></tr>'; return; }
+  tb.innerHTML=lotes.map(pg=>{
+    const ids=admin?Object.keys(pg.totais||{}).sort((a,b)=>_seNomeMembro(a).localeCompare(_seNomeMembro(b))):[eu];
+    const pessoas=ids.map(id=>'<div style="display:flex;align-items:center;gap:8px;padding:2px 0;">'+
+      '<span style="flex:1;font-size:12.5px;">'+_seEsc(_seNomeMembro(id))+'</span>'+
+      '<b style="font-size:12.5px;white-space:nowrap;">'+_seBrl(pg.totais[id])+'</b>'+
+      '<button class="se-icon-btn" onclick="abrirRelatorioPagamento('+pg.id+',\''+id+'\')" title="Extrato de '+_seEsc(_seNomeMembro(id))+'"><i class="fa-solid fa-file-lines"></i></button></div>').join('');
+    const acoes=admin?'<button class="btn btn-sm" onclick="abrirRelatorioPagamento('+pg.id+',\'separado\')" title="Todos os extratos, 1 página cada"><i class="fa-solid fa-copy"></i> Todos</button>'+
+      '<div style="margin-top:6px;font-size:12px;color:var(--text3);">Total <b style="color:var(--sage);">'+_seBrl(pg.total)+'</b></div>'+
+      '<button class="se-icon-btn no" onclick="desfazerPagamento('+pg.id+')" title="Desfazer pagamento" style="margin-top:4px;"><i class="fa-solid fa-rotate-left"></i> desfazer</button>':'';
+    return '<tr><td style="white-space:nowrap;vertical-align:top;">'+_seDf(pg.dataPagamento)+'</td>'+
+      '<td style="font-size:12.5px;vertical-align:top;">'+_seEsc(_fcLabelPeriodo(pg.periodo))+(pg.obs?'<div style="font-size:11px;color:var(--text3);">'+_seEsc(pg.obs)+'</div>':'')+'</td>'+
+      '<td style="min-width:200px;">'+pessoas+'</td>'+
+      '<td style="text-align:right;vertical-align:top;white-space:nowrap;">'+acoes+'</td></tr>';
+  }).join('');
+}
+function desfazerPagamento(id){
+  if(!confirm('Desfazer este pagamento? Os lançamentos voltam para "Aprovado (a pagar)".')) return;
+  servicosEquipe.forEach(s=>{ if(s.pagamentoId===id) s.pagamentoId=null; });
+  servicosPagamentos=servicosPagamentos.filter(x=>x.id!==id);
+  saveAll(); renderHistoricoPagamentos(); showToast('Pagamento desfeito');
+}
+
+// ── pessoas ──
+function _sePixTxt(p){
+  if(!p) return '';
+  if(p.pixChave) return 'PIX'+(p.pixTipo?' ('+SE_PIX_TIPOS[p.pixTipo]+')':'')+': '+p.pixChave;
+  if(p.banco||p.conta) return [p.banco,p.agencia?'ag. '+p.agencia:'',p.conta?'cc '+p.conta:''].filter(Boolean).join(' · ');
+  return '';
+}
+// linha de dados de pagamento (fechamento, confirmação e extrato) — com botão de copiar a chave
+function _seDadosPagHTML(id,compacto){
+  const p=_sePessoa(id), txt=_sePixTxt(p);
+  if(!txt) return '<span style="font-size:11.5px;color:var(--peach);"><i class="fa-solid fa-triangle-exclamation"></i> sem dados de pagamento'+(_seIsAdmin()?' · <a href="#" onclick="event.stopPropagation();abrirEditarPessoa(\''+id+'\');return false;" style="color:inherit;">cadastrar</a>':'')+'</span>';
+  const copiar=p.pixChave?' <button class="se-icon-btn" onclick="event.stopPropagation();_seCopiarTexto(\''+_seEsc(p.pixChave).replace(/'/g,"\\'")+'\',\'Chave PIX copiada\')" title="Copiar chave"><i class="fa-regular fa-copy"></i></button>':'';
+  return '<span style="font-size:'+(compacto?'11.5':'12.5')+'px;color:var(--text2);">'+_seEsc(txt)+'</span>'+copiar;
+}
+function _seCopiarTexto(t,msg){ if(navigator.clipboard) navigator.clipboard.writeText(t).then(()=>showToast(msg||'Copiado'),()=>showToast('Não foi possível copiar')); }
+function renderPessoas(){
+  const tb=document.getElementById('se-pessoas-tbody');
+  const inativos=document.getElementById('se-p-inativos').checked;
+  const lista=servicosPessoas.filter(p=>inativos||p.ativo!==false).sort((a,b)=>(a.ativo===false)-(b.ativo===false)||a.nome.localeCompare(b.nome));
+  if(!lista.length){ tb.innerHTML='<tr><td colspan="4" class="se-vazio">Ninguém cadastrado. Clique em "Nova pessoa".</td></tr>'; return; }
+  tb.innerHTML=lista.map(p=>{
+    const inat=p.ativo===false;
+    const temHist=servicosEquipe.some(s=>s.membroId===p.id);
+    return '<tr style="'+(inat?'opacity:.5;':'')+'">'+
+      '<td><div style="font-weight:600;">'+_seEsc(p.nome)+(inat?' <span class="se-status recusado">inativo</span>':'')+'</div><div style="font-size:11.5px;color:var(--text3);">'+_seEsc(p.funcao||'')+(p.documento?' · '+_seEsc(p.documento):'')+'</div></td>'+
+      '<td class="se-hide-mobile" style="font-size:12.5px;">'+(p.telefone?'<a href="https://wa.me/55'+p.telefone.replace(/\D/g,'').replace(/^55/,'')+'" target="_blank" style="color:var(--sage);text-decoration:none;"><i class="fa-brands fa-whatsapp"></i> '+_seEsc(p.telefone)+'</a>':'<span style="color:var(--text3);">—</span>')+'</td>'+
+      '<td>'+_seDadosPagHTML(p.id,true)+(p.obs?'<div style="font-size:11px;color:var(--text3);">'+_seEsc(p.obs)+'</div>':'')+'</td>'+
+      '<td style="white-space:nowrap;text-align:right;">'+
+        '<button class="se-icon-btn" onclick="abrirEditarPessoa(\''+p.id+'\')" title="Editar"><i class="fa-solid fa-pen"></i></button>'+
+        '<button class="se-icon-btn" onclick="toggleAtivoPessoa(\''+p.id+'\')" title="'+(inat?'Reativar':'Inativar (sai das listas, mantém histórico)')+'"><i class="fa-solid '+(inat?'fa-user-check':'fa-user-slash')+'"></i></button>'+
+        (temHist?'':'<button class="se-icon-btn no" onclick="deletarPessoa(\''+p.id+'\')" title="Excluir"><i class="fa-solid fa-trash"></i></button>')+
+      '</td></tr>';
+  }).join('');
+}
+let _sePessoaEditId=null, _sePessoaDoLancamento=false;
+function _sePessoaForm(p){
+  document.getElementById('sp-pixtipo').innerHTML='<option value="">—</option>'+Object.keys(SE_PIX_TIPOS).map(k=>'<option value="'+k+'">'+SE_PIX_TIPOS[k]+'</option>').join('');
+  ['nome','funcao','telefone','documento','email','pixChave','banco','agencia','conta','obs'].forEach(k=>{ document.getElementById('sp-'+k.toLowerCase()).value=(p&&p[k])||''; });
+  const att=p&&p.attId?(ATTS||[]).find(a=>a.id===p.attId):null;
+  document.getElementById('sp-vinculo-hint').textContent=att?'Já ligada à atendente '+(att.name||att.id)+' — o login dela já funciona sem e-mail.':'';
+  document.getElementById('sp-pixtipo').value=(p&&p.pixTipo)||'';
+  document.getElementById('modal-se-pessoa').classList.add('open');
+  setTimeout(()=>document.getElementById('sp-nome').focus(),50);
+}
+function abrirNovaPessoa(doLancamento){
+  _sePessoaEditId=null; _sePessoaDoLancamento=!!doLancamento;
+  document.getElementById('se-pessoa-title').textContent='Nova pessoa';
+  _sePessoaForm(null);
+}
+function abrirEditarPessoa(id){
+  const p=_sePessoa(id); if(!p) return;
+  _sePessoaEditId=id; _sePessoaDoLancamento=false;
+  document.getElementById('se-pessoa-title').textContent='Editar '+p.nome;
+  _sePessoaForm(p);
+}
+function salvarPessoa(){
+  const nome=document.getElementById('sp-nome').value.trim();
+  if(!nome){ showToast('Informe o nome.','peach'); return; }
+  const dup=servicosPessoas.find(p=>p.nome.toLowerCase()===nome.toLowerCase()&&p.id!==_sePessoaEditId);
+  if(dup&&!confirm('Já existe alguém com o nome "'+dup.nome+'". Salvar mesmo assim?')) return;
+  const campos={nome};
+  ['funcao','telefone','documento','email','pixChave','banco','agencia','conta','obs'].forEach(k=>{ campos[k]=document.getElementById('sp-'+k.toLowerCase()).value.trim(); });
+  campos.pixTipo=document.getElementById('sp-pixtipo').value;
+  let id=_sePessoaEditId;
+  if(id) Object.assign(_sePessoa(id),campos);
+  else { id='pes_'+Date.now(); servicosPessoas.push(Object.assign({id,ativo:true},campos)); }
+  saveAll(); closeModal('modal-se-pessoa');
+  if(_sePessoaDoLancamento){ _sePreencherSelects(); document.getElementById('se-membro').value=id; }
+  if(_seTab==='pessoas') renderPessoas(); else if(_seTab==='fechamento') renderFechamento(); else renderServicosEquipe();
+  showToast(_sePessoaEditId?'Cadastro atualizado':'Cadastro de '+nome+' salvo');
+}
+function toggleAtivoPessoa(id){
+  const p=_sePessoa(id); if(!p) return;
+  if(p.ativo!==false){
+    const aberto=servicosEquipe.filter(s=>s.membroId===id&&(seStatus(s)==='aprovado'||seStatus(s)==='pendente')).length;
+    if(!confirm('Inativar '+p.nome+'? A pessoa sai das listas de lançamento, mas o histórico fica.'+(aberto?'\n\nAtenção: tem '+aberto+' lançamento(s) ainda não pago(s) — eles continuam no fechamento.':''))) return;
+  }
+  p.ativo=p.ativo===false; saveAll(); renderPessoas();
+}
+function deletarPessoa(id){
+  if(servicosEquipe.some(s=>s.membroId===id)){ showToast('Tem lançamentos — use Inativar.','peach'); return; }
+  const p=_sePessoa(id); if(!p||!confirm('Excluir '+p.nome+'?')) return;
+  servicosPessoas=servicosPessoas.filter(x=>x.id!==id); saveAll(); renderPessoas();
+}
+
+// ── tabela de preços ──
+function setDiaPagamento(v){
+  const d=Math.min(31,Math.max(1,parseInt(v)||15)); servicosConfig.diaPagamento=d; document.getElementById('se-cfg-dia').value=d; saveAll(); showToast('Pagamento no dia '+d+' do mês seguinte');
+}
+function renderTabelaPrecos(){
+  document.getElementById('se-cfg-dia').value=servicosConfig.diaPagamento||15;
+  const tb=document.getElementById('se-tabela-tbody');
+  if(!servicosTipos.length){ tb.innerHTML='<tr><td colspan="4" class="se-vazio">Nenhum tipo cadastrado.</td></tr>'; return; }
+  tb.innerHTML=servicosTipos.map(t=>'<tr>'+
+    '<td><input class="form-input" value="'+_seEsc(t.nome)+'" onchange="setTipoCampo('+t.id+',\'nome\',this.value)" style="padding:6px 9px;font-size:13px;"></td>'+
+    '<td><input type="number" class="form-input" value="'+t.valor+'" min="0" step="0.01" onchange="setTipoCampo('+t.id+',\'valor\',this.value)" style="padding:6px 9px;font-size:13px;"></td>'+
+    '<td><input class="form-input" value="'+_seEsc(t.unidade||'')+'" placeholder="ex: por turno" onchange="setTipoCampo('+t.id+',\'unidade\',this.value)" style="padding:6px 9px;font-size:13px;"></td>'+
+    '<td><button class="se-icon-btn no" onclick="removerTipoServico('+t.id+')" title="Remover"><i class="fa-solid fa-trash"></i></button></td></tr>').join('');
+}
+function setTipoCampo(id,campo,v){
+  const t=servicosTipos.find(x=>x.id===id); if(!t) return;
+  t[campo]=campo==='valor'?(parseFloat(v)||0):v.trim(); saveAll(); showToast('Tabela atualizada');
+}
+function adicionarTipoServico(){ servicosTipos.push({id:Date.now(),nome:'Novo serviço',valor:0,unidade:''}); saveAll(); renderTabelaPrecos(); }
+function removerTipoServico(id){
+  // lançamentos antigos guardam tipoNome, então continuam legíveis
+  if(!confirm('Remover este tipo? Lançamentos já feitos continuam com o nome.')) return;
+  servicosTipos=servicosTipos.filter(x=>x.id!==id); saveAll(); renderTabelaPrecos();
+}
+
 // ═══════════════════ PERSISTÊNCIA ═══════════════════
 const _PERSIST_KEYS = {
   nx_tasks:()=>tasks, nx_imoveis:()=>imoveis, nx_notes:()=>notes,
@@ -3980,6 +4716,11 @@ const _PERSIST_KEYS = {
   nx_validacoes_fin:()=>validacoesFinanceiro,
   nx_sla_validacao_dias:()=>slaValidacaoDias,
   nx_avaliacoes_negativas:()=>avaliacoesNegativas,
+  nx_servicos_equipe:()=>servicosEquipe,
+  nx_servicos_pessoas:()=>servicosPessoas,
+  nx_servicos_tipos:()=>servicosTipos,
+  nx_servicos_pagamentos:()=>servicosPagamentos,
+  nx_servicos_diapag:()=>servicosConfig.diaPagamento,
   nx_tombstones:()=>tombstones,
   nx_update_tombstones:()=>updateTombstones
 };
@@ -3987,7 +4728,7 @@ const _PERSIST_KEYS = {
 // Listas com id próprio que o servidor mescla registro a registro (id + _ts).
 // DEVE espelhar a MERGE_POR_ID do backend (backend/app/merge.py).
 // Mantido em sincronia com MERGE_POR_ID em backend/app/merge.py.
-const _MERGE_POR_ID_KEYS=['nx_manutencoes','nx_tasks','nx_plantao','nx_projetos','nx_compras','nx_extras','nx_limpeza','nx_caucao','nx_despesas','nx_anotacoes_controle','nx_superhost','nx_cancelamentos','nx_imoveis','nx_pagamentos_fin','nx_relatorios_fin','nx_validacoes_fin','nx_avaliacoes_negativas','nx_taskcats','nx_kpidefs','nx_transcricoes','nx_outros','nx_fornecedores_cad','nx_manual','nx_update_tombstones'];
+const _MERGE_POR_ID_KEYS=['nx_manutencoes','nx_tasks','nx_plantao','nx_projetos','nx_compras','nx_extras','nx_limpeza','nx_caucao','nx_despesas','nx_anotacoes_controle','nx_superhost','nx_cancelamentos','nx_imoveis','nx_pagamentos_fin','nx_relatorios_fin','nx_validacoes_fin','nx_avaliacoes_negativas','nx_taskcats','nx_kpidefs','nx_transcricoes','nx_outros','nx_fornecedores_cad','nx_manual','nx_update_tombstones','nx_servicos_equipe','nx_servicos_pessoas','nx_servicos_tipos','nx_servicos_pagamentos'];
 function _semTs(o){ const c=Object.assign({},o); delete c._ts; return JSON.stringify(c); }
 // Antes de salvar: carimba _ts nos registros novos/alterados e cria tombstone
 // para os que foram apagados. Assim o servidor sabe qual versão é a mais recente
@@ -4878,6 +5619,11 @@ function loadAll(){
     v=g('nx_validacoes_fin'); if(Array.isArray(v)) validacoesFinanceiro=v;
     v=g('nx_sla_validacao_dias'); if(typeof v==='number') slaValidacaoDias=v;
     v=g('nx_avaliacoes_negativas'); if(Array.isArray(v)) avaliacoesNegativas=v;
+    v=g('nx_servicos_equipe'); if(Array.isArray(v)) servicosEquipe=v;
+    v=g('nx_servicos_pessoas'); if(Array.isArray(v)) servicosPessoas=v;
+    v=g('nx_servicos_tipos'); if(Array.isArray(v)) servicosTipos=v;
+    v=g('nx_servicos_pagamentos'); if(Array.isArray(v)) servicosPagamentos=v;
+    v=g('nx_servicos_diapag'); if(typeof v==='number') servicosConfig.diaPagamento=v;
     v=g('nx_tombstones'); if(Array.isArray(v)) tombstones=v;
     v=g('nx_update_tombstones'); if(Array.isArray(v)) updateTombstones=v;
     // Migração: atendentes só veem o próprio attId (sem attsPermitidos).
@@ -8031,7 +8777,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 125;
+const APP_VERSION = 126;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

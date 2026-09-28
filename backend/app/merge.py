@@ -68,6 +68,9 @@ MERGE_POR_ID = [
     # com id próprio (id do comentário apagado), então o merge por id de cima
     # já funciona como união entre aparelhos, igual ao nx_tombstones de topo.
     "nx_update_tombstones",
+    # Serviços da Equipe (lançamentos, cadastro de pessoas, tabela de preços e
+    # lotes de pagamento) — todos com id próprio, mesmo contrato das demais.
+    "nx_servicos_equipe", "nx_servicos_pessoas", "nx_servicos_tipos", "nx_servicos_pagamentos",
 ]
 
 # Listas com trava de encolhimento (não passam pelo merge por id acima).

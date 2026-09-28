@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="css/styles.css?v=3">
+<link rel="stylesheet" href="css/styles.css?v=6">
 <script src="https://accounts.google.com/gsi/client" async></script>
 <script>
 // ════════ SINCRONIZAÇÃO (backend KV) ════════
@@ -159,6 +159,7 @@ function _validarLogin(){
     <button class="nav-item" onclick="showPanel('compras',this)"><i class="fa-solid fa-cart-shopping"></i> Compras</button>
     <button class="nav-item" onclick="showPanel('manutencao',this)"><i class="fa-solid fa-screwdriver-wrench"></i> Manutenção</button>
     <button class="nav-item" onclick="showPanel('extras',this)"><i class="fa-solid fa-sack-dollar"></i> Extras</button>
+    <button class="nav-item" onclick="showPanel('servicosequipe',this)"><i class="fa-solid fa-hand-holding-dollar"></i> Serviços Adicionais</button>
     <button class="nav-item" onclick="showPanel('controle',this)"><i class="fa-solid fa-sliders"></i> Controle</button>
     <div class="nav-section">Projetos</div>
     <button class="nav-item" onclick="showPanel('projetos',this)"><i class="fa-solid fa-folder-open"></i> Projetos</button>
@@ -617,6 +618,118 @@ function _validarLogin(){
       <div style="margin-bottom:14px;"><input type="text" class="form-input" id="extras-busca" placeholder="Buscar serviço, imóvel ou observação..." oninput="renderExtras()" style="width:260px;padding:6px 10px;font-size:13px;"></div>
       <div class="metrics-grid" id="extras-resumo" style="margin-bottom:16px;"></div>
       <div class="card"><div style="overflow-x:auto;"><table class="data-table"><thead><tr><th>Mês</th><th>Data</th><th>Serviço</th><th>Imóvel</th><th>Cobrado</th><th>Custo</th><th>Margem</th><th>Obs</th><th></th></tr></thead><tbody id="extras-tbody"></tbody></table></div></div>
+    </div>
+
+    <!-- ── SERVIÇOS DA EQUIPE ── -->
+    <div class="panel" id="panel-servicosequipe">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
+      <div>
+        <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Serviços Adicionais</h2>
+        <p style="color:var(--text3);font-size:13px;margin-top:2px;">Lance os serviços adicionais feitos · aprovação da admin · fechamento e pagamento em lote</p>
+      </div>
+      <button class="btn btn-rose" id="se-btn-lancar" onclick="abrirNovoServico()"><i class="fa-solid fa-plus"></i> Lançar Serviço</button>
+    </div>
+
+    <div id="se-aviso-vinculo"></div>
+    <div class="tab-bar" style="margin-bottom:16px;flex-wrap:wrap;">
+      <button class="tab-btn se-tab-btn active" data-tab="lancamentos" onclick="switchSETab('lancamentos')">Lançamentos</button>
+      <button class="tab-btn se-tab-btn se-admin" data-tab="fechamento" onclick="switchSETab('fechamento')">Fechamento</button>
+      <button class="tab-btn se-tab-btn" data-tab="historico" onclick="switchSETab('historico')">Pagamentos</button>
+      <button class="tab-btn se-tab-btn se-admin" data-tab="pessoas" onclick="switchSETab('pessoas')">Pessoas</button>
+      <button class="tab-btn se-tab-btn se-admin" data-tab="tabela" onclick="switchSETab('tabela')">Tabela de Preços</button>
+    </div>
+
+    <!-- ── LANÇAMENTOS ── -->
+    <div class="se-tab-panel active" id="se-tab-lancamentos">
+      <div class="metrics-grid" id="se-resumo" style="margin-bottom:16px;"></div>
+      <div class="se-filtros">
+        <input type="month" class="form-input" id="se-f-mes" onchange="renderServicosEquipe()" title="Mês de vigência">
+        <select class="form-select se-admin" id="se-f-membro" onchange="renderServicosEquipe()"></select>
+        <select class="form-select" id="se-f-onb" onchange="renderServicosEquipe()">
+          <option value="">Onboarding e demais</option>
+          <option value="sim">Só onboarding</option>
+          <option value="nao">Sem onboarding</option>
+        </select>
+        <select class="form-select" id="se-f-status" onchange="renderServicosEquipe()">
+          <option value="">Todos os status</option>
+          <option value="pendente">Pendente</option>
+          <option value="aprovado">Aprovado (a pagar)</option>
+          <option value="pago">Pago</option>
+          <option value="recusado">Recusado</option>
+        </select>
+        <button class="btn btn-sm btn-sage se-admin" id="se-btn-aprovar-lote" onclick="aprovarSelecionados()" style="display:none;"><i class="fa-solid fa-check-double"></i> Aprovar selecionados</button>
+      </div>
+      <div class="card"><div style="overflow-x:auto;"><table class="data-table">
+        <thead><tr>
+          <th class="se-admin" style="width:28px;"><input type="checkbox" id="se-sel-todos" onchange="selecionarTodosPendentes(this.checked)" title="Selecionar pendentes"></th>
+          <th>Data</th><th class="se-admin">Membro</th><th>Serviço</th><th class="se-hide-mobile">Imóvel</th><th>Valor</th><th>Status</th><th></th>
+        </tr></thead>
+        <tbody id="se-tbody"></tbody>
+      </table></div></div>
+    </div>
+
+    <!-- ── FECHAMENTO ── -->
+    <div class="se-tab-panel" id="se-tab-fechamento">
+      <div class="card" style="margin-bottom:16px;"><div class="card-body">
+        <div class="form-label" style="margin-bottom:8px;">Mês de vigência</div>
+        <div class="se-filtros" id="se-presets" style="margin-bottom:0;"></div>
+        <div class="se-filtros" id="se-fc-datas" style="margin:10px 0 0;display:none;">
+          <label style="font-size:12px;color:var(--text3);">Data do serviço de</label>
+          <input type="date" class="form-input" id="se-fc-ini" onchange="renderFechamento()">
+          <label style="font-size:12px;color:var(--text3);">até</label>
+          <input type="date" class="form-input" id="se-fc-fim" onchange="renderFechamento()">
+        </div>
+      </div></div>
+      <div id="se-fc-aviso"></div>
+      <div class="metrics-grid" id="se-fc-resumo" style="margin-bottom:16px;"></div>
+      <div id="se-fc-membros"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px;">
+        <button class="btn" onclick="exportarCSVFechamento()"><i class="fa-solid fa-file-csv"></i> Exportar CSV</button>
+        <button class="btn" onclick="abrirRelatorioFechamento('geral')"><i class="fa-solid fa-file-lines"></i> Relatório geral</button>
+        <button class="btn" onclick="abrirRelatorioFechamento('separado')"><i class="fa-solid fa-copy"></i> Relatórios por pessoa</button>
+        <button class="btn btn-sage" onclick="abrirConfirmarPagamento()"><i class="fa-solid fa-money-bill-wave"></i> Registrar pagamento</button>
+      </div>
+    </div>
+
+    <!-- ── HISTÓRICO DE PAGAMENTOS ── -->
+    <div class="se-tab-panel" id="se-tab-historico">
+      <div class="card"><div style="overflow-x:auto;"><table class="data-table">
+        <thead><tr><th>Pago em</th><th>Período</th><th id="se-hist-th-pessoas">Por pessoa</th><th></th></tr></thead>
+        <tbody id="se-hist-tbody"></tbody>
+      </table></div></div>
+    </div>
+
+    <!-- ── PESSOAS ── -->
+    <div class="se-tab-panel" id="se-tab-pessoas">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+        <p style="font-size:13px;color:var(--text3);">Quem pode receber por serviço extra, com os dados de pagamento.</p>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <label style="font-size:12.5px;color:var(--text2);display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="se-p-inativos" onchange="renderPessoas()"> mostrar inativos</label>
+          <button class="btn btn-sm btn-rose" onclick="abrirNovaPessoa()"><i class="fa-solid fa-user-plus"></i> Nova pessoa</button>
+        </div>
+      </div>
+      <div class="card"><div style="overflow-x:auto;"><table class="data-table">
+        <thead><tr><th>Nome</th><th class="se-hide-mobile">Contato</th><th>Pagamento</th><th></th></tr></thead>
+        <tbody id="se-pessoas-tbody"></tbody>
+      </table></div></div>
+    </div>
+
+    <!-- ── TABELA DE PREÇOS ── -->
+    <div class="se-tab-panel" id="se-tab-tabela">
+      <div class="card" style="margin-bottom:16px;"><div class="card-body" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13.5px;">
+        <i class="fa-solid fa-calendar-day" style="color:var(--peach);"></i> <b>Regra de pagamento:</b> serviços de um mês de vigência são pagos no dia
+        <input type="number" class="form-input" id="se-cfg-dia" min="1" max="31" style="width:70px;padding:5px 8px;" onchange="setDiaPagamento(this.value)"> do mês seguinte.
+        <span style="font-size:12px;color:var(--text3);">Vale pra tudo que ainda não foi pago, exceto lançamentos com previsão alterada na mão.</span>
+      </div></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+        <p style="font-size:13px;color:var(--text3);">Valor padrão que já vem preenchido ao lançar. Dá pra ajustar em cada lançamento.</p>
+        <button class="btn btn-sm btn-rose" onclick="adicionarTipoServico()"><i class="fa-solid fa-plus"></i> Novo tipo</button>
+      </div>
+      <div class="card"><div style="overflow-x:auto;"><table class="data-table">
+        <thead><tr><th>Serviço</th><th style="width:160px;">Valor padrão (R$)</th><th style="width:130px;">Unidade</th><th style="width:60px;"></th></tr></thead>
+        <tbody id="se-tabela-tbody"></tbody>
+      </table></div></div>
+    </div>
     </div>
 
     <!-- ── CONTROLE ── -->
@@ -1508,6 +1621,91 @@ function _validarLogin(){
     <div class="modal-footer"><button class="btn" onclick="closeModal('modal-extra')">Cancelar</button><button class="btn btn-rose" onclick="salvarExtra()"><i class="fa-solid fa-check"></i> Salvar</button></div>
   </div>
 </div>
+<!-- ── Modais: Serviços Adicionais (painel servicosequipe) ── -->
+<!-- Modal: lançar/editar serviço -->
+<div class="modal-overlay" id="modal-servico-equipe">
+  <div class="modal" style="width:520px;max-width:calc(100vw - 24px);">
+    <div class="modal-title" id="se-modal-title">Lançar Serviço</div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Data em que fez</label><input type="date" class="form-input" id="se-data" onchange="_seAoTrocarData()"></div>
+      <div class="form-group"><label class="form-label">Quem fez</label><select class="form-select" id="se-membro"></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Mês de vigência</label><input type="month" class="form-input" id="se-mesvig" onchange="_seMesVigManual=true;_seAtualizarPrevisao()"></div>
+      <div class="form-group"><label class="form-label">Previsão de pagamento</label><input type="date" class="form-input" id="se-prev" onchange="_seAoEditarPrevisao()"><div id="se-prev-hint" style="font-size:11px;color:var(--text3);margin-top:3px;"></div></div>
+    </div>
+    <div class="form-group"><label class="form-label">Serviço</label><select class="form-select" id="se-tipo" onchange="_seAoTrocarTipo()"></select></div>
+    <div class="form-group" id="se-desc-wrap" style="display:none;"><label class="form-label">Qual serviço?</label><input type="text" class="form-input" id="se-desc" placeholder="Descreva o serviço"></div>
+    <div class="form-group"><label class="form-label">Imóvel (opcional)</label><div class="se-ac-wrap"><input type="text" class="form-input" id="se-imovel" autocomplete="off" placeholder="Digite pra buscar (código ou nome)" oninput="_seImovelBuscar()" onfocus="_seImovelBuscar()" onkeydown="_seImovelTecla(event)" onblur="setTimeout(_seImovelFechar,150)"><div class="se-ac-lista" id="se-imovel-sug"></div></div></div>
+    <div class="form-group"><label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;"><input type="checkbox" id="se-onboarding"> É serviço de <span class="se-tag-onb">Onboarding</span> <span style="font-size:11.5px;color:var(--text3);">(imóvel entrando na casa)</span></label></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Quantidade</label><input type="number" class="form-input" id="se-qtd" min="1" step="1" value="1" oninput="_seAtualizarTotal()"></div>
+      <div class="form-group"><label class="form-label">Valor unitário (R$)</label><input type="number" class="form-input" id="se-valor" min="0" step="0.01" oninput="_seAtualizarTotal()"></div>
+    </div>
+    <div id="se-total-preview" style="font-size:13px;color:var(--text2);margin:-4px 0 12px;"></div>
+    <div class="form-group"><label class="form-label">Observações</label><textarea class="form-input" id="se-obs" rows="2" placeholder="Detalhes úteis pra aprovação"></textarea></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-servico-equipe')">Cancelar</button><button class="btn btn-rose" onclick="salvarServicoEquipe()"><i class="fa-solid fa-check"></i> Salvar</button></div>
+  </div>
+</div>
+
+<!-- Modal: relatório -->
+<div class="modal-overlay" id="modal-se-relatorio">
+  <div class="modal" style="width:720px;max-width:calc(100vw - 24px);max-height:90vh;overflow-y:auto;">
+    <select class="form-select" id="se-rel-modo" onchange="trocarModoRelatorio(this.value)" style="margin-bottom:14px;"></select>
+    <div id="se-relatorio"></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-se-relatorio')">Fechar</button><button class="btn" id="se-rel-copiar" onclick="copiarResumoRelatorio()"><i class="fa-regular fa-copy"></i> Copiar resumo</button><button class="btn btn-sage" id="se-rel-whats" onclick="enviarWhatsRelatorio()" style="display:none;"><i class="fa-brands fa-whatsapp"></i> Enviar no WhatsApp</button><button class="btn btn-rose" onclick="_seImprimirRelatorio()"><i class="fa-solid fa-print"></i> Imprimir / PDF</button></div>
+  </div>
+</div>
+
+<!-- Modal: confirmar pagamento -->
+<div class="modal-overlay" id="modal-se-pagar">
+  <div class="modal" style="width:460px;max-width:calc(100vw - 24px);">
+    <div class="modal-title">Registrar pagamento</div>
+    <div id="se-pagar-resumo" style="font-size:13px;margin-bottom:14px;"></div>
+    <div class="form-group"><label class="form-label">Data do pagamento</label><input type="date" class="form-input" id="se-pagar-data"><div id="se-pagar-prev" style="font-size:11.5px;color:var(--text3);margin-top:4px;"></div></div>
+    <div class="form-group"><label class="form-label">Observação (opcional)</label><input type="text" class="form-input" id="se-pagar-obs" placeholder="Ex: PIX enviado"></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-se-pagar')">Cancelar</button><button class="btn btn-sage" onclick="confirmarPagamentoSE()"><i class="fa-solid fa-check"></i> Confirmar pagamento</button></div>
+  </div>
+</div>
+
+<!-- Modal: recusar -->
+<div class="modal-overlay" id="modal-se-recusar">
+  <div class="modal" style="width:420px;max-width:calc(100vw - 24px);">
+    <div class="modal-title">Recusar lançamento</div>
+    <div class="form-group"><label class="form-label">Motivo</label><textarea class="form-input" id="se-recusar-motivo" rows="3" placeholder="A pessoa vai ver esse motivo"></textarea></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-se-recusar')">Cancelar</button><button class="btn btn-rose" onclick="confirmarRecusaSE()">Recusar</button></div>
+  </div>
+</div>
+
+<!-- Modal: pessoa (fica por último pra abrir por cima do modal de lançamento) -->
+<div class="modal-overlay" id="modal-se-pessoa">
+  <div class="modal" style="width:540px;max-width:calc(100vw - 24px);max-height:92vh;overflow-y:auto;">
+    <div class="modal-title" id="se-pessoa-title">Nova pessoa</div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Nome *</label><input type="text" class="form-input" id="sp-nome" placeholder="Nome como aparece no relatório"></div>
+      <div class="form-group"><label class="form-label">Função</label><input type="text" class="form-input" id="sp-funcao" list="sp-funcoes" placeholder="Ex: Atendente, Diarista"><datalist id="sp-funcoes"><option value="Atendente"><option value="Coordenação"><option value="Diarista"><option value="Manutenção"><option value="Freelancer"></datalist></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">WhatsApp</label><input type="tel" class="form-input" id="sp-telefone" placeholder="(21) 99999-9999"></div>
+      <div class="form-group"><label class="form-label">CPF / CNPJ</label><input type="text" class="form-input" id="sp-documento" placeholder="Pra recibo / nota"></div>
+    </div>
+    <div class="form-group"><label class="form-label">E-mail de login no Claire (opcional)</label><input type="email" class="form-input" id="sp-email" placeholder="Pra essa pessoa lançar os próprios serviços"><div style="font-size:11px;color:var(--text3);margin-top:3px;" id="sp-vinculo-hint"></div></div>
+    <div class="form-label" style="margin:6px 0 8px;color:var(--text);">Dados para pagamento</div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Tipo da chave PIX</label><select class="form-select" id="sp-pixtipo"><option value="">—</option></select></div>
+      <div class="form-group"><label class="form-label">Chave PIX</label><input type="text" class="form-input" id="sp-pixchave"></div>
+    </div>
+    <details style="margin-bottom:13px;"><summary style="font-size:12.5px;color:var(--text2);cursor:pointer;">Conta bancária (se não usar PIX)</summary>
+      <div class="form-group" style="margin-top:10px;"><label class="form-label">Banco</label><input type="text" class="form-input" id="sp-banco"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Agência</label><input type="text" class="form-input" id="sp-agencia"></div>
+        <div class="form-group"><label class="form-label">Conta</label><input type="text" class="form-input" id="sp-conta"></div>
+      </div>
+    </details>
+    <div class="form-group"><label class="form-label">Observações</label><textarea class="form-input" id="sp-obs" rows="2" placeholder="Ex: pagar só no dia 5, conta no nome da mãe…"></textarea></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-se-pessoa')">Cancelar</button><button class="btn btn-rose" onclick="salvarPessoa()"><i class="fa-solid fa-check"></i> Salvar</button></div>
+  </div>
+</div>
 <!-- Modal: Nova Despesa Fixa -->
 <div class="modal-overlay" id="modal-despesa">
   <div class="modal" style="width:520px;">
@@ -1778,6 +1976,6 @@ function _validarLogin(){
   </div>
 </div>
 
-<script src="js/app.js?v=126"></script>
+<script src="js/app.js?v=129"></script>
 </body>
 </html>

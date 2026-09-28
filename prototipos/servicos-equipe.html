@@ -94,7 +94,7 @@
   <div class="se-tab-panel active" id="se-tab-lancamentos">
     <div class="metrics-grid" id="se-resumo" style="margin-bottom:16px;"></div>
     <div class="se-filtros">
-      <input type="month" class="form-input" id="se-f-mes" onchange="renderServicosEquipe()" title="Mês">
+      <input type="month" class="form-input" id="se-f-mes" onchange="renderServicosEquipe()" title="Mês de vigência">
       <select class="form-select se-admin" id="se-f-membro" onchange="renderServicosEquipe()"></select>
       <select class="form-select" id="se-f-status" onchange="renderServicosEquipe()">
         <option value="">Todos os status</option>
@@ -117,13 +117,13 @@
   <!-- ── FECHAMENTO ── -->
   <div class="se-tab-panel" id="se-tab-fechamento">
     <div class="card" style="margin-bottom:16px;"><div class="card-body">
-      <div class="form-label" style="margin-bottom:8px;">Período</div>
-      <div class="se-filtros" id="se-presets"></div>
-      <div class="se-filtros" style="margin-bottom:0;">
-        <label style="font-size:12px;color:var(--text3);">De</label>
-        <input type="date" class="form-input" id="se-fc-ini" onchange="_fcPreset='custom';renderFechamento()">
+      <div class="form-label" style="margin-bottom:8px;">Mês de vigência</div>
+      <div class="se-filtros" id="se-presets" style="margin-bottom:0;"></div>
+      <div class="se-filtros" id="se-fc-datas" style="margin:10px 0 0;display:none;">
+        <label style="font-size:12px;color:var(--text3);">Data do serviço de</label>
+        <input type="date" class="form-input" id="se-fc-ini" onchange="renderFechamento()">
         <label style="font-size:12px;color:var(--text3);">até</label>
-        <input type="date" class="form-input" id="se-fc-fim" onchange="_fcPreset='custom';renderFechamento()">
+        <input type="date" class="form-input" id="se-fc-fim" onchange="renderFechamento()">
       </div>
     </div></div>
     <div id="se-fc-aviso"></div>
@@ -161,6 +161,11 @@
   </div>
 
   <div class="se-tab-panel" id="se-tab-tabela">
+    <div class="card" style="margin-bottom:16px;"><div class="card-body" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13.5px;">
+      <i class="fa-solid fa-calendar-day" style="color:var(--peach);"></i> <b>Regra de pagamento:</b> serviços de um mês de vigência são pagos no dia
+      <input type="number" class="form-input" id="se-cfg-dia" min="1" max="31" style="width:70px;padding:5px 8px;" onchange="setDiaPagamento(this.value)"> do mês seguinte.
+      <span style="font-size:12px;color:var(--text3);">Vale pra tudo que ainda não foi pago, exceto lançamentos com previsão alterada na mão.</span>
+    </div></div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
       <p style="font-size:13px;color:var(--text3);">Valor padrão que já vem preenchido ao lançar. Dá pra ajustar em cada lançamento.</p>
       <button class="btn btn-sm btn-rose" onclick="adicionarTipoServico()"><i class="fa-solid fa-plus"></i> Novo tipo</button>
@@ -178,8 +183,12 @@
   <div class="modal" style="width:520px;max-width:calc(100vw - 24px);">
     <div class="modal-title" id="se-modal-title">Lançar Serviço</div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Data em que fez</label><input type="date" class="form-input" id="se-data"></div>
+      <div class="form-group"><label class="form-label">Data em que fez</label><input type="date" class="form-input" id="se-data" onchange="_seAoTrocarData()"></div>
       <div class="form-group"><label class="form-label">Quem fez</label><select class="form-select" id="se-membro"></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Mês de vigência</label><input type="month" class="form-input" id="se-mesvig" onchange="_seMesVigManual=true;_seAtualizarPrevisao()"></div>
+      <div class="form-group"><label class="form-label">Previsão de pagamento</label><input type="date" class="form-input" id="se-prev" onchange="_seAoEditarPrevisao()"><div id="se-prev-hint" style="font-size:11px;color:var(--text3);margin-top:3px;"></div></div>
     </div>
     <div class="form-group"><label class="form-label">Serviço</label><select class="form-select" id="se-tipo" onchange="_seAoTrocarTipo()"></select></div>
     <div class="form-group" id="se-desc-wrap" style="display:none;"><label class="form-label">Qual serviço?</label><input type="text" class="form-input" id="se-desc" placeholder="Descreva o serviço"></div>
@@ -208,7 +217,7 @@
   <div class="modal" style="width:460px;max-width:calc(100vw - 24px);">
     <div class="modal-title">Registrar pagamento</div>
     <div id="se-pagar-resumo" style="font-size:13px;margin-bottom:14px;"></div>
-    <div class="form-group"><label class="form-label">Data do pagamento</label><input type="date" class="form-input" id="se-pagar-data"></div>
+    <div class="form-group"><label class="form-label">Data do pagamento</label><input type="date" class="form-input" id="se-pagar-data"><div id="se-pagar-prev" style="font-size:11.5px;color:var(--text3);margin-top:4px;"></div></div>
     <div class="form-group"><label class="form-label">Observação (opcional)</label><input type="text" class="form-input" id="se-pagar-obs" placeholder="Ex: PIX enviado"></div>
     <div class="modal-footer"><button class="btn" onclick="closeModal('modal-se-pagar')">Cancelar</button><button class="btn btn-sage" onclick="confirmarPagamentoSE()"><i class="fa-solid fa-check"></i> Confirmar pagamento</button></div>
   </div>
@@ -296,6 +305,8 @@ let servicosEquipe=[];
 let servicosTipos=[];
 // {id, dataPagamento, ini, fim, itens:[ids], totais:{membroId:valor}, total, obs, criadoEm}
 let servicosPagamentos=[];
+// {diaPagamento} — dia do mês seguinte à vigência em que se paga
+let servicosConfig={diaPagamento:15};
 
 const SE_TIPOS_EXEMPLO=[
   {id:1,nome:'Check-in presencial',valor:50,unidade:'por check-in'},
@@ -310,6 +321,7 @@ function _seLoad(){
     servicosPagamentos=JSON.parse(localStorage.getItem('proto_servicos_pagamentos')||'[]');
     const t=localStorage.getItem('proto_servicos_tipos');
     servicosTipos=t?JSON.parse(t):SE_TIPOS_EXEMPLO.slice();
+    const cf=localStorage.getItem('proto_servicos_config'); if(cf) servicosConfig=Object.assign({diaPagamento:15},JSON.parse(cf));
     const p=localStorage.getItem('proto_servicos_pessoas');
     servicosPessoas=p?JSON.parse(p):SE_PESSOAS_INICIAIS.map(x=>Object.assign({},x));
   }catch(e){ servicosTipos=SE_TIPOS_EXEMPLO.slice(); servicosPessoas=SE_PESSOAS_INICIAIS.map(x=>Object.assign({},x)); }
@@ -320,6 +332,7 @@ function _seSave(){
     localStorage.setItem('proto_servicos_tipos',JSON.stringify(servicosTipos));
     localStorage.setItem('proto_servicos_pagamentos',JSON.stringify(servicosPagamentos));
     localStorage.setItem('proto_servicos_pessoas',JSON.stringify(servicosPessoas));
+    localStorage.setItem('proto_servicos_config',JSON.stringify(servicosConfig));
   }catch(e){ showToast('Não foi possível salvar neste navegador'); }
 }
 
@@ -372,7 +385,7 @@ function renderServicosEquipe(){
   const membro=admin?document.getElementById('se-f-membro').value:u.id;
   const st=document.getElementById('se-f-status').value;
 
-  let lista=servicosEquipe.filter(s=>(!mes||(s.data||'').startsWith(mes)) && (!membro||s.membroId===membro));
+  let lista=servicosEquipe.filter(s=>(!mes||seMesVig(s)===mes) && (!membro||s.membroId===membro));
   const base=lista;
   if(st) lista=lista.filter(s=>seStatus(s)===st);
   lista.sort((a,b)=>(b.data||'').localeCompare(a.data||'')||b.id-a.id);
@@ -412,7 +425,7 @@ function renderServicosEquipe(){
     const recusa=status==='recusado'&&s.motivoRecusa?'<div style="font-size:11px;color:var(--vermelha);margin-top:2px;"><i class="fa-solid fa-circle-info"></i> '+esc(s.motivoRecusa)+'</div>':'';
     const chk=admin?'<td>'+(status==='pendente'?'<input type="checkbox" data-id="'+s.id+'" '+(_seSelecionados.has(s.id)?'checked':'')+' onchange="toggleSelServico('+s.id+',this.checked)">':'')+'</td>':'';
     return '<tr>'+chk+
-      '<td style="white-space:nowrap;font-size:12.5px;">'+_df(s.data)+'</td>'+
+      '<td style="white-space:nowrap;font-size:12.5px;">'+_df(s.data)+'<div style="font-size:10.5px;color:var(--text3);line-height:1.4;">vig. '+_mesCurto(seMesVig(s))+(status==='pago'?'':'<br>paga '+_df(sePrevisao(s)))+'</div></td>'+
       (admin?'<td style="font-weight:600;font-size:13px;">'+esc(_seNomeMembro(s.membroId))+'</td>':'')+
       '<td>'+esc(seNomeServico(s))+obs+recusa+'</td>'+
       '<td class="se-hide-mobile" style="font-size:12px;">'+esc(s.imovelNome||'—')+'</td>'+
@@ -456,10 +469,38 @@ function _seAtualizarTotal(){
   const q=parseFloat(document.getElementById('se-qtd').value)||1, v=parseFloat(document.getElementById('se-valor').value)||0;
   document.getElementById('se-total-preview').innerHTML=q>1?'Total: <b>'+brl(q*v)+'</b>':'';
 }
+// vigência acompanha a data do serviço até alguém mexer nela; previsão acompanha a vigência
+// até alguém mexer nela (e aí vira dataPrevista gravada no lançamento)
+let _seMesVigManual=false, _sePrevManual=false;
+function _seAoTrocarData(){
+  const d=document.getElementById('se-data').value;
+  if(!_seMesVigManual && d) document.getElementById('se-mesvig').value=d.substring(0,7);
+  _seAtualizarPrevisao();
+}
+function _seAtualizarPrevisao(){
+  const padrao=sePrevisaoPadrao(document.getElementById('se-mesvig').value);
+  if(!_sePrevManual) document.getElementById('se-prev').value=padrao;
+  _sePrevHint();
+}
+function _seAoEditarPrevisao(){
+  const padrao=sePrevisaoPadrao(document.getElementById('se-mesvig').value);
+  _sePrevManual=document.getElementById('se-prev').value!==padrao && !!document.getElementById('se-prev').value;
+  if(!document.getElementById('se-prev').value) document.getElementById('se-prev').value=padrao;
+  _sePrevHint();
+}
+function _sePrevHint(){
+  const padrao=sePrevisaoPadrao(document.getElementById('se-mesvig').value);
+  const h=document.getElementById('se-prev-hint');
+  h.innerHTML=_sePrevManual
+    ?'<span style="color:var(--peach);">alterada · padrão seria '+_df(padrao)+'</span> <a href="#" onclick="_sePrevManual=false;_seAtualizarPrevisao();return false;" style="color:var(--text2);">voltar</a>'
+    :'dia '+(servicosConfig.diaPagamento||15)+' do mês seguinte';
+  document.getElementById('se-prev').disabled=!_seIsAdmin();
+}
 function abrirNovoServico(){
   _seEditId=null; _sePreencherSelects();
   document.getElementById('se-modal-title').textContent='Lançar Serviço';
   document.getElementById('se-data').value=_hoje();
+  _seMesVigManual=false; _sePrevManual=false; document.getElementById('se-mesvig').value=_hoje().substring(0,7); _seAtualizarPrevisao();
   document.getElementById('se-imovel').value=''; document.getElementById('se-obs').value=''; document.getElementById('se-desc').value='';
   document.getElementById('se-qtd').value=1;
   document.getElementById('se-tipo').selectedIndex=0; _seAoTrocarTipo();
@@ -470,6 +511,7 @@ function abrirEditarServico(id){
   _seEditId=id; _sePreencherSelects();
   document.getElementById('se-modal-title').textContent='Editar Serviço';
   document.getElementById('se-data').value=s.data||'';
+  _seMesVigManual=true; _sePrevManual=!!s.dataPrevista; document.getElementById('se-mesvig').value=seMesVig(s); document.getElementById('se-prev').value=sePrevisao(s); _sePrevHint();
   document.getElementById('se-membro').value=s.membroId;
   document.getElementById('se-tipo').value=String(s.tipoId||'outro');
   document.getElementById('se-desc-wrap').style.display=s.tipoId==='outro'?'':'none';
@@ -488,12 +530,13 @@ function salvarServicoEquipe(){
   const data=document.getElementById('se-data').value;
   const valor=parseFloat(document.getElementById('se-valor').value);
   if(!data){ showToast('Informe a data.'); return; }
+  const mesVigente=document.getElementById('se-mesvig').value||data.substring(0,7);
   if(tipoId==='outro'&&!desc){ showToast('Descreva o serviço.'); return; }
   if(isNaN(valor)||valor<0){ showToast('Informe o valor.'); return; }
   const u=_seUsuario();
   const membroId=_seIsAdmin()?document.getElementById('se-membro').value:u.id;
   const tipo=servicosTipos.find(x=>x.id===tipoId);
-  const campos={data, membroId, tipoId, tipoNome:tipo?tipo.nome:'', descricao:desc, imovelNome:document.getElementById('se-imovel').value.trim(),
+  const campos={data, mesVigente, dataPrevista:_sePrevManual?document.getElementById('se-prev').value:'', membroId, tipoId, tipoNome:tipo?tipo.nome:'', descricao:desc, imovelNome:document.getElementById('se-imovel').value.trim(),
     qtd:Math.max(1,parseFloat(document.getElementById('se-qtd').value)||1), valorUnit:valor, obs:document.getElementById('se-obs').value.trim()};
   if(_seEditId){
     const s=servicosEquipe.find(x=>x.id===_seEditId); if(!s) return;
@@ -538,32 +581,62 @@ function voltarPendente(id){
   _seSave(); renderServicosEquipe();
 }
 
-// ── fechamento ──
-let _fcPreset='mes_atual';
-let _fcExcluidos=new Set(); // membros desmarcados neste fechamento
+// ── vigência e previsão de pagamento ──
+// Regra da casa: trabalha no mês de vigência, recebe no dia X do mês seguinte.
+// dataPrevista no lançamento só é preenchida quando alguém muda na mão;
+// vazia = segue a regra (assim mudar o dia na configuração vale pra tudo em aberto).
 function _fimDoMes(y,m){ return new Date(y,m+1,0).getDate(); }
 function _fmt(y,m,d){ return y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0'); }
-function _sePresets(){
-  const d=new Date(), y=d.getFullYear(), m=d.getMonth();
-  const py=m===0?y-1:y, pm=m===0?11:m-1;
-  const nomeMes=(yy,mm)=>new Date(yy,mm,1).toLocaleDateString('pt-BR',{month:'long'});
-  return [
-    {id:'mes_atual',     l:'Este mês ('+nomeMes(y,m)+')',      ini:_fmt(y,m,1),   fim:_fmt(y,m,_fimDoMes(y,m))},
-    {id:'mes_passado',   l:'Mês passado ('+nomeMes(py,pm)+')', ini:_fmt(py,pm,1), fim:_fmt(py,pm,_fimDoMes(py,pm))},
-    {id:'q1',            l:'1ª quinzena',                      ini:_fmt(y,m,1),   fim:_fmt(y,m,15)},
-    {id:'q2',            l:'2ª quinzena',                      ini:_fmt(y,m,16),  fim:_fmt(y,m,_fimDoMes(y,m))},
-    {id:'tudo_aberto',   l:'Tudo em aberto',                   ini:'',            fim:''},
-  ];
+function _mesAdd(mes,n){ const y=+mes.substring(0,4), m=+mes.substring(5,7)-1+n; const d=new Date(y,m,1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function _mesNome(mes){ if(!mes) return '—'; const t=new Date(+mes.substring(0,4),+mes.substring(5,7)-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'}); return t.replace(' de ','/'); }
+function _mesCurto(mes){ if(!mes) return '—'; return new Date(+mes.substring(0,4),+mes.substring(5,7)-1,1).toLocaleDateString('pt-BR',{month:'short'}).replace('.','')+'/'+mes.substring(2,4); }
+function sePrevisaoPadrao(mesVig){
+  if(!mesVig) return '';
+  const prox=_mesAdd(mesVig,1), y=+prox.substring(0,4), m=+prox.substring(5,7)-1;
+  return _fmt(y,m,Math.min(servicosConfig.diaPagamento||15,_fimDoMes(y,m)));
 }
-function aplicarPresetFechamento(id){
-  _fcPreset=id;
-  const p=_sePresets().find(x=>x.id===id);
-  document.getElementById('se-fc-ini').value=p?p.ini:'';
-  document.getElementById('se-fc-fim').value=p?p.fim:'';
+function seMesVig(s){ return s.mesVigente || (s.data||'').substring(0,7); }
+function sePrevisao(s){ return s.dataPrevista || sePrevisaoPadrao(seMesVig(s)); }
+
+// ── fechamento ──
+// modo 'vigencia' (padrão: fecha um mês de vigência) | 'datas' (intervalo pela data do serviço) | 'tudo'
+let _fcModo='vigencia', _fcMes='';
+let _fcExcluidos=new Set(); // membros desmarcados neste fechamento
+function _fcMesPadrao(){
+  // até o dia de pagamento, o que está pra pagar é a vigência do mês passado
+  const h=_hoje(), mesAtual=h.substring(0,7);
+  return +h.substring(8,10)<=(servicosConfig.diaPagamento||15)?_mesAdd(mesAtual,-1):mesAtual;
+}
+function setFcModo(modo){
+  _fcModo=modo;
+  if(modo==='datas' && !document.getElementById('se-fc-ini').value){
+    const d=new Date(), y=d.getFullYear(), m=d.getMonth();
+    document.getElementById('se-fc-ini').value=_fmt(y,m,1); document.getElementById('se-fc-fim').value=_fmt(y,m,_fimDoMes(y,m));
+  }
   renderFechamento();
 }
-function _fcPeriodo(){ return {ini:document.getElementById('se-fc-ini').value, fim:document.getElementById('se-fc-fim').value}; }
-function _noPeriodo(s,p){ return (!p.ini||s.data>=p.ini) && (!p.fim||s.data<=p.fim); }
+function setFcMes(mes){ _fcModo='vigencia'; _fcMes=mes; renderFechamento(); }
+function _fcPeriodo(){
+  if(_fcModo==='vigencia') return {modo:'vigencia', mes:_fcMes};
+  if(_fcModo==='datas') return {modo:'datas', ini:document.getElementById('se-fc-ini').value, fim:document.getElementById('se-fc-fim').value};
+  return {modo:'tudo'};
+}
+function _noPeriodo(s,p){
+  if(p.modo==='vigencia') return seMesVig(s)===p.mes;
+  if(p.modo==='datas') return (!p.ini||s.data>=p.ini) && (!p.fim||s.data<=p.fim);
+  return true;
+}
+function _fcLabelPeriodo(p){
+  if(!p) return '—';
+  if(p.modo==='vigencia') return 'Vigência '+_mesNome(p.mes);
+  if(p.modo==='datas'||p.ini||p.fim) return 'Serviços de '+(p.ini?_df(p.ini):'início')+' a '+(p.fim?_df(p.fim):'hoje');
+  return 'Tudo em aberto';
+}
+// previsão do grupo: se todos os itens têm a mesma, é ela; senão a mais cedo (e avisa)
+function _fcPrevisao(itens){
+  const ds=[...new Set(itens.map(sePrevisao).filter(Boolean))].sort();
+  return {data:ds[0]||'', varias:ds.length>1};
+}
 function _fcItensAPagar(){
   const p=_fcPeriodo();
   return servicosEquipe.filter(s=>seStatus(s)==='aprovado' && _noPeriodo(s,p) && !_fcExcluidos.has(s.membroId));
@@ -575,10 +648,17 @@ function _fcAgruparPorMembro(itens){
     .sort((a,b)=>a.nome.localeCompare(b.nome));
 }
 function renderFechamento(){
-  if(!document.getElementById('se-fc-ini').value && !document.getElementById('se-fc-fim').value && _fcPreset!=='tudo_aberto' && _fcPreset!=='custom'){
-    const p=_sePresets().find(x=>x.id===_fcPreset); if(p){ document.getElementById('se-fc-ini').value=p.ini; document.getElementById('se-fc-fim').value=p.fim; }
-  }
-  document.getElementById('se-presets').innerHTML=_sePresets().map(p=>'<button class="se-chip '+(_fcPreset===p.id?'active':'')+'" onclick="aplicarPresetFechamento(\''+p.id+'\')">'+esc(p.l)+'</button>').join('');
+  if(!_fcMes) _fcMes=_fcMesPadrao();
+  const dia=servicosConfig.diaPagamento||15;
+  // atalhos: 3 últimas vigências + atual, cada uma já dizendo quando paga
+  const mesAtual=_hoje().substring(0,7);
+  const chips=[-2,-1,0].map(n=>_mesAdd(mesAtual,n)).map(m=>'<button class="se-chip '+(_fcModo==='vigencia'&&_fcMes===m?'active':'')+'" onclick="setFcMes(\''+m+'\')">'+esc(_mesCurto(m))+' <span style="opacity:.75;">· paga '+_df(sePrevisaoPadrao(m)).substring(0,5)+'</span></button>').join('');
+  document.getElementById('se-presets').innerHTML=chips+
+    '<input type="month" class="form-input" value="'+(_fcModo==='vigencia'?_fcMes:'')+'" onchange="setFcMes(this.value)" title="Outro mês de vigência" style="width:auto;padding:5px 9px;font-size:12.5px;">'+
+    '<span style="flex:1;"></span>'+
+    '<button class="se-chip '+(_fcModo==='datas'?'active':'')+'" onclick="setFcModo(\'datas\')">Por datas</button>'+
+    '<button class="se-chip '+(_fcModo==='tudo'?'active':'')+'" onclick="setFcModo(\'tudo\')">Tudo em aberto</button>';
+  document.getElementById('se-fc-datas').style.display=_fcModo==='datas'?'':'none';
 
   const p=_fcPeriodo();
   const pend=servicosEquipe.filter(s=>seStatus(s)==='pendente' && _noPeriodo(s,p));
@@ -589,14 +669,17 @@ function renderFechamento(){
   const todos=_fcAgruparPorMembro(servicosEquipe.filter(s=>seStatus(s)==='aprovado' && _noPeriodo(s,p)));
   const incluidos=todos.filter(g=>!_fcExcluidos.has(g.id));
   const total=incluidos.reduce((t,g)=>t+g.total,0);
+  const prev=_fcPrevisao(incluidos.flatMap(g=>g.itens));
+  const prevData=prev.data||(p.modo==='vigencia'?sePrevisaoPadrao(p.mes):'');
+  const atrasado=total>0 && prevData && prevData<_hoje();
   document.getElementById('se-fc-resumo').innerHTML=[
     {l:'Total a pagar',v:brl(total),c:'sage',i:'fa-sack-dollar'},
-    {l:'Pessoas',v:incluidos.length,c:'lav',i:'fa-users'},
-    {l:'Lançamentos',v:incluidos.reduce((t,g)=>t+g.itens.length,0),c:'sky',i:'fa-list'},
-  ].map(x=>'<div class="metric-card '+x.c+'"><div class="metric-icon '+x.c+'"><i class="fa-solid '+x.i+'"></i></div><div class="metric-value" style="font-size:22px;">'+x.v+'</div><div class="metric-label">'+x.l+'</div></div>').join('');
+    {l:'Previsão de pagamento'+(prev.varias?' (a mais cedo)':''),v:prevData?_df(prevData):'—',c:atrasado?'rose':'peach',i:'fa-calendar-day',sub:atrasado?'<span style="color:var(--vermelha);">atrasado</span>':(p.modo==='vigencia'?'dia '+dia+' do mês seguinte':'')},
+    {l:'Pessoas · lançamentos',v:incluidos.length+' · '+incluidos.reduce((t,g)=>t+g.itens.length,0),c:'lav',i:'fa-users'},
+  ].map(x=>'<div class="metric-card '+x.c+'"><div class="metric-icon '+x.c+'"><i class="fa-solid '+x.i+'"></i></div><div class="metric-value" style="font-size:22px;">'+x.v+'</div><div class="metric-label">'+x.l+'</div>'+(x.sub?'<div class="metric-delta neutral">'+x.sub+'</div>':'')+'</div>').join('');
 
   const box=document.getElementById('se-fc-membros');
-  if(!todos.length){ box.innerHTML='<div class="card"><div class="se-vazio">Nada aprovado e em aberto neste período.</div></div>'; return; }
+  if(!todos.length){ box.innerHTML='<div class="card"><div class="se-vazio">Nada aprovado e em aberto '+(p.modo==='vigencia'?'na vigência de '+_mesNome(p.mes):'neste período')+'.</div></div>'; return; }
   box.innerHTML=todos.map(g=>{
     const fora=_fcExcluidos.has(g.id);
     return '<div class="se-membro-card" id="se-fc-m-'+g.id+'" style="'+(fora?'opacity:.45;':'')+'">'+
@@ -607,15 +690,19 @@ function renderFechamento(){
         '<span class="total">'+brl(g.total)+'</span><i class="fa-solid fa-chevron-down" style="font-size:11px;color:var(--text3);"></i>'+
       '</div>'+
       '<div class="se-membro-itens"><table class="data-table"><tbody>'+
-        g.itens.map(s=>'<tr><td style="font-size:12px;white-space:nowrap;width:80px;">'+_df(s.data)+'</td><td style="font-size:12.5px;">'+esc(seNomeServico(s))+(s.imovelNome?' <span style="color:var(--text3);">· '+esc(s.imovelNome)+'</span>':'')+'</td><td style="text-align:right;white-space:nowrap;font-size:12.5px;">'+((parseFloat(s.qtd)||1)>1?'<span style="color:var(--text3);font-size:11px;">'+s.qtd+' × '+brl(s.valorUnit)+' =</span> ':'')+'<b>'+brl(seValorItem(s))+'</b></td></tr>').join('')+
+        g.itens.map(s=>{
+          const difPrev=s.dataPrevista&&s.dataPrevista!==prevData?' <span style="font-size:10.5px;color:var(--peach);" title="Previsão alterada neste lançamento"><i class="fa-regular fa-calendar"></i> paga '+_df(s.dataPrevista)+'</span>':'';
+          const difVig=p.modo!=='vigencia'?' <span style="font-size:10.5px;color:var(--text3);">· vig. '+_mesCurto(seMesVig(s))+'</span>':'';
+          return '<tr><td style="font-size:12px;white-space:nowrap;width:80px;">'+_df(s.data)+'</td><td style="font-size:12.5px;">'+esc(seNomeServico(s))+(s.imovelNome?' <span style="color:var(--text3);">· '+esc(s.imovelNome)+'</span>':'')+difVig+difPrev+'</td><td style="text-align:right;white-space:nowrap;font-size:12.5px;">'+((parseFloat(s.qtd)||1)>1?'<span style="color:var(--text3);font-size:11px;">'+s.qtd+' × '+brl(s.valorUnit)+' =</span> ':'')+'<b>'+brl(seValorItem(s))+'</b></td></tr>';
+        }).join('')+
       '</tbody></table></div></div>';
   }).join('');
 }
 function toggleMembroFechamento(id,on){ on?_fcExcluidos.delete(id):_fcExcluidos.add(id); renderFechamento(); }
-function irParaPendentes(){ document.getElementById('se-f-status').value='pendente'; document.getElementById('se-f-mes').value=''; switchSETab('lancamentos'); }
-function _fcLabelPeriodo(ini,fim){
-  if(!ini&&!fim) return 'Tudo em aberto';
-  return (ini?_df(ini):'início')+' a '+(fim?_df(fim):'hoje');
+function irParaPendentes(){
+  document.getElementById('se-f-status').value='pendente';
+  document.getElementById('se-f-mes').value=_fcModo==='vigencia'?_fcMes:'';
+  switchSETab('lancamentos');
 }
 
 // ── relatório ──
@@ -633,16 +720,17 @@ function _relTabela(g){
     g.itens.map(s=>'<tr><td style="white-space:nowrap;">'+_df(s.data)+'</td><td>'+esc(seNomeServico(s))+(s.obs?'<div style="font-size:11px;color:var(--text3);">'+esc(s.obs)+'</div>':'')+'</td><td>'+esc(s.imovelNome||'—')+'</td><td style="text-align:right;">'+(s.qtd||1)+'</td><td style="text-align:right;white-space:nowrap;">'+brl(seValorItem(s))+'</td></tr>').join('')+
     '</tbody></table>';
 }
-function _relStatusTxt(){
-  const c=_relCtx;
-  return c.tipo==='pago'?'Pago em '+_df(c.pagoEm)+(c.obs?' · '+esc(c.obs):''):'A pagar (prévia)';
+// g = extrato de uma pessoa: a previsão é a dos itens dela, não a do lote todo
+function _relStatusTxt(g){
+  const c=_relCtx, prev=g?_fcPrevisao(g.itens).data:c.previsao;
+  return c.tipo==='pago'?'Pago em '+_df(c.pagoEm)+(c.obs?' · '+esc(c.obs):''):'<b>Previsão de pagamento: '+(prev?_df(prev):'a definir')+'</b>';
 }
 // Extrato de uma pessoa só — é o que vai pra cada um
 function _relIndividual(g){
   const c=_relCtx;
   return '<div class="rel-pagina">'+
     _relCabecalho('<div style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);font-weight:600;">Extrato de serviços extras</div><div style="font-family:var(--font-display);font-size:22px;font-weight:700;margin:2px 0 4px;">'+esc(g.nome)+'</div>',
-      ['Período: '+esc(c.periodo),_relStatusTxt()])+
+      [esc(c.periodo),_relStatusTxt(g)])+
     _relTabela(g)+
     '<div class="rel-total"><span>Total a receber</span><span>'+brl(g.total)+'</span></div>'+
     _relDadosPag(g.id)+
@@ -662,7 +750,7 @@ function _relDadosPag(id){
 }
 function _relGeral(grupos){
   const c=_relCtx, total=grupos.reduce((t,g)=>t+g.total,0);
-  return _relCabecalho('<div style="font-family:var(--font-display);font-size:19px;font-weight:700;">Serviços Extras — '+(c.tipo==='pago'?'pagamento':'prévia')+'</div>',['Período: '+esc(c.periodo),_relStatusTxt()])+
+  return _relCabecalho('<div style="font-family:var(--font-display);font-size:19px;font-weight:700;">Serviços Extras — '+(c.tipo==='pago'?'pagamento':'prévia')+'</div>',[esc(c.periodo),_relStatusTxt()])+
     '<table class="data-table" style="margin-top:12px;"><thead><tr><th>Pessoa</th><th>Pagamento</th><th style="text-align:right;">Serviços</th><th style="text-align:right;">Total</th></tr></thead><tbody>'+
     grupos.map(g=>'<tr><td style="font-weight:600;">'+esc(g.nome)+'</td><td style="font-size:12px;">'+esc(_sePixTxt(_sePessoa(g.id))||'—')+'</td><td style="text-align:right;">'+g.itens.length+'</td><td style="text-align:right;white-space:nowrap;">'+brl(g.total)+'</td></tr>').join('')+
     '</tbody></table>'+
@@ -704,22 +792,24 @@ function abrirRelatorioFechamento(membroId){
   const grupos=_fcAgruparPorMembro(_fcItensAPagar());
   if(!grupos.length){ showToast('Nada a pagar neste período.'); return; }
   const p=_fcPeriodo();
-  _abrirRelatorio({grupos, tipo:'previa', periodo:_fcLabelPeriodo(p.ini,p.fim)}, membroId);
+  _abrirRelatorio({grupos, tipo:'previa', periodo:_fcLabelPeriodo(p), previsao:_fcPrevisao(grupos.flatMap(g=>g.itens)).data}, membroId);
 }
 function abrirRelatorioMembroFechamento(membroId){
   // abre mesmo se a pessoa estiver desmarcada deste pagamento
   const p=_fcPeriodo();
   const itens=servicosEquipe.filter(s=>seStatus(s)==='aprovado' && _noPeriodo(s,p) && (s.membroId===membroId || !_fcExcluidos.has(s.membroId)));
-  _abrirRelatorio({grupos:_fcAgruparPorMembro(itens), tipo:'previa', periodo:_fcLabelPeriodo(p.ini,p.fim)}, membroId);
+  _abrirRelatorio({grupos:_fcAgruparPorMembro(itens), tipo:'previa', periodo:_fcLabelPeriodo(p), previsao:_fcPrevisao(itens).data}, membroId);
 }
 function abrirRelatorioPagamento(pagId,membroId){
   const pg=servicosPagamentos.find(x=>x.id===pagId); if(!pg) return;
   const grupos=_fcAgruparPorMembro(servicosEquipe.filter(s=>s.pagamentoId===pagId));
-  _abrirRelatorio({grupos, tipo:'pago', periodo:_fcLabelPeriodo(pg.ini,pg.fim), pagoEm:pg.dataPagamento, obs:pg.obs}, membroId);
+  _abrirRelatorio({grupos, tipo:'pago', periodo:_fcLabelPeriodo(pg.periodo), pagoEm:pg.dataPagamento, obs:pg.obs}, membroId);
 }
 function _relTexto(){
   const c=_relCtx; if(!c) return '';
-  const cab='Período: '+c.periodo+'\n'+(c.tipo==='pago'?'Pago em '+_df(c.pagoEm):'A pagar');
+  const gSel=c.grupos.find(x=>x.id===_relModo);
+  const prev=gSel?_fcPrevisao(gSel.itens).data:c.previsao;
+  const cab=c.periodo+'\n'+(c.tipo==='pago'?'Pago em '+_df(c.pagoEm):'Previsão de pagamento: '+(prev?_df(prev):'a definir'));
   if(_relModo==='geral'){
     const total=c.grupos.reduce((t,g)=>t+g.total,0);
     return '*Serviços Extras*\n'+cab+'\n\n'+c.grupos.map(g=>g.nome+': '+brl(g.total)+' ('+g.itens.length+' serviço'+(g.itens.length>1?'s':'')+')').join('\n')+'\n\n*Total: '+brl(total)+'*';
@@ -743,7 +833,7 @@ function exportarCSVFechamento(){
   });
   const csv='﻿'+linhas.map(l=>l.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(';')).join('\n');
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
-  const p=_fcPeriodo(); a.download='servicos-equipe_'+(p.ini||'inicio')+'_'+(p.fim||'hoje')+'.csv'; a.click();
+  const p=_fcPeriodo(); a.download='servicos-equipe_'+(p.modo==='vigencia'?'vigencia-'+p.mes:p.modo==='datas'?(p.ini||'inicio')+'_'+(p.fim||'hoje'):'em-aberto')+'.csv'; a.click();
 }
 
 // ── pagamento em lote ──
@@ -754,14 +844,16 @@ function abrirConfirmarPagamento(){
   document.getElementById('se-pagar-resumo').innerHTML=grupos.map(g=>'<div style="padding:5px 0;border-bottom:1px solid var(--border);"><div style="display:flex;justify-content:space-between;"><span>'+esc(g.nome)+'</span><b>'+brl(g.total)+'</b></div><div>'+_seDadosPagHTML(g.id,true)+'</div></div>').join('')+
     '<div style="display:flex;justify-content:space-between;padding-top:8px;margin-top:6px;border-top:1px solid var(--border2);font-size:14px;"><span>Total</span><b style="color:var(--sage);">'+brl(total)+'</b></div>'+
     '<div style="font-size:11.5px;color:var(--text3);margin-top:8px;">Todos esses lançamentos vão ficar marcados como <b>Pago</b>. Dá pra desfazer depois em Pagamentos.</div>';
-  document.getElementById('se-pagar-data').value=_hoje(); document.getElementById('se-pagar-obs').value='';
+  const prev=_fcPrevisao(grupos.flatMap(g=>g.itens)).data;
+  document.getElementById('se-pagar-data').value=prev&&prev>_hoje()?prev:_hoje(); document.getElementById('se-pagar-obs').value='';
+  document.getElementById('se-pagar-prev').textContent=prev?'Previsto para '+_df(prev):'';
   document.getElementById('modal-se-pagar').classList.add('open');
 }
 function confirmarPagamentoSE(){
   const itens=_fcItensAPagar(); if(!itens.length) return;
   const p=_fcPeriodo();
   const grupos=_fcAgruparPorMembro(itens);
-  const pg={id:Date.now(), dataPagamento:document.getElementById('se-pagar-data').value||_hoje(), ini:p.ini, fim:p.fim,
+  const pg={id:Date.now(), dataPagamento:document.getElementById('se-pagar-data').value||_hoje(), periodo:p, dataPrevista:_fcPrevisao(itens).data,
     itens:itens.map(s=>s.id), totais:Object.fromEntries(grupos.map(g=>[g.id,+g.total.toFixed(2)])),
     total:+grupos.reduce((t,g)=>t+g.total,0).toFixed(2), obs:document.getElementById('se-pagar-obs').value.trim(), criadoEm:new Date().toISOString()};
   itens.forEach(s=>{ s.pagamentoId=pg.id; });
@@ -787,7 +879,7 @@ function renderHistoricoPagamentos(){
       '<div style="margin-top:6px;font-size:12px;color:var(--text3);">Total <b style="color:var(--sage);">'+brl(pg.total)+'</b></div>'+
       '<button class="se-icon-btn no" onclick="desfazerPagamento('+pg.id+')" title="Desfazer pagamento" style="margin-top:4px;"><i class="fa-solid fa-rotate-left"></i> desfazer</button>':'';
     return '<tr><td style="white-space:nowrap;vertical-align:top;">'+_df(pg.dataPagamento)+'</td>'+
-      '<td style="font-size:12.5px;vertical-align:top;">'+esc(_fcLabelPeriodo(pg.ini,pg.fim))+(pg.obs?'<div style="font-size:11px;color:var(--text3);">'+esc(pg.obs)+'</div>':'')+'</td>'+
+      '<td style="font-size:12.5px;vertical-align:top;">'+esc(_fcLabelPeriodo(pg.periodo))+(pg.obs?'<div style="font-size:11px;color:var(--text3);">'+esc(pg.obs)+'</div>':'')+'</td>'+
       '<td style="min-width:200px;">'+pessoas+'</td>'+
       '<td style="text-align:right;vertical-align:top;white-space:nowrap;">'+acoes+'</td></tr>';
   }).join('');
@@ -883,7 +975,11 @@ function deletarPessoa(id){
 }
 
 // ── tabela de preços ──
+function setDiaPagamento(v){
+  const d=Math.min(31,Math.max(1,parseInt(v)||15)); servicosConfig.diaPagamento=d; document.getElementById('se-cfg-dia').value=d; _seSave(); showToast('Pagamento no dia '+d+' do mês seguinte');
+}
 function renderTabelaPrecos(){
+  document.getElementById('se-cfg-dia').value=servicosConfig.diaPagamento||15;
   const tb=document.getElementById('se-tabela-tbody');
   if(!servicosTipos.length){ tb.innerHTML='<tr><td colspan="4" class="se-vazio">Nenhum tipo cadastrado.</td></tr>'; return; }
   tb.innerHTML=servicosTipos.map(t=>'<tr>'+

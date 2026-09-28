@@ -86,6 +86,7 @@
     <button class="tab-btn se-tab-btn active" data-tab="lancamentos" onclick="switchSETab('lancamentos')">Lançamentos</button>
     <button class="tab-btn se-tab-btn se-admin" data-tab="fechamento" onclick="switchSETab('fechamento')">Fechamento</button>
     <button class="tab-btn se-tab-btn" data-tab="historico" onclick="switchSETab('historico')">Pagamentos</button>
+    <button class="tab-btn se-tab-btn se-admin" data-tab="pessoas" onclick="switchSETab('pessoas')">Pessoas</button>
     <button class="tab-btn se-tab-btn se-admin" data-tab="tabela" onclick="switchSETab('tabela')">Tabela de Preços</button>
   </div>
 
@@ -145,6 +146,20 @@
   </div>
 
   <!-- ── TABELA DE PREÇOS ── -->
+  <div class="se-tab-panel" id="se-tab-pessoas">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <p style="font-size:13px;color:var(--text3);">Quem pode receber por serviço extra, com os dados de pagamento.</p>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <label style="font-size:12.5px;color:var(--text2);display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="se-p-inativos" onchange="renderPessoas()"> mostrar inativos</label>
+        <button class="btn btn-sm btn-rose" onclick="abrirNovaPessoa()"><i class="fa-solid fa-user-plus"></i> Nova pessoa</button>
+      </div>
+    </div>
+    <div class="card"><div style="overflow-x:auto;"><table class="data-table">
+      <thead><tr><th>Nome</th><th class="se-hide-mobile">Contato</th><th>Pagamento</th><th></th></tr></thead>
+      <tbody id="se-pessoas-tbody"></tbody>
+    </table></div></div>
+  </div>
+
   <div class="se-tab-panel" id="se-tab-tabela">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
       <p style="font-size:13px;color:var(--text3);">Valor padrão que já vem preenchido ao lançar. Dá pra ajustar em cada lançamento.</p>
@@ -184,7 +199,7 @@
   <div class="modal" style="width:720px;max-width:calc(100vw - 24px);max-height:90vh;overflow-y:auto;">
     <select class="form-select" id="se-rel-modo" onchange="trocarModoRelatorio(this.value)" style="margin-bottom:14px;"></select>
     <div id="se-relatorio"></div>
-    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-se-relatorio')">Fechar</button><button class="btn" id="se-rel-copiar" onclick="copiarResumoRelatorio()"><i class="fa-regular fa-copy"></i> Copiar resumo</button><button class="btn btn-rose" onclick="window.print()"><i class="fa-solid fa-print"></i> Imprimir / PDF</button></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-se-relatorio')">Fechar</button><button class="btn" id="se-rel-copiar" onclick="copiarResumoRelatorio()"><i class="fa-regular fa-copy"></i> Copiar resumo</button><button class="btn btn-sage" id="se-rel-whats" onclick="enviarWhatsRelatorio()" style="display:none;"><i class="fa-brands fa-whatsapp"></i> Enviar no WhatsApp</button><button class="btn btn-rose" onclick="window.print()"><i class="fa-solid fa-print"></i> Imprimir / PDF</button></div>
   </div>
 </div>
 
@@ -208,6 +223,35 @@
   </div>
 </div>
 
+<!-- Modal: pessoa (fica por último pra abrir por cima do modal de lançamento) -->
+<div class="modal-overlay" id="modal-se-pessoa">
+  <div class="modal" style="width:540px;max-width:calc(100vw - 24px);max-height:92vh;overflow-y:auto;">
+    <div class="modal-title" id="se-pessoa-title">Nova pessoa</div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Nome *</label><input type="text" class="form-input" id="sp-nome" placeholder="Nome como aparece no relatório"></div>
+      <div class="form-group"><label class="form-label">Função</label><input type="text" class="form-input" id="sp-funcao" list="sp-funcoes" placeholder="Ex: Atendente, Diarista"><datalist id="sp-funcoes"><option value="Atendente"><option value="Coordenação"><option value="Diarista"><option value="Manutenção"><option value="Freelancer"></datalist></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">WhatsApp</label><input type="tel" class="form-input" id="sp-telefone" placeholder="(21) 99999-9999"></div>
+      <div class="form-group"><label class="form-label">CPF / CNPJ</label><input type="text" class="form-input" id="sp-documento" placeholder="Pra recibo / nota"></div>
+    </div>
+    <div class="form-label" style="margin:6px 0 8px;color:var(--text);">Dados para pagamento</div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Tipo da chave PIX</label><select class="form-select" id="sp-pixtipo"><option value="">—</option></select></div>
+      <div class="form-group"><label class="form-label">Chave PIX</label><input type="text" class="form-input" id="sp-pixchave"></div>
+    </div>
+    <details style="margin-bottom:13px;"><summary style="font-size:12.5px;color:var(--text2);cursor:pointer;">Conta bancária (se não usar PIX)</summary>
+      <div class="form-group" style="margin-top:10px;"><label class="form-label">Banco</label><input type="text" class="form-input" id="sp-banco"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Agência</label><input type="text" class="form-input" id="sp-agencia"></div>
+        <div class="form-group"><label class="form-label">Conta</label><input type="text" class="form-input" id="sp-conta"></div>
+      </div>
+    </details>
+    <div class="form-group"><label class="form-label">Observações</label><textarea class="form-input" id="sp-obs" rows="2" placeholder="Ex: pagar só no dia 5, conta no nome da mãe…"></textarea></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-se-pessoa')">Cancelar</button><button class="btn btn-rose" onclick="salvarPessoa()"><i class="fa-solid fa-check"></i> Salvar</button></div>
+  </div>
+</div>
+
 <div id="se-toast" style="position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:9px 18px;border-radius:20px;font-size:13px;display:none;z-index:999;"></div>
 
 <script>
@@ -219,7 +263,8 @@
      e entram em _MERGE_POR_ID_KEYS + backend/app/merge.py.
    - _seUsuario()/_seIsAdmin() trocam por getCurrentUser()/isAdmin(), e o
      membro logado vem de u.attId.
-   - SE_MEMBROS vem de ATTS (+ outrosMembros).
+   - servicosPessoas vira nx_servicos_pessoas; na migração, semear com ATTS
+     (+ outrosMembros) e ligar pessoa↔usuário pelo attId pra equipe lançar o próprio.
    - esc/brl/showToast/closeModal já existem no app.js.
    ═══════════════════════════════════════════════════════════════ */
 
@@ -233,9 +278,16 @@ function _hoje(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMon
 function _df(d){ return d?d.split('-').reverse().join('/'):'—'; }
 
 // ── dados ──
-const SE_MEMBROS=[
-  {id:'patricia',name:'Patrícia'},{id:'sara',name:'Sara'},{id:'lisarb',name:'Lisarb'},{id:'lais',name:'Laís'},
-];
+// Cadastro de quem pode receber por serviço extra. Inativos saem dos selects
+// mas continuam nos lançamentos/pagamentos antigos (por isso não se apaga quem já tem histórico).
+// {id, nome, funcao, telefone, documento, pixTipo, pixChave, banco, agencia, conta, obs, ativo}
+let servicosPessoas=[];
+const SE_PESSOAS_INICIAIS=[
+  {id:'patricia',nome:'Patrícia'},{id:'sara',nome:'Sara'},{id:'lisarb',nome:'Lisarb'},{id:'lais',nome:'Laís'},
+].map(p=>Object.assign({funcao:'Atendente',telefone:'',documento:'',pixTipo:'',pixChave:'',banco:'',agencia:'',conta:'',obs:'',ativo:true},p));
+const SE_PIX_TIPOS={cpf:'CPF',cnpj:'CNPJ',telefone:'Telefone',email:'E-mail',aleatoria:'Chave aleatória'};
+function _sePessoasAtivas(){ return servicosPessoas.filter(p=>p.ativo!==false).sort((a,b)=>a.nome.localeCompare(b.nome)); }
+function _sePessoa(id){ return servicosPessoas.find(x=>x.id===id); }
 // {id, data:'YYYY-MM-DD', membroId, tipoId, descricao, imovelNome, qtd, valorUnit, obs,
 //  status:'pendente'|'aprovado'|'recusado', motivoRecusa, criadoPor, criadoEm,
 //  aprovadoPor, aprovadoEm, pagamentoId}
@@ -258,13 +310,16 @@ function _seLoad(){
     servicosPagamentos=JSON.parse(localStorage.getItem('proto_servicos_pagamentos')||'[]');
     const t=localStorage.getItem('proto_servicos_tipos');
     servicosTipos=t?JSON.parse(t):SE_TIPOS_EXEMPLO.slice();
-  }catch(e){ servicosTipos=SE_TIPOS_EXEMPLO.slice(); }
+    const p=localStorage.getItem('proto_servicos_pessoas');
+    servicosPessoas=p?JSON.parse(p):SE_PESSOAS_INICIAIS.map(x=>Object.assign({},x));
+  }catch(e){ servicosTipos=SE_TIPOS_EXEMPLO.slice(); servicosPessoas=SE_PESSOAS_INICIAIS.map(x=>Object.assign({},x)); }
 }
 function _seSave(){
   try{
     localStorage.setItem('proto_servicos_equipe',JSON.stringify(servicosEquipe));
     localStorage.setItem('proto_servicos_tipos',JSON.stringify(servicosTipos));
     localStorage.setItem('proto_servicos_pagamentos',JSON.stringify(servicosPagamentos));
+    localStorage.setItem('proto_servicos_pessoas',JSON.stringify(servicosPessoas));
   }catch(e){ showToast('Não foi possível salvar neste navegador'); }
 }
 
@@ -272,7 +327,12 @@ function _seSave(){
 let _seUserId='admin';
 function _seIsAdmin(){ return _seUserId==='admin'; }
 function _seUsuario(){ return _seIsAdmin()?{id:'admin',nome:'Nicole'}:{id:_seUserId,nome:_seNomeMembro(_seUserId)}; }
-function _seNomeMembro(id){ const m=SE_MEMBROS.find(x=>x.id===id); return m?m.name:id; }
+function _seNomeMembro(id){ const m=_sePessoa(id); return m?m.nome:id; }
+function _sePreencherUsuariosProto(){
+  const su=document.getElementById('se-usuario'), v=su.value;
+  su.innerHTML='<option value="admin">Nicole (admin)</option>'+_sePessoasAtivas().map(m=>'<option value="'+m.id+'">'+esc(m.nome)+' (equipe)</option>').join('');
+  if(v) su.value=v;
+}
 function trocarUsuarioProto(id){
   _seUserId=id; try{ localStorage.setItem('proto_servicos_user',id); }catch(e){}
   document.querySelectorAll('.se-admin').forEach(el=>el.style.display=_seIsAdmin()?'':'none');
@@ -298,6 +358,7 @@ function switchSETab(tab){
   if(tab==='fechamento') renderFechamento();
   else if(tab==='historico') renderHistoricoPagamentos();
   else if(tab==='tabela') renderTabelaPrecos();
+  else if(tab==='pessoas') renderPessoas();
   else renderServicosEquipe();
 }
 
@@ -306,7 +367,7 @@ let _seSelecionados=new Set();
 function renderServicosEquipe(){
   const u=_seUsuario(), admin=_seIsAdmin();
   const fm=document.getElementById('se-f-membro');
-  if(fm && !fm.options.length) fm.innerHTML='<option value="">Toda a equipe</option>'+SE_MEMBROS.map(m=>'<option value="'+m.id+'">'+esc(m.name)+'</option>').join('');
+  if(fm){ const v=fm.value; fm.innerHTML='<option value="">Toda a equipe</option>'+servicosPessoas.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(m=>'<option value="'+m.id+'">'+esc(m.nome)+(m.ativo===false?' (inativo)':'')+'</option>').join(''); fm.value=v; }
   const mes=document.getElementById('se-f-mes').value;
   const membro=admin?document.getElementById('se-f-membro').value:u.id;
   const st=document.getElementById('se-f-status').value;
@@ -372,7 +433,12 @@ let _seEditId=null;
 function _sePreencherSelects(){
   const u=_seUsuario();
   const sm=document.getElementById('se-membro');
-  sm.innerHTML=SE_MEMBROS.map(m=>'<option value="'+m.id+'">'+esc(m.name)+'</option>').join('');
+  // editando lançamento de alguém que foi inativado: mantém a pessoa na lista
+  const atual=_seEditId?(servicosEquipe.find(x=>x.id===_seEditId)||{}).membroId:null;
+  const lista=_sePessoasAtivas(); const pa=atual&&!lista.some(p=>p.id===atual)?_sePessoa(atual):null; if(pa) lista.push(pa);
+  sm.innerHTML=lista.map(m=>'<option value="'+m.id+'">'+esc(m.nome)+'</option>').join('')+
+    (_seIsAdmin()?'<option value="__nova__">+ Cadastrar nova pessoa…</option>':'');
+  sm.onchange=function(){ if(sm.value==='__nova__'){ sm.value=lista[0]?lista[0].id:''; abrirNovaPessoa(true); } };
   sm.disabled=!_seIsAdmin(); if(!_seIsAdmin()) sm.value=u.id;
   document.getElementById('se-tipo').innerHTML=servicosTipos.map(t=>'<option value="'+t.id+'">'+esc(t.nome)+' — '+brl(t.valor)+(t.unidade?' '+esc(t.unidade):'')+'</option>').join('')+'<option value="outro">Outro (descrever)</option>';
   const imoveis=[...new Set(servicosEquipe.map(s=>s.imovelNome).filter(Boolean))].sort();
@@ -536,7 +602,7 @@ function renderFechamento(){
     return '<div class="se-membro-card" id="se-fc-m-'+g.id+'" style="'+(fora?'opacity:.45;':'')+'">'+
       '<div class="se-membro-head" onclick="this.parentNode.classList.toggle(\'open\')">'+
         '<input type="checkbox" '+(fora?'':'checked')+' onclick="event.stopPropagation()" onchange="toggleMembroFechamento(\''+g.id+'\',this.checked)" title="Incluir neste pagamento">'+
-        '<span class="nome">'+esc(g.nome)+' <span style="font-weight:400;font-size:12px;color:var(--text3);">· '+g.itens.length+' serviço(s)</span></span>'+
+        '<span class="nome">'+esc(g.nome)+' <span style="font-weight:400;font-size:12px;color:var(--text3);">· '+g.itens.length+' serviço(s)</span><div style="font-weight:400;">'+_seDadosPagHTML(g.id,true)+'</div></span>'+
         '<button class="btn btn-sm" onclick="event.stopPropagation();abrirRelatorioMembroFechamento(\''+g.id+'\')" title="Extrato só desta pessoa"><i class="fa-solid fa-file-lines"></i> Relatório</button>'+
         '<span class="total">'+brl(g.total)+'</span><i class="fa-solid fa-chevron-down" style="font-size:11px;color:var(--text3);"></i>'+
       '</div>'+
@@ -579,14 +645,26 @@ function _relIndividual(g){
       ['Período: '+esc(c.periodo),_relStatusTxt()])+
     _relTabela(g)+
     '<div class="rel-total"><span>Total a receber</span><span>'+brl(g.total)+'</span></div>'+
+    _relDadosPag(g.id)+
     (c.tipo==='pago'?'<div style="margin-top:40px;display:flex;gap:30px;font-size:12px;color:var(--text2);"><div style="flex:1;border-top:1px solid var(--text3);padding-top:4px;">Assinatura de '+esc(g.nome)+'</div><div style="width:140px;border-top:1px solid var(--text3);padding-top:4px;">Data</div></div>':'')+
   '</div>';
+}
+function _relDadosPag(id){
+  const p=_sePessoa(id); if(!p) return '';
+  const linhas=[];
+  if(p.documento) linhas.push(['CPF/CNPJ',p.documento]);
+  if(p.pixChave) linhas.push(['PIX'+(p.pixTipo?' ('+SE_PIX_TIPOS[p.pixTipo]+')':''),p.pixChave]);
+  if(p.banco||p.conta) linhas.push(['Conta',[p.banco,p.agencia?'ag. '+p.agencia:'',p.conta?'cc '+p.conta:''].filter(Boolean).join(' · ')]);
+  if(!linhas.length) return '';
+  return '<div style="margin-top:14px;background:var(--bg3);border-radius:var(--r-sm);padding:10px 13px;font-size:12.5px;">'+
+    '<div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);font-weight:600;margin-bottom:4px;">Dados para pagamento</div>'+
+    linhas.map(l=>'<div><span style="color:var(--text3);">'+esc(l[0])+':</span> '+esc(l[1])+'</div>').join('')+'</div>';
 }
 function _relGeral(grupos){
   const c=_relCtx, total=grupos.reduce((t,g)=>t+g.total,0);
   return _relCabecalho('<div style="font-family:var(--font-display);font-size:19px;font-weight:700;">Serviços Extras — '+(c.tipo==='pago'?'pagamento':'prévia')+'</div>',['Período: '+esc(c.periodo),_relStatusTxt()])+
-    '<table class="data-table" style="margin-top:12px;"><thead><tr><th>Pessoa</th><th style="text-align:right;">Serviços</th><th style="text-align:right;">Total</th></tr></thead><tbody>'+
-    grupos.map(g=>'<tr><td style="font-weight:600;">'+esc(g.nome)+'</td><td style="text-align:right;">'+g.itens.length+'</td><td style="text-align:right;white-space:nowrap;">'+brl(g.total)+'</td></tr>').join('')+
+    '<table class="data-table" style="margin-top:12px;"><thead><tr><th>Pessoa</th><th>Pagamento</th><th style="text-align:right;">Serviços</th><th style="text-align:right;">Total</th></tr></thead><tbody>'+
+    grupos.map(g=>'<tr><td style="font-weight:600;">'+esc(g.nome)+'</td><td style="font-size:12px;">'+esc(_sePixTxt(_sePessoa(g.id))||'—')+'</td><td style="text-align:right;">'+g.itens.length+'</td><td style="text-align:right;white-space:nowrap;">'+brl(g.total)+'</td></tr>').join('')+
     '</tbody></table>'+
     grupos.map(g=>'<h3><span>'+esc(g.nome)+'</span><span>'+brl(g.total)+'</span></h3>'+_relTabela(g)).join('')+
     '<div class="rel-total"><span>Total geral</span><span>'+brl(total)+'</span></div>';
@@ -608,6 +686,14 @@ function _renderRelatorio(){
   else { const g=grupos.find(x=>x.id===_relModo); html=g?_relIndividual(g):'<div class="se-vazio">Nada para esta pessoa.</div>'; }
   document.getElementById('se-relatorio').innerHTML=html;
   document.getElementById('se-rel-copiar').style.display=_relModo==='separado'?'none':'';
+  // WhatsApp direto pra pessoa: só no extrato individual, pela admin, com telefone cadastrado
+  const p=_sePessoa(_relModo);
+  document.getElementById('se-rel-whats').style.display=admin&&p&&p.telefone?'':'none';
+}
+function enviarWhatsRelatorio(){
+  const p=_sePessoa(_relModo); if(!p||!p.telefone) return;
+  const num=p.telefone.replace(/\D/g,'').replace(/^55/,'');
+  window.open('https://wa.me/55'+num+'?text='+encodeURIComponent(_relTexto()),'_blank');
 }
 function trocarModoRelatorio(v){ _relModo=v; _renderRelatorio(); }
 function _abrirRelatorio(ctx,modo){
@@ -641,7 +727,8 @@ function _relTexto(){
   const g=c.grupos.find(x=>x.id===_relModo); if(!g) return '';
   return 'Oi, '+g.nome+'! Segue seu extrato de serviços extras 😊\n'+cab+'\n\n'+
     g.itens.map(s=>'• '+_df(s.data)+' — '+seNomeServico(s)+(s.imovelNome?' ('+s.imovelNome+')':'')+((parseFloat(s.qtd)||1)>1?' · '+s.qtd+'×':'')+': '+brl(seValorItem(s))).join('\n')+
-    '\n\n*Total: '+brl(g.total)+'*';
+    '\n\n*Total: '+brl(g.total)+'*'+
+    (_sePixTxt(_sePessoa(g.id))?'\n'+(c.tipo==='pago'?'Enviado para ':'Vai para ')+_sePixTxt(_sePessoa(g.id)):'');
 }
 function copiarResumoRelatorio(){
   const t=_relTexto();
@@ -650,9 +737,9 @@ function copiarResumoRelatorio(){
 function exportarCSVFechamento(){
   const itens=_fcItensAPagar();
   if(!itens.length){ showToast('Nada a pagar neste período.'); return; }
-  const linhas=[['Membro','Data','Serviço','Imóvel','Qtd','Valor unitário','Total','Obs']];
+  const linhas=[['Membro','Dados pagamento','Data','Serviço','Imóvel','Qtd','Valor unitário','Total','Obs']];
   itens.slice().sort((a,b)=>_seNomeMembro(a.membroId).localeCompare(_seNomeMembro(b.membroId))||a.data.localeCompare(b.data)).forEach(s=>{
-    linhas.push([_seNomeMembro(s.membroId),_df(s.data),seNomeServico(s),s.imovelNome||'',s.qtd||1,String(s.valorUnit).replace('.',','),String(seValorItem(s).toFixed(2)).replace('.',','),s.obs||'']);
+    linhas.push([_seNomeMembro(s.membroId),_sePixTxt(_sePessoa(s.membroId)),_df(s.data),seNomeServico(s),s.imovelNome||'',s.qtd||1,String(s.valorUnit).replace('.',','),String(seValorItem(s).toFixed(2)).replace('.',','),s.obs||'']);
   });
   const csv='﻿'+linhas.map(l=>l.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(';')).join('\n');
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
@@ -664,7 +751,7 @@ function abrirConfirmarPagamento(){
   const grupos=_fcAgruparPorMembro(_fcItensAPagar());
   if(!grupos.length){ showToast('Nada a pagar neste período.'); return; }
   const total=grupos.reduce((t,g)=>t+g.total,0);
-  document.getElementById('se-pagar-resumo').innerHTML=grupos.map(g=>'<div style="display:flex;justify-content:space-between;padding:3px 0;"><span>'+esc(g.nome)+'</span><b>'+brl(g.total)+'</b></div>').join('')+
+  document.getElementById('se-pagar-resumo').innerHTML=grupos.map(g=>'<div style="padding:5px 0;border-bottom:1px solid var(--border);"><div style="display:flex;justify-content:space-between;"><span>'+esc(g.nome)+'</span><b>'+brl(g.total)+'</b></div><div>'+_seDadosPagHTML(g.id,true)+'</div></div>').join('')+
     '<div style="display:flex;justify-content:space-between;padding-top:8px;margin-top:6px;border-top:1px solid var(--border2);font-size:14px;"><span>Total</span><b style="color:var(--sage);">'+brl(total)+'</b></div>'+
     '<div style="font-size:11.5px;color:var(--text3);margin-top:8px;">Todos esses lançamentos vão ficar marcados como <b>Pago</b>. Dá pra desfazer depois em Pagamentos.</div>';
   document.getElementById('se-pagar-data').value=_hoje(); document.getElementById('se-pagar-obs').value='';
@@ -712,6 +799,89 @@ function desfazerPagamento(id){
   _seSave(); renderHistoricoPagamentos(); showToast('Pagamento desfeito');
 }
 
+// ── pessoas ──
+function _sePixTxt(p){
+  if(!p) return '';
+  if(p.pixChave) return 'PIX'+(p.pixTipo?' ('+SE_PIX_TIPOS[p.pixTipo]+')':'')+': '+p.pixChave;
+  if(p.banco||p.conta) return [p.banco,p.agencia?'ag. '+p.agencia:'',p.conta?'cc '+p.conta:''].filter(Boolean).join(' · ');
+  return '';
+}
+// linha de dados de pagamento (fechamento, confirmação e extrato) — com botão de copiar a chave
+function _seDadosPagHTML(id,compacto){
+  const p=_sePessoa(id), txt=_sePixTxt(p);
+  if(!txt) return '<span style="font-size:11.5px;color:var(--peach);"><i class="fa-solid fa-triangle-exclamation"></i> sem dados de pagamento'+(_seIsAdmin()?' · <a href="#" onclick="event.stopPropagation();abrirEditarPessoa(\''+id+'\');return false;" style="color:inherit;">cadastrar</a>':'')+'</span>';
+  const copiar=p.pixChave?' <button class="se-icon-btn" onclick="event.stopPropagation();copiarTexto(\''+esc(p.pixChave).replace(/'/g,"\\'")+'\',\'Chave PIX copiada\')" title="Copiar chave"><i class="fa-regular fa-copy"></i></button>':'';
+  return '<span style="font-size:'+(compacto?'11.5':'12.5')+'px;color:var(--text2);">'+esc(txt)+'</span>'+copiar;
+}
+function copiarTexto(t,msg){ if(navigator.clipboard) navigator.clipboard.writeText(t).then(()=>showToast(msg||'Copiado'),()=>showToast('Não foi possível copiar')); }
+function renderPessoas(){
+  const tb=document.getElementById('se-pessoas-tbody');
+  const inativos=document.getElementById('se-p-inativos').checked;
+  const lista=servicosPessoas.filter(p=>inativos||p.ativo!==false).sort((a,b)=>(a.ativo===false)-(b.ativo===false)||a.nome.localeCompare(b.nome));
+  if(!lista.length){ tb.innerHTML='<tr><td colspan="4" class="se-vazio">Ninguém cadastrado. Clique em "Nova pessoa".</td></tr>'; return; }
+  tb.innerHTML=lista.map(p=>{
+    const inat=p.ativo===false;
+    const temHist=servicosEquipe.some(s=>s.membroId===p.id);
+    return '<tr style="'+(inat?'opacity:.5;':'')+'">'+
+      '<td><div style="font-weight:600;">'+esc(p.nome)+(inat?' <span class="se-status recusado">inativo</span>':'')+'</div><div style="font-size:11.5px;color:var(--text3);">'+esc(p.funcao||'')+(p.documento?' · '+esc(p.documento):'')+'</div></td>'+
+      '<td class="se-hide-mobile" style="font-size:12.5px;">'+(p.telefone?'<a href="https://wa.me/55'+p.telefone.replace(/\D/g,'').replace(/^55/,'')+'" target="_blank" style="color:var(--sage);text-decoration:none;"><i class="fa-brands fa-whatsapp"></i> '+esc(p.telefone)+'</a>':'<span style="color:var(--text3);">—</span>')+'</td>'+
+      '<td>'+_seDadosPagHTML(p.id,true)+(p.obs?'<div style="font-size:11px;color:var(--text3);">'+esc(p.obs)+'</div>':'')+'</td>'+
+      '<td style="white-space:nowrap;text-align:right;">'+
+        '<button class="se-icon-btn" onclick="abrirEditarPessoa(\''+p.id+'\')" title="Editar"><i class="fa-solid fa-pen"></i></button>'+
+        '<button class="se-icon-btn" onclick="toggleAtivoPessoa(\''+p.id+'\')" title="'+(inat?'Reativar':'Inativar (sai das listas, mantém histórico)')+'"><i class="fa-solid '+(inat?'fa-user-check':'fa-user-slash')+'"></i></button>'+
+        (temHist?'':'<button class="se-icon-btn no" onclick="deletarPessoa(\''+p.id+'\')" title="Excluir"><i class="fa-solid fa-trash"></i></button>')+
+      '</td></tr>';
+  }).join('');
+}
+let _sePessoaEditId=null, _sePessoaDoLancamento=false;
+function _sePessoaForm(p){
+  document.getElementById('sp-pixtipo').innerHTML='<option value="">—</option>'+Object.keys(SE_PIX_TIPOS).map(k=>'<option value="'+k+'">'+SE_PIX_TIPOS[k]+'</option>').join('');
+  ['nome','funcao','telefone','documento','pixChave','banco','agencia','conta','obs'].forEach(k=>{ document.getElementById('sp-'+k.toLowerCase()).value=(p&&p[k])||''; });
+  document.getElementById('sp-pixtipo').value=(p&&p.pixTipo)||'';
+  document.getElementById('modal-se-pessoa').classList.add('open');
+  setTimeout(()=>document.getElementById('sp-nome').focus(),50);
+}
+function abrirNovaPessoa(doLancamento){
+  _sePessoaEditId=null; _sePessoaDoLancamento=!!doLancamento;
+  document.getElementById('se-pessoa-title').textContent='Nova pessoa';
+  _sePessoaForm(null);
+}
+function abrirEditarPessoa(id){
+  const p=_sePessoa(id); if(!p) return;
+  _sePessoaEditId=id; _sePessoaDoLancamento=false;
+  document.getElementById('se-pessoa-title').textContent='Editar '+p.nome;
+  _sePessoaForm(p);
+}
+function salvarPessoa(){
+  const nome=document.getElementById('sp-nome').value.trim();
+  if(!nome){ showToast('Informe o nome.'); return; }
+  const dup=servicosPessoas.find(p=>p.nome.toLowerCase()===nome.toLowerCase()&&p.id!==_sePessoaEditId);
+  if(dup&&!confirm('Já existe alguém com o nome "'+dup.nome+'". Salvar mesmo assim?')) return;
+  const campos={nome};
+  ['funcao','telefone','documento','pixChave','banco','agencia','conta','obs'].forEach(k=>{ campos[k]=document.getElementById('sp-'+k.toLowerCase()).value.trim(); });
+  campos.pixTipo=document.getElementById('sp-pixtipo').value;
+  let id=_sePessoaEditId;
+  if(id) Object.assign(_sePessoa(id),campos);
+  else { id='p'+Date.now(); servicosPessoas.push(Object.assign({id,ativo:true},campos)); }
+  _seSave(); closeModal('modal-se-pessoa'); _sePreencherUsuariosProto();
+  if(_sePessoaDoLancamento){ _sePreencherSelects(); document.getElementById('se-membro').value=id; }
+  if(_seTab==='pessoas') renderPessoas(); else if(_seTab==='fechamento') renderFechamento(); else renderServicosEquipe();
+  showToast(_sePessoaEditId?'Cadastro atualizado':'Cadastro de '+nome+' salvo');
+}
+function toggleAtivoPessoa(id){
+  const p=_sePessoa(id); if(!p) return;
+  if(p.ativo!==false){
+    const aberto=servicosEquipe.filter(s=>s.membroId===id&&(seStatus(s)==='aprovado'||seStatus(s)==='pendente')).length;
+    if(!confirm('Inativar '+p.nome+'? A pessoa sai das listas de lançamento, mas o histórico fica.'+(aberto?'\n\nAtenção: tem '+aberto+' lançamento(s) ainda não pago(s) — eles continuam no fechamento.':''))) return;
+  }
+  p.ativo=p.ativo===false; _seSave(); _sePreencherUsuariosProto(); renderPessoas();
+}
+function deletarPessoa(id){
+  if(servicosEquipe.some(s=>s.membroId===id)){ showToast('Tem lançamentos — use Inativar.'); return; }
+  const p=_sePessoa(id); if(!p||!confirm('Excluir '+p.nome+'?')) return;
+  servicosPessoas=servicosPessoas.filter(x=>x.id!==id); _seSave(); _sePreencherUsuariosProto(); renderPessoas();
+}
+
 // ── tabela de preços ──
 function renderTabelaPrecos(){
   const tb=document.getElementById('se-tabela-tbody');
@@ -738,8 +908,9 @@ document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click
 _seLoad();
 (function(){
   const su=document.getElementById('se-usuario');
-  su.innerHTML='<option value="admin">Nicole (admin)</option>'+SE_MEMBROS.map(m=>'<option value="'+m.id+'">'+esc(m.name)+' (equipe)</option>').join('');
+  _sePreencherUsuariosProto();
   let u='admin'; try{ u=localStorage.getItem('proto_servicos_user')||'admin'; }catch(e){}
+  if(u!=='admin'&&!_sePessoa(u)) u='admin';
   su.value=u;
   document.getElementById('se-f-mes').value=_hoje().substring(0,7);
   trocarUsuarioProto(u);

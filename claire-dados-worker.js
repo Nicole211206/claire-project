@@ -516,6 +516,8 @@ async function handleApi(request, url, env, cors) {
 
     // ── /api/manutencoes ──────────────────────────────────────
     if (resource === 'manutencoes' && method === 'POST' && !param1) {
+      // Integração Onboarding → Manutenção DESATIVADA (não cria mais cards).
+      return jsonResp({ ok: true, ignorado: true, motivo: 'integracao onboarding->manutencao desativada' }, cors);
       const body = await request.json();
       if (!body.imovelNome) return jsonResp({ error: 'campo imovelNome obrigatorio' }, cors, 400);
       let manutencoes = state.nx_manutencoes || [];

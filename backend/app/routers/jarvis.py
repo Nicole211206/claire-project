@@ -216,6 +216,10 @@ def patch_project(id: int, body: dict = Body(...), db: Session = Depends(get_db)
 # ── /api/manutencoes ──────────────────────────────────────
 @router.post("/manutencoes", status_code=201)
 def create_manutencao(body: dict = Body(...), db: Session = Depends(get_db)):
+    # Integração Onboarding → Manutenção DESATIVADA: o onboarding não gera mais
+    # manutenções na Claire. Mantém a rota respondendo 200 (sem criar nada) para
+    # o onboarding não ficar re-tentando e para não recriar cards apagados.
+    return {"ok": True, "ignorado": True, "motivo": "integracao onboarding->manutencao desativada"}
     if not body.get("imovelNome"):
         return JSONResponse({"error": "campo imovelNome obrigatorio"}, status_code=400)
     state = crud.kv_load(db)

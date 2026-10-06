@@ -202,6 +202,17 @@ def do_merge(db: Session, prev: dict, parsed_in: dict) -> dict:
                 or tomb_map[o.get("id")] < _ts_num(o)
             ]
 
+    # ── integração Onboarding → Manutenção DESATIVADA ──
+    # Cards com origem "onboarding" não devem mais existir. Descartados aqui
+    # (rede de segurança no servidor): um aparelho com cópia antiga de um card
+    # apagado, ao mexer nele, gera _ts novo e a "edição" vencia a exclusão —
+    # o card voltava mesmo depois de apagado.
+    if isinstance(merged.get("nx_manutencoes"), list):
+        merged["nx_manutencoes"] = [
+            o for o in merged["nx_manutencoes"]
+            if not (isinstance(o, dict) and o.get("origem") == "onboarding")
+        ]
+
     # ── trava de encolhimento (clássica + "encolheu demais") ──
     for k in PROT:
         if k in MERGE_POR_ID:

@@ -127,8 +127,10 @@ function _renderObList(){
   const el=document.getElementById('ob-onboarding-list');
   if(!el||!Array.isArray(_obData))return;
   const lista=_obData;
-  const calcDias=im=>{const fim=im.dataAtivacao?new Date(im.dataAtivacao):new Date();return Math.max(0,Math.round((fim-new Date(im.dataContratoAssinado))/(1000*60*60*24)));};
-  const marcadosDoMes=lista.filter(im=>im.incluirKpiClaire&&im.mesReferenciaKpi===kpiPeriodo&&im.dataContratoAssinado&&im.dataAtivacao);
+  // diasOnboarding já vem calculado pelo onboarding na base configurada lá (liberação ou contrato);
+  // sem ele (imóvel ainda não ativo ou versão antiga do endpoint), conta a partir do contrato.
+  const calcDias=im=>{if(im.dataAtivacao&&im.diasOnboarding!=null)return Math.max(0,im.diasOnboarding);const fim=im.dataAtivacao?new Date(im.dataAtivacao):new Date();return Math.max(0,Math.round((fim-new Date(im.dataContratoAssinado))/(1000*60*60*24)));};
+  const marcadosDoMes=lista.filter(im=>im.incluirKpiClaire&&im.mesReferenciaKpi===kpiPeriodo&&im.dataContratoAssinado&&im.dataAtivacao&&im.tipoOnboarding!=='Reativação');
   const outros=lista.filter(im=>!marcadosDoMes.includes(im)&&im.dataContratoAssinado&&calcDias(im)>=0);
   if(!marcadosDoMes.length&&!outros.length){el.innerHTML='<div style="font-size:12px;color:var(--text3);text-align:center;padding:8px;">Nenhum imóvel no módulo de Onboarding ainda.</div>';return;}
   const m=_obKpiPorMes&&_obKpiPorMes[kpiPeriodo];
@@ -8840,7 +8842,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 129;
+const APP_VERSION = 130;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

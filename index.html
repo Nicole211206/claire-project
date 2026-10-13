@@ -445,6 +445,7 @@ function _validarLogin(){
       <div id="lc-automacao-bar" style="margin-bottom:14px;"></div>
 
       <div id="lc-content-limpeza">
+        <div style="margin-bottom:12px;"><select class="form-select" id="lz-filtro-empresa" onchange="renderLimpezaKanban()" style="width:auto;padding:6px 10px;font-size:13px;"></select></div>
         <div id="limpeza-kanban" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;"></div>
       </div>
 
@@ -1833,9 +1834,10 @@ function _validarLogin(){
     </div>
     <div class="form-group"><label class="form-label">Imóvel (nome externo)</label><input type="text" class="form-input" id="lz-imovel-externo" placeholder="Nome no Airbnb/Booking"></div>
     <div class="form-group"><label class="form-label">Endereço</label><input type="text" class="form-input" id="lz-endereco" placeholder="Endereço do imóvel"></div>
+    <div class="form-group"><label class="form-label">Empresa de limpeza</label><select class="form-select" id="lz-empresa"></select></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
       <div class="form-group"><label class="form-label">Responsável pela limpeza</label><input type="text" class="form-input" id="lz-responsavel" placeholder="Nome"></div>
-      <div class="form-group"><label class="form-label">Grupo de WhatsApp (link)</label><input type="text" class="form-input" id="lz-grupo-wpp" placeholder="https://chat.whatsapp.com/..."></div>
+      <div class="form-group"><label class="form-label">Grupo de WhatsApp (link)</label><input type="text" class="form-input" id="lz-grupo-wpp" placeholder="vazio = usa o grupo da empresa"></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
       <div class="form-group"><label class="form-label">Check-in</label><input type="date" class="form-input" id="lz-checkin"></div>
@@ -1913,6 +1915,11 @@ function _validarLogin(){
     </div>
     <div id="lc-auto-status" style="margin-bottom:14px;"></div>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+      <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);">Empresas de limpeza</div>
+      <button class="btn btn-sm" onclick="adicionarEmpresaLimpeza()" style="margin-left:auto;"><i class="fa-solid fa-plus"></i> Nova empresa</button>
+    </div>
+    <div id="lc-auto-empresas" style="margin-bottom:18px;"></div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
       <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);">Imóveis com limpeza manual</div>
       <input type="text" class="form-input" id="lc-auto-busca" placeholder="Buscar imóvel..." oninput="_lcRenderListings()" style="margin-left:auto;width:220px;padding:6px 10px;font-size:13px;">
     </div>
@@ -1944,6 +1951,12 @@ function _validarLogin(){
       <div class="form-group"><label class="form-label">Valor recebido (R$)</label><input type="number" step="0.01" class="form-input" id="sin-recebido" placeholder="0,00"></div>
     </div>
     <div class="form-group"><label class="form-label">Próximos passos</label><textarea class="form-input" id="sin-proximos" rows="2" placeholder="O que falta fazer neste caso"></textarea></div>
+    <div class="form-group">
+      <label class="form-label">Anexos <span style="font-size:10.5px;color:var(--text3);text-transform:none;letter-spacing:0;font-weight:400;">(fotos, laudos, orçamentos, e-mails da seguradora)</span></label>
+      <div id="sin-anexos" style="display:flex;flex-direction:column;gap:5px;margin-bottom:8px;"></div>
+      <label class="btn btn-sm" style="cursor:pointer;"><i class="fa-solid fa-paperclip"></i> Anexar arquivos<input type="file" multiple style="display:none;" onchange="sinUploadAnexos(event)"></label>
+      <span id="sin-anexos-status" style="font-size:11.5px;color:var(--text3);margin-left:8px;"></span>
+    </div>
     <div class="form-group">
       <label class="form-label">Acompanhamento</label>
       <div id="sin-historico" style="max-height:180px;overflow:auto;margin-bottom:8px;"></div>
@@ -2049,6 +2062,6 @@ function _validarLogin(){
   </div>
 </div>
 
-<script src="js/app.js?v=131"></script>
+<script src="js/app.js?v=132"></script>
 </body>
 </html>

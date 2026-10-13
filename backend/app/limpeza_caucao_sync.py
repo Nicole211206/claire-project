@@ -134,6 +134,10 @@ def aplicar(state: dict, saidas: list[dict], chegadas: list[dict]) -> tuple[dict
     lz_por_id = {o.get("id"): o for o in limpeza if isinstance(o, dict)}
     cc_por_id = {o.get("id"): o for o in caucao if isinstance(o, dict)}
 
+    empresas = {
+        str(e["id"]): e for e in (state.get("nx_lc_empresas") or [])
+        if isinstance(e, dict) and e.get("id") is not None
+    }
     imoveis_cfg = {}
     for im in state.get("nx_lc_imoveis") or []:
         if isinstance(im, dict) and im.get("id") is not None and im.get("ativo", True):
@@ -175,8 +179,11 @@ def aplicar(state: dict, saidas: list[dict], chegadas: list[dict]) -> tuple[dict
                     "hospede": r.get("guestName") or "",
                     "imovelExterno": cfg.get("nome") or r.get("listingName") or "",
                     "endereco": cfg.get("endereco") or "",
+                    "empresaId": cfg.get("empresaId") if str(cfg.get("empresaId")) in empresas else None,
                     "responsavel": cfg.get("responsavel") or "",
-                    "grupoWpp": cfg.get("grupoWpp") or "",
+                    # com empresa, o front lê o grupo da empresa na hora; o campo do
+                    # card fica só pra exceção (ou config antiga, sem empresa)
+                    "grupoWpp": "" if str(cfg.get("empresaId")) in empresas else (cfg.get("grupoWpp") or ""),
                     "checkin": prox_checkin(listing, checkout),
                     "checkout": checkout,
                     "dataLimpeza": checkout,

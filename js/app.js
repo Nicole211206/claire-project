@@ -235,6 +235,7 @@ let manutencoes=[];
 let limpezaItens=[];
 let caucaoItens=[];
 let sinistros=[];
+let lcEmpresasLimpeza=[]; // cadastro de empresas de limpeza (grupo de WhatsApp, contato)
 let lcImoveisLimpeza=[]; // imóveis do Hostaway que exigem solicitação manual de limpeza (lidos pela automação do servidor)
 let manutAtiva=null, manutAba='solicitacao';
 let fornecedoresCadastro=[]; // cadastro de fornecedores reutilizáveis
@@ -3684,6 +3685,7 @@ function abrirNovaLimpeza(){
   document.getElementById('modal-limpeza-titulo').textContent='Nova Limpeza';
   ['lz-hospede','lz-imovel-externo','lz-endereco','lz-responsavel','lz-grupo-wpp','lz-checkin','lz-checkout','lz-data-limpeza','lz-hora-limpeza','lz-obs'].forEach(id=>{document.getElementById(id).value='';});
   document.getElementById('lz-status').value='a_solicitar';
+  _lzPreencherEmpresas('');
   document.getElementById('lz-btn-apagar').style.display='none';
   document.getElementById('modal-limpeza').classList.add('open');
 }
@@ -3703,6 +3705,7 @@ function abrirEditarLimpeza(id){
   document.getElementById('lz-data-limpeza').value=l.dataLimpeza||'';
   document.getElementById('lz-hora-limpeza').value=l.horaLimpeza||'';
   document.getElementById('lz-obs').value=l.obs||'';
+  _lzPreencherEmpresas(l.empresaId||'');
   document.getElementById('lz-btn-apagar').style.display='';
   document.getElementById('modal-limpeza').classList.add('open');
 }
@@ -3710,9 +3713,11 @@ function abrirEditarLimpeza(id){
 function salvarLimpeza(){
   const hospede=document.getElementById('lz-hospede').value.trim();
   if(!hospede){ showToast('Informe o hóspede.','peach'); return; }
-  const obj={
+  const existente=_limpezaEditId?limpezaItens.find(x=>x.id===_limpezaEditId):null;
+  const obj=Object.assign({},existente||{},{
     id:_limpezaEditId||Date.now(),
     status:document.getElementById('lz-status').value,
+    empresaId:document.getElementById('lz-empresa').value?Number(document.getElementById('lz-empresa').value):null,
     hospede,
     imovelExterno:document.getElementById('lz-imovel-externo').value.trim(),
     endereco:document.getElementById('lz-endereco').value.trim(),
@@ -3723,8 +3728,8 @@ function salvarLimpeza(){
     dataLimpeza:document.getElementById('lz-data-limpeza').value,
     horaLimpeza:document.getElementById('lz-hora-limpeza').value,
     obs:document.getElementById('lz-obs').value.trim(),
-    dataCriacao:new Date().toISOString(),
-  };
+  });
+  if(!existente) obj.dataCriacao=new Date().toISOString();
   if(_limpezaEditId){ const i=limpezaItens.findIndex(x=>x.id===_limpezaEditId); if(i>=0) limpezaItens[i]=obj; }
   else limpezaItens.unshift(obj);
   closeModal('modal-limpeza');
@@ -3755,7 +3760,7 @@ function moverLimpeza(id,delta){
 
 function enviarWhatsappLimpeza(id){
   const l=limpezaItens.find(x=>x.id===id); if(!l) return;
-  const link=(l.grupoWpp||'').trim();
+  const link=_lzGrupo(l);
   if(!link){ showToast('Cadastre o link do grupo de WhatsApp.','peach'); return; }
   const msg='Oi pessoal! Precisamos de uma limpeza no imóvel '+(l.imovelExterno||'')+
     (l.endereco?' ('+l.endereco+')':'')+' para '+(fd(l.dataLimpeza)||'data a combinar')+(l.horaLimpeza?' às '+l.horaLimpeza:'')+
@@ -3766,10 +3771,52 @@ function enviarWhatsappLimpeza(id){
   window.open(link,'_blank');
 }
 
+// ── Empresas de limpeza (nx_lc_empresas) ──
+// Cada imóvel marcado na automação aponta pra uma empresa; o card guarda só o
+// empresaId e o grupo de WhatsApp é lido da empresa na hora — trocar o grupo da
+// empresa vale pra todos os imóveis e cards dela. Grupo preenchido no próprio
+// card tem prioridade (exceção pontual).
+function _lcEmpresa(id){ return id==null||id===''?null:(lcEmpresasLimpeza.find(e=>String(e.id)===String(id))||null); }
+function _lzGrupo(l){ const e=_lcEmpresa(l.empresaId); return ((l.grupoWpp||'').trim())||(e&&e.grupoWpp?e.grupoWpp.trim():''); }
+function _lcEmpresaOptions(sel){
+  return '<option value="">— sem empresa —</option>'+lcEmpresasLimpeza.filter(e=>e.ativo!==false||String(e.id)===String(sel)).map(e=>'<option value="'+e.id+'"'+(String(e.id)===String(sel)?' selected':'')+'>'+_seEsc(e.nome||'(sem nome)')+'</option>').join('');
+}
+function _lzPreencherEmpresas(sel){ document.getElementById('lz-empresa').innerHTML=_lcEmpresaOptions(sel); }
+function _lcRenderEmpresas(){
+  const el=document.getElementById('lc-auto-empresas'); if(!el) return;
+  const ativas=lcEmpresasLimpeza.filter(e=>e.ativo!==false);
+  if(!ativas.length){ el.innerHTML='<div style="font-size:12.5px;color:var(--text3);padding:10px 12px;border:1px dashed var(--border);border-radius:var(--r-sm);">Nenhuma empresa cadastrada. Cadastre as empresas e depois escolha a empresa de cada imóvel abaixo.</div>'; return; }
+  el.innerHTML='<div style="border:1px solid var(--border);border-radius:var(--r-sm);">'+ativas.map((e,i)=>{
+    const n=lcImoveisLimpeza.filter(im=>im.ativo!==false&&String(im.empresaId)===String(e.id)).length;
+    const inp=(campo,ph,extra)=>'<input type="text" class="form-input" placeholder="'+ph+'" value="'+_seEsc(e[campo]||'')+'" onchange="_lcSetEmpresaCampo('+e.id+',\''+campo+'\',this.value)" style="padding:5px 9px;font-size:12.5px;'+(extra||'')+'">';
+    return '<div style="display:grid;grid-template-columns:1fr 1.4fr 1fr auto;gap:8px;align-items:center;padding:8px 10px;'+(i?'border-top:1px solid var(--border);':'')+'">'+
+      inp('nome','Nome da empresa','font-weight:600;')+inp('grupoWpp','Link do grupo de WhatsApp')+inp('contato','Contato (nome/telefone)')+
+      '<div style="display:flex;align-items:center;gap:6px;white-space:nowrap;"><span style="font-size:11px;color:var(--text3);">'+n+' imóve'+(n===1?'l':'is')+'</span>'+
+      '<button onclick="removerEmpresaLimpeza('+e.id+')" title="Remover empresa" style="background:none;border:none;color:var(--text3);cursor:pointer;"><i class="fa-solid fa-trash"></i></button></div></div>';
+  }).join('')+'</div>';
+}
+function adicionarEmpresaLimpeza(){
+  lcEmpresasLimpeza.push({id:Date.now(),nome:'',grupoWpp:'',contato:'',ativo:true});
+  saveAll(); _lcRenderEmpresas(); _lcRenderListings();
+  const ins=document.querySelectorAll('#lc-auto-empresas input[placeholder="Nome da empresa"]'); if(ins.length) ins[ins.length-1].focus();
+}
+function _lcSetEmpresaCampo(id,campo,v){ const e=_lcEmpresa(id); if(!e) return; e[campo]=String(v||'').trim(); saveAll(); if(campo==='nome'){ _lcRenderListings(); renderLimpezaKanban(); } }
+function removerEmpresaLimpeza(id){
+  const e=_lcEmpresa(id); if(!e) return;
+  const n=lcImoveisLimpeza.filter(im=>im.ativo!==false&&String(im.empresaId)===String(id)).length;
+  if(!confirm('Remover a empresa '+(e.nome||'')+'?'+(n?' Os '+n+' imóveis dela ficam sem empresa.':''))) return;
+  e.ativo=false; // não apaga: cards antigos continuam mostrando o nome
+  lcImoveisLimpeza.forEach(im=>{ if(String(im.empresaId)===String(id)) im.empresaId=null; });
+  saveAll(); _lcRenderEmpresas(); _lcRenderListings(); renderLimpezaKanban();
+}
+
 function renderLimpezaKanban(){
   const kEl=document.getElementById('limpeza-kanban'); if(!kEl) return;
+  const fSel=document.getElementById('lz-filtro-empresa');
+  if(fSel){ const v=fSel.value; fSel.innerHTML='<option value="">Todas as empresas de limpeza</option>'+lcEmpresasLimpeza.filter(e=>e.ativo!==false).map(e=>'<option value="'+e.id+'">'+_seEsc(e.nome||'(sem nome)')+'</option>').join('')+'<option value="_sem">Sem empresa definida</option>'; fSel.value=v; if(fSel.value!==v) fSel.value=''; }
+  const fEmp=fSel?fSel.value:'';
   kEl.innerHTML=LIMPEZA_COLS.map((col,colIdx)=>{
-    const itens=limpezaItens.filter(l=>(l.status||'a_solicitar')===col.id);
+    const itens=limpezaItens.filter(l=>(l.status||'a_solicitar')===col.id&&(!fEmp||(fEmp==='_sem'?!_lcEmpresa(l.empresaId):String(l.empresaId)===fEmp)));
     const podeVoltar=colIdx>0, podeAvancar=colIdx<LIMPEZA_COLS.length-1;
     return '<div>'
       +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid '+col.color+';">'
@@ -3785,8 +3832,9 @@ function renderLimpezaKanban(){
         +'</div>'
         +'<div style="font-size:10.5px;color:var(--text3);margin-bottom:5px;"><i class="fa-solid fa-user"></i> '+esc(l.hospede||'—')+' · Check-in '+(fd(l.checkin)||'—')+' · Check-out '+(fd(l.checkout)||'—')+'</div>'
         +'<div style="font-size:12px;color:var(--text2);line-height:1.4;margin-bottom:6px;">Limpeza: '+(fd(l.dataLimpeza)||'—')+(l.horaLimpeza?' às '+l.horaLimpeza:'')+(l.responsavel?' · '+esc(l.responsavel):'')+'</div>'
+        +(_lcEmpresa(l.empresaId)?'<div style="font-size:11px;color:var(--text3);margin-bottom:6px;"><i class="fa-solid fa-broom"></i> '+esc(_lcEmpresa(l.empresaId).nome)+'</div>':'')
         +'<div style="display:flex;justify-content:flex-end;gap:4px;" onclick="event.stopPropagation()">'
-        +(l.grupoWpp?'<button onclick="enviarWhatsappLimpeza('+l.id+')" class="btn btn-sm" title="Enviar para o grupo de WhatsApp" style="color:#25D366;"><i class="fa-brands fa-whatsapp"></i></button>':'')
+        +(_lzGrupo(l)?'<button onclick="enviarWhatsappLimpeza('+l.id+')" class="btn btn-sm" title="Enviar para o grupo de WhatsApp" style="color:#25D366;"><i class="fa-brands fa-whatsapp"></i></button>':'')
         +(podeVoltar?'<button onclick="moverLimpeza('+l.id+',-1)" class="btn btn-sm" title="Voltar etapa"><i class="fa-solid fa-arrow-left"></i></button>':'')
         +(podeAvancar?'<button onclick="moverLimpeza('+l.id+',1)" class="btn btn-sm btn-rose" title="Avançar etapa"><i class="fa-solid fa-arrow-right"></i></button>':'')
         +'<button onclick="deletarLimpeza('+l.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:4px 6px;" title="Apagar"><i class="fa-solid fa-trash"></i></button>'
@@ -4003,6 +4051,7 @@ async function abrirAutomacaoLC(){
   document.getElementById('modal-lc-automacao').classList.add('open');
   document.getElementById('lc-auto-busca').value='';
   _lcCarregarStatus();
+  _lcRenderEmpresas();
   if(_lcListings){ _lcRenderListings(); return; }
   document.getElementById('lc-auto-listings').innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px;"><i class="fa-solid fa-spinner fa-spin"></i> Buscando imóveis no Hostaway...</div>';
   try{ _lcListings=(await _lcApi('/hostaway/listings')).listings||[]; _lcRenderListings(); }
@@ -4023,8 +4072,8 @@ function _lcRenderListings(){
       '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;"><input type="checkbox" '+(on?'checked':'')+' onchange="_lcToggleImovel('+l.id+',this.checked)">'+
       '<span style="flex:1;min-width:0;"><b>'+_seEsc(l.nome)+'</b>'+(l.nomeExterno&&l.nomeExterno!==l.nome?' <span style="color:var(--text3);font-size:11.5px;">· '+_seEsc(l.nomeExterno)+'</span>':'')+'</span></label>'+
       (on?'<div style="display:grid;grid-template-columns:1.4fr 1fr;gap:8px;margin:8px 0 2px 24px;">'+
-        '<input type="text" class="form-input" placeholder="Link do grupo de WhatsApp" value="'+_seEsc(c.grupoWpp||'')+'" onchange="_lcSetCampo('+l.id+',\'grupoWpp\',this.value)" style="padding:5px 9px;font-size:12.5px;">'+
-        '<input type="text" class="form-input" placeholder="Responsável pela limpeza" value="'+_seEsc(c.responsavel||'')+'" onchange="_lcSetCampo('+l.id+',\'responsavel\',this.value)" style="padding:5px 9px;font-size:12.5px;">'+
+        '<select class="form-select" title="Empresa de limpeza" onchange="_lcSetCampo('+l.id+',\'empresaId\',this.value)" style="padding:5px 9px;font-size:12.5px;'+(_lcEmpresa(c.empresaId)?'':'color:var(--vermelha);')+'">'+_lcEmpresaOptions(c.empresaId)+'</select>'+
+        '<input type="text" class="form-input" placeholder="Responsável (opcional)" value="'+_seEsc(c.responsavel||'')+'" onchange="_lcSetCampo('+l.id+',\'responsavel\',this.value)" style="padding:5px 9px;font-size:12.5px;">'+
       '</div>':'')+
     '</div>';
   }).join('');
@@ -4033,11 +4082,11 @@ function _lcToggleImovel(id,on){
   const l=(_lcListings||[]).find(x=>x.id===id)||{};
   const c=_lcCfg(id);
   if(c){ c.ativo=on; }
-  else if(on){ lcImoveisLimpeza.push({id,nome:l.nome||'',endereco:l.endereco||'',grupoWpp:'',responsavel:'',ativo:true}); }
+  else if(on){ lcImoveisLimpeza.push({id,nome:l.nome||'',endereco:l.endereco||'',empresaId:null,responsavel:'',ativo:true}); }
   saveAll(); _lcRenderListings();
   ['lc-automacao-bar','lc-auto-status'].forEach(id=>{ const el=document.getElementById(id); if(el) el.innerHTML=_lcStatusHTML(); });
 }
-function _lcSetCampo(id,campo,v){ const c=_lcCfg(id); if(!c) return; c[campo]=String(v||'').trim(); saveAll(); }
+function _lcSetCampo(id,campo,v){ const c=_lcCfg(id); if(!c) return; c[campo]=campo==='empresaId'?(v?Number(v):null):String(v||'').trim(); saveAll(); if(campo==='empresaId'){ _lcRenderEmpresas(); _lcRenderListings(); } }
 async function sincronizarLCAgora(){
   const btn=document.getElementById('lc-auto-btn-sync');
   btn.disabled=true; btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Sincronizando...';
@@ -4071,7 +4120,7 @@ const SIN_STATUS=[
   {id:'negado',label:'Negado',cor:'var(--vermelha)',bg:'var(--vermelha-bg)',ativo:false},
   {id:'encerrado',label:'Encerrado',cor:'var(--text3)',bg:'var(--bg3)',ativo:false}
 ];
-let _sinEditId=null, _sinFiltroSeg='todas', _sinHistoricoTmp=[];
+let _sinEditId=null, _sinFiltroSeg='todas', _sinHistoricoTmp=[], _sinAnexosTmp=[], _sinEnviando=0;
 function _sinStatus(id){ return SIN_STATUS.find(s=>s.id===id)||SIN_STATUS[0]; }
 function _sinSeg(id){ return SIN_SEGURADORAS.find(s=>s.id===id)||SIN_SEGURADORAS[3]; }
 function _sinBrl(v){ return 'R$ '+(parseFloat(v)||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
@@ -4152,6 +4201,7 @@ function renderSinistros(){
       '<div style="min-width:0;font-size:12px;"><div style="font-weight:600;">'+seg.label+(seg.sub?' <span style="color:var(--text3);font-weight:400;">· '+seg.sub+'</span>':'')+'</div>'+
         '<div style="color:var(--text3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+_seEsc(s.protocolo||'')+'">'+(s.protocolo?'Prot. '+_seEsc(s.protocolo):'sem protocolo')+'</div>'+
         (s.reserva?'<div style="color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+_seEsc(s.reserva)+'">Reserva '+_seEsc(s.reserva)+'</div>':'')+
+        ((s.anexos||[]).length?'<div style="color:var(--text3);"><i class="fa-solid fa-paperclip"></i> '+s.anexos.length+' anexo'+(s.anexos.length>1?'s':'')+'</div>':'')+
         '<div style="color:var(--text3);">Aberto em '+_sinDf(s.dataAbertura)+'</div></div>'+
       '<div style="text-align:right;font-size:12px;"><div style="font-weight:700;font-size:13px;">'+(parseFloat(s.valorEstimado)?_sinBrl(s.valorEstimado):'—')+'</div>'+
         (parseFloat(s.valorRecebido)?'<div style="color:var(--sage);font-weight:600;">recebido '+_sinBrl(s.valorRecebido)+'</div>':'')+'</div>'+
@@ -4175,7 +4225,7 @@ function _sinRenderHistorico(){
     :'<div style="font-size:12px;color:var(--text3);">Nenhuma atualização registrada ainda.</div>';
 }
 function abrirNovoSinistro(){
-  _sinEditId=null; _sinHistoricoTmp=[];
+  _sinEditId=null; _sinHistoricoTmp=[]; _sinAnexosTmp=[];
   _sinPreencherSelects();
   document.getElementById('modal-sinistro-titulo').textContent='Novo Sinistro';
   ['sin-protocolo','sin-reserva','sin-imovel','sin-descricao','sin-prazo','sin-valor','sin-recebido','sin-proximos','sin-nova-atualizacao'].forEach(id=>{document.getElementById(id).value='';});
@@ -4183,12 +4233,12 @@ function abrirNovoSinistro(){
   document.getElementById('sin-status').value='aberto';
   document.getElementById('sin-data').value=_sinHoje();
   document.getElementById('sin-btn-apagar').style.display='none';
-  _sinRenderHistorico();
+  _sinRenderHistorico(); _sinRenderAnexos();
   document.getElementById('modal-sinistro').classList.add('open');
 }
 function abrirEditarSinistro(id){
   const s=sinistros.find(x=>x.id===id); if(!s) return;
-  _sinEditId=id; _sinHistoricoTmp=(s.historico||[]).slice();
+  _sinEditId=id; _sinHistoricoTmp=(s.historico||[]).slice(); _sinAnexosTmp=(s.anexos||[]).slice();
   _sinPreencherSelects();
   document.getElementById('modal-sinistro-titulo').textContent='Sinistro — '+(s.imovel||'');
   document.getElementById('sin-seguradora').value=s.seguradora||'outro';
@@ -4204,8 +4254,35 @@ function abrirEditarSinistro(id){
   document.getElementById('sin-proximos').value=s.proximosPassos||'';
   document.getElementById('sin-nova-atualizacao').value='';
   document.getElementById('sin-btn-apagar').style.display='';
-  _sinRenderHistorico();
+  _sinRenderHistorico(); _sinRenderAnexos();
   document.getElementById('modal-sinistro').classList.add('open');
+}
+function _sinRenderAnexos(){
+  const el=document.getElementById('sin-anexos'); if(!el) return;
+  el.innerHTML=_sinAnexosTmp.map((a,i)=>{
+    const img=(a.tipo||'').startsWith('image/');
+    return '<div style="display:flex;align-items:center;gap:8px;background:var(--bg3);border-radius:var(--r-sm);padding:6px 10px;font-size:12.5px;">'+
+      '<i class="fa-regular '+(img?'fa-image':(a.tipo||'').includes('pdf')?'fa-file-pdf':'fa-file')+'" style="color:var(--text3);"></i>'+
+      '<a href="#" onclick="event.preventDefault();abrirAnexo(_sinAnexosTmp['+i+'].url)" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);">'+_seEsc(a.nome||'anexo')+'</a>'+
+      '<span style="color:var(--text3);font-size:11px;">'+_sinDf((a.data||'').substring(0,10))+'</span>'+
+      '<button onclick="_sinRemoverAnexo('+i+')" title="Remover" style="background:none;border:none;color:var(--text3);cursor:pointer;"><i class="fa-solid fa-xmark"></i></button></div>';
+  }).join('');
+}
+function _sinRemoverAnexo(i){ if(!confirm('Remover este anexo?')) return; _sinAnexosTmp.splice(i,1); _sinRenderAnexos(); }
+function sinUploadAnexos(event){
+  const files=event.target.files; if(!files||!files.length) return;
+  const st=document.getElementById('sin-anexos-status');
+  Array.prototype.forEach.call(files,function(file){
+    _sinEnviando++; st.textContent='enviando '+_sinEnviando+' arquivo(s)...';
+    _lerArquivoBase64(file,function(dataUrl,nome){
+      _enviarAnexo(dataUrl,nome,function(url){
+        _sinAnexosTmp.push({id:Date.now()+Math.random(),nome,tipo:file.type||'',url,data:new Date().toISOString(),autor:_manutCriadoPorAtual()});
+        _sinEnviando--; st.textContent=_sinEnviando>0?'enviando '+_sinEnviando+' arquivo(s)...':'';
+        _sinRenderAnexos();
+      });
+    });
+  });
+  event.target.value='';
 }
 function adicionarAtualizacaoSinistro(){
   const inp=document.getElementById('sin-nova-atualizacao'), t=inp.value.trim();
@@ -4218,6 +4295,7 @@ function salvarSinistro(){
   const imovel=document.getElementById('sin-imovel').value.trim();
   const descricao=document.getElementById('sin-descricao').value.trim();
   if(!imovel&&!descricao){ showToast('Informe o imóvel ou a descrição.','peach'); return; }
+  if(_sinEnviando>0){ showToast('Aguarde terminar o envio dos anexos.','peach'); return; }
   if(document.getElementById('sin-nova-atualizacao').value.trim()) adicionarAtualizacaoSinistro();
   const existente=_sinEditId?sinistros.find(x=>x.id===_sinEditId):null;
   const obj=Object.assign({},existente||{},{
@@ -4233,6 +4311,7 @@ function salvarSinistro(){
     valorRecebido:parseFloat(document.getElementById('sin-recebido').value)||0,
     proximosPassos:document.getElementById('sin-proximos').value.trim(),
     historico:_sinHistoricoTmp.slice(),
+    anexos:_sinAnexosTmp.slice(),
   });
   if(!existente){ obj.dataCriacao=new Date().toISOString(); obj.criadoPor=_manutCriadoPorAtual(); }
   if(existente){ const i=sinistros.findIndex(x=>x.id===_sinEditId); sinistros[i]=obj; }
@@ -5116,6 +5195,7 @@ const _PERSIST_KEYS = {
   nx_caucao:()=>caucaoItens,
   nx_sinistros:()=>sinistros,
   nx_lc_imoveis:()=>lcImoveisLimpeza,
+  nx_lc_empresas:()=>lcEmpresasLimpeza,
   nx_despesas:()=>despesasFixas,
   nx_anotacoes_controle:()=>anotacoesControle,
   nx_pagamentos_fin:()=>pagamentosFinanceiro,
@@ -5135,7 +5215,7 @@ const _PERSIST_KEYS = {
 // Listas com id próprio que o servidor mescla registro a registro (id + _ts).
 // DEVE espelhar a MERGE_POR_ID do backend (backend/app/merge.py).
 // Mantido em sincronia com MERGE_POR_ID em backend/app/merge.py.
-const _MERGE_POR_ID_KEYS=['nx_manutencoes','nx_tasks','nx_plantao','nx_projetos','nx_compras','nx_extras','nx_limpeza','nx_caucao','nx_sinistros','nx_lc_imoveis','nx_despesas','nx_anotacoes_controle','nx_superhost','nx_cancelamentos','nx_imoveis','nx_pagamentos_fin','nx_relatorios_fin','nx_validacoes_fin','nx_avaliacoes_negativas','nx_taskcats','nx_kpidefs','nx_transcricoes','nx_outros','nx_fornecedores_cad','nx_manual','nx_update_tombstones','nx_servicos_equipe','nx_servicos_pessoas','nx_servicos_tipos','nx_servicos_pagamentos'];
+const _MERGE_POR_ID_KEYS=['nx_manutencoes','nx_tasks','nx_plantao','nx_projetos','nx_compras','nx_extras','nx_limpeza','nx_caucao','nx_sinistros','nx_lc_imoveis','nx_lc_empresas','nx_despesas','nx_anotacoes_controle','nx_superhost','nx_cancelamentos','nx_imoveis','nx_pagamentos_fin','nx_relatorios_fin','nx_validacoes_fin','nx_avaliacoes_negativas','nx_taskcats','nx_kpidefs','nx_transcricoes','nx_outros','nx_fornecedores_cad','nx_manual','nx_update_tombstones','nx_servicos_equipe','nx_servicos_pessoas','nx_servicos_tipos','nx_servicos_pagamentos'];
 function _semTs(o){ const c=Object.assign({},o); delete c._ts; return JSON.stringify(c); }
 // Antes de salvar: carimba _ts nos registros novos/alterados e cria tombstone
 // para os que foram apagados. Assim o servidor sabe qual versão é a mais recente
@@ -6022,6 +6102,7 @@ function loadAll(){
     v=g('nx_caucao'); if(Array.isArray(v)) caucaoItens=v;
     v=g('nx_sinistros'); if(Array.isArray(v)) sinistros=v;
     v=g('nx_lc_imoveis'); if(Array.isArray(v)) lcImoveisLimpeza=v;
+    v=g('nx_lc_empresas'); if(Array.isArray(v)) lcEmpresasLimpeza=v;
     v=g('nx_despesas'); if(Array.isArray(v)) despesasFixas=v;
     v=g('nx_anotacoes_controle'); if(Array.isArray(v)) anotacoesControle=v;
     v=g('nx_pagamentos_fin'); if(Array.isArray(v)) pagamentosFinanceiro=v;
@@ -9204,7 +9285,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 131;
+const APP_VERSION = 132;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

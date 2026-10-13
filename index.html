@@ -1926,6 +1926,22 @@ function _validarLogin(){
   </div>
 </div>
 
+<div class="modal-overlay" id="modal-lc-escolher-empresa" style="z-index:1100;">
+  <div class="modal" style="width:440px;max-width:calc(100vw - 24px);">
+    <h3 class="modal-title">Qual empresa faz a limpeza?</h3>
+    <div style="font-size:12.5px;color:var(--text2);margin-bottom:12px;" id="lc-esc-imovel"></div>
+    <div class="form-group" id="lc-esc-existente-grupo"><label class="form-label">Empresa de limpeza</label><select class="form-select" id="lc-esc-select" onchange="_lcEscAlternar()"></select></div>
+    <div id="lc-esc-nova" style="display:none;background:var(--bg3);border-radius:var(--r-sm);padding:10px 12px;margin-bottom:12px;">
+      <div class="form-group"><label class="form-label">Nome da empresa</label><input type="text" class="form-input" id="lc-esc-nome"></div>
+      <div class="form-group" style="margin-bottom:0;"><label class="form-label">Nome do grupo de WhatsApp</label><input type="text" class="form-input" id="lc-esc-grupo"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-lc-escolher-empresa')" style="margin-right:auto;">Escolher depois</button>
+      <button class="btn btn-rose" onclick="confirmarEmpresaImovelLC()"><i class="fa-solid fa-check"></i> Confirmar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-lc-automacao">
   <div class="modal" style="width:720px;max-width:calc(100vw - 24px);max-height:92vh;overflow-y:auto;">
     <h3 class="modal-title">Automação Hostaway — Limpeza &amp; Caução</h3>
@@ -2083,6 +2099,6 @@ function _validarLogin(){
   </div>
 </div>
 
-<script src="js/app.js?v=138"></script>
+<script src="js/app.js?v=139"></script>
 </body>
 </html>

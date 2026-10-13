@@ -4083,6 +4083,41 @@ function _lcToggleImovel(id,on){
   else if(on){ lcImoveisLimpeza.push({id,nome:l.nome||'',endereco:l.endereco||'',empresaId:null,responsavel:'',ativo:true}); }
   saveAll(); _lcRenderListings();
   ['lc-automacao-bar','lc-auto-status'].forEach(id=>{ const el=document.getElementById(id); if(el) el.innerHTML=_lcStatusHTML(); });
+  // Marcou um imóvel sem empresa → pergunta na hora qual empresa faz a limpeza
+  const cfg=_lcCfg(id);
+  if(on && cfg && !_lcEmpresa(cfg.empresaId)) _lcPerguntarEmpresa(id);
+}
+let _lcEscImovelId=null;
+function _lcPerguntarEmpresa(id){
+  _lcEscImovelId=id;
+  const c=_lcCfg(id)||{};
+  const ativas=lcEmpresasLimpeza.filter(e=>e.ativo!==false).sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
+  document.getElementById('lc-esc-imovel').innerHTML='Imóvel: <b>'+_seEsc(c.nome||'')+'</b>';
+  document.getElementById('lc-esc-select').innerHTML=ativas.map(e=>'<option value="'+e.id+'">'+_seEsc(e.nome||'(sem nome)')+'</option>').join('')+'<option value="_nova">+ Cadastrar nova empresa</option>';
+  document.getElementById('lc-esc-select').value=ativas.length?String(ativas[0].id):'_nova';
+  document.getElementById('lc-esc-nome').value=''; document.getElementById('lc-esc-grupo').value='';
+  _lcEscAlternar();
+  document.getElementById('modal-lc-escolher-empresa').classList.add('open');
+}
+function _lcEscAlternar(){
+  const nova=document.getElementById('lc-esc-select').value==='_nova';
+  document.getElementById('lc-esc-nova').style.display=nova?'':'none';
+  if(nova) setTimeout(()=>document.getElementById('lc-esc-nome').focus(),50);
+}
+function confirmarEmpresaImovelLC(){
+  const c=_lcCfg(_lcEscImovelId); if(!c){ closeModal('modal-lc-escolher-empresa'); return; }
+  let empId=document.getElementById('lc-esc-select').value;
+  if(empId==='_nova'){
+    const nome=document.getElementById('lc-esc-nome').value.trim();
+    if(!nome){ showToast('Informe o nome da empresa.','peach'); return; }
+    const e={id:Date.now(),nome,grupoNome:document.getElementById('lc-esc-grupo').value.trim(),ativo:true};
+    lcEmpresasLimpeza.push(e); empId=e.id;
+  }
+  c.empresaId=Number(empId);
+  saveAll();
+  closeModal('modal-lc-escolher-empresa');
+  _lcRenderEmpresas(); _lcRenderListings(); renderLimpezaKanban();
+  showToast('Empresa definida para '+(c.nome||'o imóvel')+'.','sage');
 }
 function _lcSetCampo(id,campo,v){ const c=_lcCfg(id); if(!c) return; c[campo]=campo==='empresaId'?(v?Number(v):null):String(v||'').trim(); saveAll(); if(campo==='empresaId'){ _lcRenderEmpresas(); _lcRenderListings(); } }
 async function sincronizarLCAgora(){
@@ -9371,7 +9406,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 138;
+const APP_VERSION = 139;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

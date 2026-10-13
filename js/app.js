@@ -4156,9 +4156,41 @@ function _sinSemear(){
   if(sinistros.length && typeof saveAll==='function') saveAll();
 }
 
+// Prazo de sinistro: alerta a partir de 5 dias antes (e depois de vencido),
+// enquanto o caso estiver em andamento. Aparece em 3 lugares: badge na sidebar
+// (Manutenção), badge na aba Sinistros e aviso no topo da Manutenção.
+const SIN_DIAS_ALERTA=5;
+function _sinDiasAte(iso){ return Math.round((new Date(iso+'T12:00:00')-new Date(_sinHoje()+'T12:00:00'))/864e5); }
+function _sinAlertas(){
+  return sinistros.filter(s=>_sinStatus(s.status).ativo&&s.prazo&&_sinDiasAte(s.prazo)<=SIN_DIAS_ALERTA)
+    .sort((a,b)=>a.prazo.localeCompare(b.prazo));
+}
+function _sinPrazoTxt(s){
+  const d=_sinDiasAte(s.prazo);
+  return d<0?'venceu há '+(-d)+' dia'+(d<-1?'s':''):d===0?'vence hoje':d===1?'vence amanhã':'vence em '+d+' dias';
+}
+function _sinAtualizarAlertas(){
+  const al=_sinAlertas(), n=al.length, vencidos=al.filter(s=>_sinDiasAte(s.prazo)<0).length;
+  const b1=document.getElementById('manut-sin-badge'); if(b1){ b1.textContent=n; b1.style.display=n?'':'none'; }
+  const b2=document.getElementById('manut-tab-sin-badge'); if(b2){ b2.textContent=n; b2.style.display=n?'':'none'; }
+  const topo=document.getElementById('manut-sin-alerta-topo');
+  if(topo) topo.innerHTML=(!n||manutTabAtiva==='sinistros')?'':
+    '<div onclick="switchManutTab(\'sinistros\',document.getElementById(\'manut-tab-sinistros\'))" style="cursor:pointer;display:flex;align-items:center;gap:10px;background:var(--vermelha-bg);color:var(--vermelha);border-radius:var(--r-sm);padding:9px 14px;margin-bottom:12px;font-size:13px;">'+
+    '<i class="fa-solid fa-triangle-exclamation"></i><div style="flex:1;"><b>'+n+' sinistro'+(n>1?'s':'')+'</b> com prazo '+(vencidos?'vencido ou ':'')+'nos próximos '+SIN_DIAS_ALERTA+' dias</div><span style="font-weight:600;">Ver <i class="fa-solid fa-arrow-right"></i></span></div>';
+  const lista=document.getElementById('sinistros-alertas');
+  if(lista) lista.innerHTML=!n?'':
+    '<div style="background:var(--vermelha-bg);border-radius:var(--r-sm);padding:10px 14px;margin-bottom:14px;">'+
+    '<div style="font-size:12px;font-weight:700;color:var(--vermelha);margin-bottom:6px;"><i class="fa-solid fa-bell"></i> Atenção aos prazos</div>'+
+    al.map(s=>'<div onclick="abrirEditarSinistro('+s.id+')" style="cursor:pointer;display:flex;gap:10px;align-items:baseline;font-size:12.5px;padding:3px 0;">'+
+      '<span style="font-weight:700;color:var(--vermelha);white-space:nowrap;min-width:120px;">'+_sinPrazoTxt(s)+'</span>'+
+      '<span style="flex:1;"><b>'+_seEsc(s.imovel||'—')+'</b> — '+_seEsc(s.descricao||'')+' <span style="color:var(--text3);">· '+_sinSeg(s.seguradora).label+' · prazo '+_sinDf(s.prazo)+'</span></span></div>').join('')+
+    '</div>';
+}
+
 function renderSinistros(){
   const lista=document.getElementById('sinistros-lista'); if(!lista) return;
   if(_dataLoaded) _sinSemear();
+  _sinAtualizarAlertas();
   const hoje=_sinHoje();
   const ativos=sinistros.filter(s=>_sinStatus(s.status).ativo);
   const card=(lbl,val,cor,sub)=>'<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;">'+
@@ -4195,13 +4227,14 @@ function renderSinistros(){
     const ult=(s.historico||[]).slice(-1)[0];
     return '<div onclick="abrirEditarSinistro('+s.id+')" style="display:grid;grid-template-columns:150px minmax(0,1.3fr) minmax(0,1fr) 110px minmax(0,1.6fr);gap:14px;align-items:start;padding:12px 16px;cursor:pointer;'+(i?'border-top:1px solid var(--border);':'')+'" onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\'\'">'+
       '<div><span style="display:inline-block;font-size:11px;font-weight:600;padding:3px 9px;border-radius:10px;background:'+st.bg+';color:'+st.cor+';">'+st.label+'</span>'+
-        (s.prazo&&st.ativo?'<div style="font-size:11px;margin-top:6px;color:'+(prazoAlerta?'var(--vermelha)':'var(--text3)')+';font-weight:'+(prazoAlerta?'600':'400')+';"><i class="fa-regular fa-clock"></i> prazo '+_sinDf(s.prazo)+'</div>':'')+'</div>'+
+        (s.prazo&&st.ativo?'<div style="font-size:11px;margin-top:6px;color:'+(prazoAlerta?'var(--vermelha)':'var(--text3)')+';font-weight:'+(prazoAlerta?'600':'400')+';"><i class="fa-regular '+(prazoAlerta?'fa-bell':'fa-clock')+'"></i> prazo '+_sinDf(s.prazo)+(prazoAlerta?' · '+_sinPrazoTxt(s):'')+'</div>':'')+'</div>'+
       '<div style="min-width:0;"><div style="font-weight:700;font-size:13px;">'+_seEsc(s.imovel||'—')+'</div><div style="font-size:12px;color:var(--text2);margin-top:2px;">'+_seEsc(s.descricao||'')+'</div></div>'+
       '<div style="min-width:0;font-size:12px;"><div style="font-weight:600;">'+seg.label+(seg.sub?' <span style="color:var(--text3);font-weight:400;">· '+seg.sub+'</span>':'')+'</div>'+
         '<div style="color:var(--text3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+_seEsc(s.protocolo||'')+'">'+(s.protocolo?'Prot. '+_seEsc(s.protocolo):'sem protocolo')+'</div>'+
         (s.reserva?'<div style="color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+_seEsc(s.reserva)+'">Reserva '+_seEsc(s.reserva)+'</div>':'')+
         ((s.anexos||[]).length?'<div style="color:var(--text3);"><i class="fa-solid fa-paperclip"></i> '+s.anexos.length+' anexo'+(s.anexos.length>1?'s':'')+'</div>':'')+
-        '<div style="color:var(--text3);">Aberto em '+_sinDf(s.dataAbertura)+'</div></div>'+
+        '<div style="color:var(--text3);">Aberto em '+_sinDf(s.dataAbertura)+'</div>'+
+        (_sinManut(s)?'<a href="#" onclick="event.preventDefault();event.stopPropagation();abrirManutModal('+s.manutencaoId+')" style="display:inline-block;margin-top:3px;color:var(--sky);font-weight:600;"><i class="fa-solid fa-screwdriver-wrench"></i> '+_seEsc(manutCardTitulo(_sinManut(s)))+'</a>':'')+'</div>'+
       '<div style="text-align:right;font-size:12px;"><div style="font-weight:700;font-size:13px;">'+(parseFloat(s.valorEstimado)?_sinBrl(s.valorEstimado):'—')+'</div>'+
         (parseFloat(s.valorRecebido)?'<div style="color:var(--sage);font-weight:600;">recebido '+_sinBrl(s.valorRecebido)+'</div>':'')+'</div>'+
       '<div style="min-width:0;font-size:12px;color:var(--text2);line-height:1.45;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">'+
@@ -4212,6 +4245,31 @@ function renderSinistros(){
 }
 function _sinMaisDias(iso,n){ const d=new Date(iso+'T12:00:00'); d.setDate(d.getDate()+n); return d.toISOString().substring(0,10); }
 
+function _sinManut(s){ return s&&s.manutencaoId?manutencoes.find(m=>m.id===s.manutencaoId)||null:null; }
+function _sinNorm(t){ return _seSemAcento(t).replace(/[^a-z0-9]+/g,' ').trim(); }
+// Opções de card de manutenção: os do mesmo imóvel primeiro (comparação
+// tolerante a acento/prefixo WC-xx), depois os demais, mais recentes antes.
+function _sinOpcoesManut(sel,imovel){
+  const alvo=_sinNorm(imovel||'');
+  const mesmo=m=>{ const n=_sinNorm((m.imovelNome||'').replace(/^WC-\d+\s*-\s*/,'')); return !!(alvo&&n&&(n.includes(alvo)||alvo.includes(n))); };
+  const col=id=>(MANUT_COLS.find(c=>c.id===id)||{label:id||''}).label;
+  const ord=manutencoes.slice().sort((a,b)=>(mesmo(b)-mesmo(a))||String(b.dataCriacao||b.dataSolicitacao||'').localeCompare(String(a.dataCriacao||a.dataSolicitacao||'')));
+  const op=m=>'<option value="'+m.id+'"'+(m.id===sel?' selected':'')+'>'+_seEsc(manutCardTitulo(m))+' · '+_seEsc(col(m.status))+(m.pausado?' (pausado)':'')+'</option>';
+  const doImovel=ord.filter(mesmo), outros=ord.filter(m=>!mesmo(m));
+  return '<option value="">— nenhum —</option>'+
+    (doImovel.length?'<optgroup label="Mesmo imóvel">'+doImovel.map(op).join('')+'</optgroup>':'')+
+    '<optgroup label="'+(doImovel.length?'Outros cards':'Todos os cards')+'">'+outros.map(op).join('')+'</optgroup>';
+}
+function _sinAtualizarSelManut(sel){
+  const el=document.getElementById('sin-manutencao');
+  const atual=sel!==undefined?sel:(el.value?Number(el.value):null);
+  el.innerHTML=_sinOpcoesManut(atual,document.getElementById('sin-imovel').value);
+  document.getElementById('sin-btn-ver-manut').style.display=atual?'':'none';
+}
+function _sinAbrirManutVinculada(){
+  const v=document.getElementById('sin-manutencao').value; if(!v) return;
+  closeModal('modal-sinistro'); abrirManutModal(Number(v));
+}
 function _sinPreencherSelects(){
   document.getElementById('sin-seguradora').innerHTML=SIN_SEGURADORAS.map(g=>'<option value="'+g.id+'">'+g.label+(g.sub?' ('+g.sub+')':'')+'</option>').join('');
   document.getElementById('sin-status').innerHTML=SIN_STATUS.map(s=>'<option value="'+s.id+'">'+s.label+'</option>').join('');
@@ -4232,6 +4290,7 @@ function abrirNovoSinistro(){
   document.getElementById('sin-status').value='aberto';
   document.getElementById('sin-data').value=_sinHoje();
   document.getElementById('sin-btn-apagar').style.display='none';
+  _sinAtualizarSelManut(null);
   _sinRenderHistorico(); _sinRenderAnexos();
   document.getElementById('modal-sinistro').classList.add('open');
 }
@@ -4253,6 +4312,7 @@ function abrirEditarSinistro(id){
   document.getElementById('sin-proximos').value=s.proximosPassos||'';
   document.getElementById('sin-nova-atualizacao').value='';
   document.getElementById('sin-btn-apagar').style.display='';
+  _sinAtualizarSelManut(s.manutencaoId||null);
   _sinRenderHistorico(); _sinRenderAnexos();
   document.getElementById('modal-sinistro').classList.add('open');
 }
@@ -4311,6 +4371,7 @@ function salvarSinistro(){
     proximosPassos:document.getElementById('sin-proximos').value.trim(),
     historico:_sinHistoricoTmp.slice(),
     anexos:_sinAnexosTmp.slice(),
+    manutencaoId:document.getElementById('sin-manutencao').value?Number(document.getElementById('sin-manutencao').value):null,
   });
   if(!existente){ obj.dataCriacao=new Date().toISOString(); obj.criadoPor=_manutCriadoPorAtual(); }
   if(existente){ const i=sinistros.findIndex(x=>x.id===_sinEditId); sinistros[i]=obj; }
@@ -8457,6 +8518,7 @@ function renderManutSaldoGeral(){
 function renderManutencaoKanban(){
   const el=document.getElementById('manutencao-kanban'); if(!el) return;
   renderManutResumo();
+  if(typeof _sinAtualizarAlertas==='function') _sinAtualizarAlertas();
   const _bf=document.getElementById('manut-busca'); const _bv=_bf?_bf.value.trim().toLowerCase():'';
   const _filtroBusca=function(m){ return !_bv || (manutCardTitulo(m)+' '+(m.obs||'')).toLowerCase().includes(_bv); };
   const barEl=document.getElementById('manutencao-pausadas-bar');
@@ -8500,7 +8562,7 @@ function renderManutencaoKanban(){
         const cardOpacity=m.status==='pago'?'opacity:0.6;':'';
         const prazoStr=m.dataPrazo?'<span style="font-size:9.5px;color:var(--text3);"><i class="fa-regular fa-calendar"></i> '+fd(m.dataPrazo)+'</span>':'';
         return '<div onclick="abrirManutModal('+m.id+')" style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:9px;margin-bottom:6px;cursor:pointer;'+cardOpacity+'transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'var(--bg3)\'">'+
-          '<div style="font-size:13px;font-weight:600;margin-bottom:3px;">'+esc(manutCardTitulo(m))+'</div>'+
+          '<div style="font-size:13px;font-weight:600;margin-bottom:3px;">'+esc(manutCardTitulo(m))+(sinistros.some(function(x){return x.manutencaoId===m.id;})?' <span title="Tem sinistro vinculado" style="font-size:9.5px;padding:1px 6px;border-radius:8px;background:var(--lav-light);color:var(--lavender);font-weight:700;white-space:nowrap;"><i class="fa-solid fa-shield-halved"></i> Sinistro</span>':'')+'</div>'+
           '<div style="font-size:11px;color:var(--text3);margin-bottom:5px;">'+(MANUT_ORIGEM[m.origem]||m.origem)+' · '+(m.tipo==='dano'?'Dano':m.tipo==='desgaste'?'Desgaste':'Perda')+'</div>'+
           '<div style="display:flex;justify-content:space-between;align-items:center;">'+
           '<span style="font-size:9.5px;padding:1px 6px;border-radius:8px;background:var(--sky-light);color:var(--sky);font-weight:600;">'+(MANUT_PAGADOR[m.quemPaga]||m.quemPaga)+'</span>'+
@@ -8527,6 +8589,7 @@ function switchManutTab(tab,btn){
   if(btn) btn.classList.add('active');
   if(tab==='saldo'){ renderManutSaldoGeral(); renderManutSaldoImoveis(); }
   if(tab==='sinistros') renderSinistros();
+  _sinAtualizarAlertas();
 }
 // Cards de saldo individual (imóveis pontuais que não usam o saldo geral) +
 // controle simples pra ativar em um imóvel do catálogo. Ver _manutencoesComSaldoGeral()
@@ -9284,7 +9347,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 135;
+const APP_VERSION = 136;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

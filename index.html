@@ -157,7 +157,7 @@ function _validarLogin(){
     <div class="nav-section">Equipe</div>
     <button class="nav-item" id="nav-equipe" onclick="showPanel('equipe',this)"><i class="fa-solid fa-users"></i> Equipe</button>
     <button class="nav-item" onclick="showPanel('compras',this)"><i class="fa-solid fa-cart-shopping"></i> Compras</button>
-    <button class="nav-item" onclick="showPanel('manutencao',this)"><i class="fa-solid fa-screwdriver-wrench"></i> Manutenção</button>
+    <button class="nav-item" onclick="showPanel('manutencao',this)"><i class="fa-solid fa-screwdriver-wrench"></i> Manutenção <span class="nav-badge" id="manut-sin-badge" title="Sinistros com prazo nos próximos 5 dias" style="display:none;">0</span></button>
     <button class="nav-item" onclick="showPanel('extras',this)"><i class="fa-solid fa-sack-dollar"></i> Extras</button>
     <button class="nav-item" onclick="showPanel('servicosequipe',this)"><i class="fa-solid fa-hand-holding-dollar"></i> Serviços Adicionais</button>
     <button class="nav-item" onclick="showPanel('controle',this)"><i class="fa-solid fa-sliders"></i> Controle</button>
@@ -834,12 +834,13 @@ function _validarLogin(){
         <div><h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;">Manutenção</h2><p style="color:var(--text3);font-size:13px;margin-top:2px;">Solicitações de manutenção e reparos</p></div>
         <button class="btn btn-rose" onclick="abrirNovaManutencao()"><i class="fa-solid fa-plus"></i> Nova Solicitação</button>
       </div>
+      <div id="manut-sin-alerta-topo"></div>
       <div id="manutencao-resumo" style="margin-bottom:14px;"></div>
       <div style="margin-bottom:14px;"><input type="text" class="form-input" id="manut-busca" placeholder="Buscar manutenção, imóvel ou observação..." oninput="renderManutencaoKanban()" style="width:260px;padding:6px 10px;font-size:13px;"></div>
       <div style="display:flex;gap:8px;margin-bottom:16px;">
         <button class="tab-btn active" id="manut-tab-kanban" onclick="switchManutTab('kanban',this)">Kanban</button>
         <button class="tab-btn" id="manut-tab-saldo" onclick="switchManutTab('saldo',this)">Saldo Geral</button>
-        <button class="tab-btn" id="manut-tab-sinistros" onclick="switchManutTab('sinistros',this)"><i class="fa-solid fa-shield-halved"></i> Sinistros</button>
+        <button class="tab-btn" id="manut-tab-sinistros" onclick="switchManutTab('sinistros',this)"><i class="fa-solid fa-shield-halved"></i> Sinistros <span id="manut-tab-sin-badge" style="display:none;margin-left:4px;font-size:10px;font-weight:700;background:var(--vermelha);color:#fff;border-radius:10px;padding:1px 6px;"></span></button>
       </div>
       <div id="manutencao-tab-kanban">
         <div id="manutencao-pausadas-bar"></div>
@@ -854,6 +855,7 @@ function _validarLogin(){
           <div style="font-size:13px;color:var(--text3);">Acompanhamento de sinistros e reembolsos junto às seguradoras</div>
           <button class="btn btn-rose" onclick="abrirNovoSinistro()"><i class="fa-solid fa-plus"></i> Novo Sinistro</button>
         </div>
+        <div id="sinistros-alertas"></div>
         <div id="sinistros-resumo" style="margin-bottom:14px;"></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
           <div id="sin-filtro-seg" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
@@ -1947,8 +1949,11 @@ function _validarLogin(){
       <div class="form-group"><label class="form-label">Protocolo</label><input type="text" class="form-input" id="sin-protocolo" placeholder="Ex.: CLSF-06542058"></div>
       <div class="form-group"><label class="form-label">Reserva / Ref. interna</label><input type="text" class="form-input" id="sin-reserva" placeholder="Código da reserva"></div>
     </div>
-    <div class="form-group"><label class="form-label">Imóvel / Apto</label><input type="text" class="form-input" id="sin-imovel" list="sin-imoveis-dl" placeholder="Nome do imóvel"><datalist id="sin-imoveis-dl"></datalist></div>
+    <div class="form-group"><label class="form-label">Imóvel / Apto</label><input type="text" class="form-input" id="sin-imovel" list="sin-imoveis-dl" placeholder="Nome do imóvel" onchange="_sinAtualizarSelManut()"><datalist id="sin-imoveis-dl"></datalist></div>
     <div class="form-group"><label class="form-label">Descrição do dano / sinistro</label><textarea class="form-input" id="sin-descricao" rows="2"></textarea></div>
+    <div class="form-group"><label class="form-label">Card de manutenção vinculado <span style="font-size:10.5px;color:var(--text3);text-transform:none;letter-spacing:0;font-weight:400;">(opcional — os do mesmo imóvel aparecem primeiro)</span></label>
+      <div style="display:flex;gap:8px;"><select class="form-select" id="sin-manutencao" style="flex:1;min-width:0;" onchange="_sinAtualizarSelManut()"></select><button class="btn" id="sin-btn-ver-manut" onclick="_sinAbrirManutVinculada()" title="Abrir o card de manutenção"><i class="fa-solid fa-arrow-up-right-from-square"></i></button></div>
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
       <div class="form-group"><label class="form-label">Data de abertura</label><input type="date" class="form-input" id="sin-data"></div>
       <div class="form-group"><label class="form-label">Prazo de resposta</label><input type="date" class="form-input" id="sin-prazo"></div>
@@ -2069,6 +2074,6 @@ function _validarLogin(){
   </div>
 </div>
 
-<script src="js/app.js?v=135"></script>
+<script src="js/app.js?v=136"></script>
 </body>
 </html>

@@ -131,15 +131,20 @@ function _renderObList(){
   // sem ele (imóvel ainda não ativo ou versão antiga do endpoint), conta a partir do contrato.
   const calcDias=im=>{if(im.dataAtivacao&&im.diasOnboarding!=null)return Math.max(0,im.diasOnboarding);const fim=im.dataAtivacao?new Date(im.dataAtivacao):new Date();return Math.max(0,Math.round((fim-new Date(im.dataContratoAssinado))/(1000*60*60*24)));};
   const marcadosDoMes=lista.filter(im=>im.incluirKpiClaire&&im.mesReferenciaKpi===kpiPeriodo&&im.dataContratoAssinado&&im.dataAtivacao&&im.tipoOnboarding!=='Reativação');
-  const outros=lista.filter(im=>!marcadosDoMes.includes(im)&&im.dataContratoAssinado&&calcDias(im)>=0);
+  // Abaixo da média só entram os que ainda estão EM onboarding (não ativos) —
+  // os já ativos não ajudam em nada aqui e só poluíam a lista.
+  const emAndamento=im=>(im.status||'').toLowerCase()!=='ativo'&&!im.dataAtivacao;
+  const outros=lista.filter(im=>!marcadosDoMes.includes(im)&&emAndamento(im)&&im.dataContratoAssinado&&calcDias(im)>=0)
+    .sort((a,b)=>calcDias(b)-calcDias(a));
+  const OB_FASES={formulario:'Formulário',setup:'Setup',preparacao:'Preparação',anuncio:'Anúncio'};
   if(!marcadosDoMes.length&&!outros.length){el.innerHTML='<div style="font-size:12px;color:var(--text3);text-align:center;padding:8px;">Nenhum imóvel no módulo de Onboarding ainda.</div>';return;}
   const m=_obKpiPorMes&&_obKpiPorMes[kpiPeriodo];
   el.innerHTML=
     (marcadosDoMes.length?'<div style="font-size:10.5px;font-weight:700;color:var(--sage);margin-bottom:4px;">⭐ Marcados pra Claire — '+kpiPeriodo+'</div>':'')+
     marcadosDoMes.map(im=>{const d=calcDias(im);return'<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);"><span style="font-size:12.5px;">'+esc(im.nome||'')+'</span><span style="font-size:12.5px;font-weight:600;color:'+(d<=10?'var(--sage)':d<=12?'var(--amarela)':'var(--vermelha)')+'">'+d+' dias</span></div>';}).join('')+
     (m?'<div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:4px;border-top:2px solid var(--border);"><span style="font-size:12px;font-weight:700;">Média do mês ('+kpiPeriodo+')</span><span style="font-size:14px;font-weight:700;color:var(--sage);">'+m.mediaOnboardingDias+' dias</span></div>':'<div style="font-size:11.5px;color:var(--text3);padding:6px 0;">Nenhum imóvel marcado "Colocar na Claire?" pra este mês ainda — marque no onboarding, na aba Captação.</div>')+
-    (outros.length?'<div style="font-size:10.5px;font-weight:700;color:var(--peach);margin-top:10px;margin-bottom:4px;">Outros imóveis do onboarding (não contam pro KPI)</div>':'')+
-    outros.map(im=>{const d=calcDias(im);return'<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);"><span style="font-size:12px;color:var(--text3);">'+esc(im.nome||'')+'</span><span style="font-size:11.5px;color:var(--text3);">'+d+' dias corridos</span></div>';}).join('');
+    (outros.length?'<div style="font-size:10.5px;font-weight:700;color:var(--peach);margin-top:10px;margin-bottom:4px;">Em onboarding agora (ainda não ativos)</div>':'')+
+    outros.map(im=>{const d=calcDias(im);const fase=OB_FASES[(im.status||'').toLowerCase()]||im.status||'';return'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border);"><span style="font-size:12px;flex:1;min-width:0;">'+esc(im.nome||'')+'</span>'+(fase?'<span style="font-size:10.5px;padding:1px 8px;border-radius:10px;background:var(--peach-light);color:var(--peach);font-weight:600;white-space:nowrap;">'+esc(fase)+'</span>':'')+'<span style="font-size:11.5px;color:'+(d>10?'var(--vermelha)':'var(--text3)')+';white-space:nowrap;min-width:110px;text-align:right;">'+d+' dia'+(d===1?'':'s')+' desde o contrato</span></div>';}).join('');
 }
 function _syncObKpiDoOnboarding(){
   if(!_obKpiPorMes)return; // ainda não buscou do onboarding — mantém o valor já salvo
@@ -9406,7 +9411,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 139;
+const APP_VERSION = 140;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

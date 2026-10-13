@@ -3468,9 +3468,32 @@ function _pillBandeiraReport(name){
   const c=m[name]||m.VERMELHA;
   return '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:0.3px;text-transform:uppercase;background:'+c.bg+';color:'+c.fg+';white-space:nowrap;">'+c.ic+' '+name+'</span>';
 }
-// Logo da WeCare — arquivo em assets/wecare-logo.png (caminho relativo,
-// mesma origem do app, resolve normalmente na janela do relatório).
-const WECARE_LOGO_SRC='assets/wecare-logo.png';
+// Relatório mensal de KPIs — mesmo visual dos relatórios de Serviços Adicionais
+// (_relDocumento/_relTopo/_REL_CSS), mostrado num iframe e impresso dele.
+const _KPI_REL_CSS=`
+.hero{display:grid;grid-template-columns:1.5fr 1fr;gap:12px;margin:18px 0 6px}
+.glob{background:#14283a;color:#fff;border-radius:12px;padding:16px 20px}
+.glob .l{font-size:9.5px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:#d9c08a}
+.glob .v{display:flex;align-items:center;gap:12px;font-size:40px;font-weight:700;line-height:1.1;margin-top:4px}
+.glob .bar{height:7px;background:rgba(255,255,255,.15);border-radius:4px;overflow:hidden;margin-top:12px}
+.glob .bar div{height:100%;background:#d9c08a;border-radius:4px}
+.glob .esc{display:flex;gap:10px;flex-wrap:wrap;font-size:10px;color:#aeb8c2;margin-top:8px}
+.pag{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pag .kpi{display:flex;flex-direction:column;justify-content:center}
+.pag .kpi.tot{grid-column:1/-1;background:#fdf9f0;border-color:#ead9b0}
+.pag .kpi.tot .l{color:#94701f}
+.grade{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px}
+.kc{border:1px solid #ebe5dc;border-radius:12px;padding:13px 15px;break-inside:avoid}
+.kc .cab{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.kc .ic{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
+.kc .nm{flex:1;font-weight:700;font-size:13px}
+.kc .nm small{display:block;font-weight:400;font-size:10.5px;color:#9a918a}
+.kc .sc{font-size:28px;font-weight:700;line-height:1}
+.kc .hint{font-size:10.5px;color:#9a918a;margin:3px 0 8px}
+.kc .bar{height:6px;background:#efe9e1;border-radius:3px;overflow:hidden;margin-bottom:9px}
+.kc .bar div{height:100%;border-radius:3px}
+.kc table{font-size:11px}.kc th,.kc td{padding:4px 6px}
+.delta{font-weight:600}`;
 function exportarKPIPDF(){
   // Mostra só o OTE Ajustado (calcGlobalOTE) — é quem decide bandeira/Variável
   // Pago desde 2026-08. calcGlobal() (bruto) não aparece mais no relatório.
@@ -3482,7 +3505,7 @@ function exportarKPIPDF(){
   const gOteAnterior=calcGlobalOTEParaMes(_mesAnteriorStr(kpiPeriodo));
   const deltaOte=gOteAnterior!==null?gOte-gOteAnterior:null;
   const deltaTexto=deltaOte===null?''
-    :' · Mês anterior: <strong>'+gOteAnterior+'%</strong> (<span style="color:'+(deltaOte>0?'#5aab82':deltaOte<0?'#d4726a':'#b0a89e')+';font-weight:600;">'+(deltaOte>0?'▲ +':deltaOte<0?'▼ ':'')+deltaOte+' p.p.</span>)';
+    :'<span>Mês anterior: <b>'+gOteAnterior+'%</b> <span class="delta" style="color:'+(deltaOte>0?'#3b7a5b':deltaOte<0?'#c0574f':'#9a918a')+';">'+(deltaOte>0?'▲ +':deltaOte<0?'▼ ':'')+deltaOte+' p.p.</span></span>';
 
   const RC_ITENS=[
     {key:'limpeza',label:'Limpeza'},
@@ -3501,81 +3524,57 @@ function exportarKPIPDF(){
     if(k.id==='tr'){const atts=['patricia','sara','lisarb','lais'];const vals=atts.filter(a=>sub[a]).map(a=>sub[a]+'min');if(vals.length)detalhe=vals.join(' | ');}
     let tabelaRc='';
     if(k.id==='rc'){
-      const linhas=RC_ITENS.map(it=>{
-        const d=sub[it.key]||{};
-        const prev=parseFloat(d.previsto), gasto=parseFloat(d.gasto);
-        const eco=(prev>0 && !isNaN(gasto))?(((prev-gasto)/prev)*100).toFixed(1)+'%':'—';
-        return '<tr><td style="padding:3px 4px;color:#666;">'+it.label+'</td>'+
-          '<td style="padding:3px 4px;text-align:right;">'+(d.previsto?brl(prev):'—')+'</td>'+
-          '<td style="padding:3px 4px;text-align:right;">'+(d.gasto?brl(gasto):'—')+'</td>'+
-          '<td style="padding:3px 4px;text-align:right;font-weight:600;">'+eco+'</td></tr>';
-      }).join('');
-      tabelaRc='<table style="width:100%;font-size:10.5px;border-collapse:collapse;margin-top:8px;">'+
-        '<thead><tr style="border-bottom:1px solid #eee;"><th align="left" style="padding:3px 4px;color:#b0a89e;font-weight:600;">Item</th><th style="padding:3px 4px;color:#b0a89e;font-weight:600;">Previsto</th><th style="padding:3px 4px;color:#b0a89e;font-weight:600;">Gasto</th><th style="padding:3px 4px;color:#b0a89e;font-weight:600;">Economia</th></tr></thead>'+
-        '<tbody>'+linhas+'</tbody></table>';
+      tabelaRc='<table><thead><tr><th>Item</th><th class="num">Previsto</th><th class="num">Gasto</th><th class="num">Economia</th></tr></thead><tbody>'+
+        RC_ITENS.map(it=>{
+          const d=sub[it.key]||{};
+          const prev=parseFloat(d.previsto), gasto=parseFloat(d.gasto);
+          const eco=(prev>0 && !isNaN(gasto))?(((prev-gasto)/prev)*100).toFixed(1)+'%':'—';
+          return '<tr><td>'+it.label+'</td><td class="num">'+(d.previsto?brl(prev):'—')+'</td><td class="num">'+(d.gasto?brl(gasto):'—')+'</td><td class="num"><b>'+eco+'</b></td></tr>';
+        }).join('')+'</tbody></table>';
     }
-    const scoreColor=ps===null?'#b0a89e':ps>=100?'#82b09a':ps>=80?'#d4a843':'#d4726a';
-    const barPct=ps!==null?Math.min(ps,150):0;
+    const scoreColor=ps===null?'#9a918a':ps>=100?'#3b7a5b':ps>=80?'#b88a1e':'#c0574f';
     const iconCor=_KPI_ICON_COLORS[k.color]||_KPI_ICON_COLORS.rose;
     const barCor=_KPI_BAR_COLORS[k.color]||_KPI_BAR_COLORS.rose;
     const temValor=_kv()[k.id]!=null && _kv()[k.id]!=='';
-    return '<div style="background:#fdfcfb;border:1px solid rgba(0,0,0,0.07);border-radius:14px;overflow:hidden;">'+
-      '<div style="padding:13px 16px;border-bottom:1px solid rgba(0,0,0,0.07);display:flex;align-items:center;gap:10px;">'+
-      '<div style="width:28px;height:28px;border-radius:8px;background:'+iconCor.bg+';color:'+iconCor.fg+';display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;"><i class="fa-solid '+k.icon+'"></i></div>'+
-      '<div style="flex:1;"><div style="font-size:13.5px;font-weight:600;">'+k.label+'</div><div style="font-size:11px;color:#b0a89e;">Peso: '+Math.round(k.peso*100)+'% · Meta: '+k.meta+' '+k.unit+'</div></div>'+
-      (kBand?_pillBandeiraReport(kBand.name):'')+
-      '</div>'+
-      '<div style="padding:13px 16px;">'+
-      '<div style="font-size:32px;font-weight:700;color:'+scoreColor+';line-height:1;">'+(ps!==null?ps+'%':'Sem dados')+'</div>'+
-      '<div style="font-size:11px;color:#b0a89e;margin:4px 0 8px;">'+k.hint+'</div>'+
-      '<div style="height:6px;background:#e8e4de;border-radius:3px;overflow:hidden;margin-bottom:10px;"><div style="height:100%;width:'+barPct+'%;background:'+barCor+';"></div></div>'+
-      (temValor?'<div style="font-size:12.5px;"><strong>'+_kv()[k.id]+' '+k.unit+'</strong>'+(detalhe?' <span style="color:#b0a89e;">'+detalhe+'</span>':'')+'</div>':'<div style="font-size:12.5px;color:#b0a89e;font-style:italic;">Sem dados lançados este mês</div>')+
-      tabelaRc+
-      '</div></div>';
+    return '<div class="kc"><div class="cab">'+
+      '<div class="ic" style="background:'+iconCor.bg+';color:'+iconCor.fg+';"><i class="fa-solid '+k.icon+'"></i></div>'+
+      '<div class="nm">'+esc(k.label)+'<small>Peso '+Math.round(k.peso*100)+'% · Meta '+k.meta+' '+k.unit+'</small></div>'+
+      (kBand?_pillBandeiraReport(kBand.name):'')+'</div>'+
+      '<div class="sc" style="color:'+scoreColor+';'+(ps===null?'font-size:17px;font-weight:600;':'')+'">'+(ps!==null?ps+'%':'Sem dados')+'</div>'+
+      '<div class="hint">'+k.hint+'</div>'+
+      '<div class="bar"><div style="width:'+(ps!==null?Math.min(ps,150)/1.5:0)+'%;background:'+barCor+';"></div></div>'+
+      (temValor?'<div><b>'+_kv()[k.id]+' '+k.unit+'</b>'+(detalhe?' <span class="muted">'+detalhe+'</span>':'')+'</div>':'<div class="muted" style="font-style:italic;">Sem dados lançados este mês</div>')+
+      tabelaRc+'</div>';
   }).join('');
 
-  const html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Relatório KPI — '+mes+'</title>'+
-    '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">'+
-    '<style>'+
-    'body{font-family:Arial,sans-serif;padding:32px 40px;color:#2d2926;max-width:900px;margin:0 auto;background:#fff;}'+
-    'h1{color:#2d2926;font-size:20px;margin:0;display:flex;align-items:center;gap:12px;}'+
-    'h2{font-size:14px;color:#2d2926;margin:24px 0 12px;}'+
-    '.footer{margin-top:28px;font-size:11px;color:#b0a89e;border-top:1px solid rgba(0,0,0,0.07);padding-top:12px;}'+
-    '@media print{button{display:none}}'+
-    '</style></head><body>'+
-    '<h1><img src="'+WECARE_LOGO_SRC+'" alt="WeCare" style="height:40px;border-radius:6px;">Relatório de KPIs — WeCare</h1>'+
-    '<p style="color:#666;font-size:13px;margin-top:8px;">Colaborador: <strong>'+esc(nomeColaborador)+'</strong> · Período: <strong>'+mes+'</strong> · Gerado em: '+new Date().toLocaleString('pt-BR')+deltaTexto+'</p>'+
-    '<div style="background:#fdfcfb;border:1px solid rgba(0,0,0,0.07);border-radius:14px;padding:20px 24px;margin:16px 0;display:grid;grid-template-columns:1fr auto;gap:20px;align-items:center;">'+
-    '<div>'+
-    '<div style="font-size:11px;color:#b0a89e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Atingimento Global Ponderado</div>'+
-    '<div style="display:flex;align-items:baseline;gap:12px;">'+
-    '<div style="font-size:44px;font-weight:700;">'+gOte+'%</div>'+
-    _pillBandeiraReport(bandOte.name)+
-    '</div>'+
-    '<div style="margin-top:10px;height:8px;background:#e8e4de;border-radius:4px;overflow:hidden;"><div style="height:100%;width:'+Math.min(gOte,150)+'%;background:#e8a4b0;border-radius:4px;"></div></div>'+
-    '<div style="display:flex;gap:14px;margin-top:8px;flex-wrap:wrap;font-size:11.5px;color:#b0a89e;">'+
-    '<span>0-79% <strong style="color:#d4726a;">Vermelha 0%</strong></span>'+
-    '<span>80-99% <strong style="color:#d4a843;">Amarela 50%</strong></span>'+
-    '<span>100-120% <strong style="color:#5aab82;">Verde 100%</strong></span>'+
-    '<span>121-150% <strong style="color:#5fa8d4;">Azul 150%</strong></span>'+
-    '<span>&gt;150% <strong style="color:#b084e0;">Elite 200%</strong></span>'+
-    '</div>'+
-    '</div>'+
-    '<div style="text-align:center;padding:0 20px;border-left:1px solid rgba(0,0,0,0.07);">'+
-    '<div style="font-size:11px;color:#b0a89e;text-transform:uppercase;margin-bottom:5px;">Variável Pago</div>'+
-    '<div style="font-size:26px;font-weight:700;color:#d4726a;">'+brl(vp)+'</div>'+
-    '<div style="font-size:12px;color:#b0a89e;margin-top:3px;">de <strong>'+brl(nv.variavel*2)+'</strong> máx</div>'+
-    '<div style="font-size:12px;color:#b0a89e;margin-top:8px;">Fixo: <strong style="color:#2d2926;">'+brl(nv.fixo)+'</strong></div>'+
-    '<div style="font-size:14px;font-weight:700;color:#82b09a;margin-top:5px;">Total: '+brl(nv.fixo+vp)+'</div>'+
-    '</div>'+
+  const corpo='<div class="pg">'+_relTopo('Relatório de KPIs')+
+    '<h1>'+esc(nomeColaborador)+'</h1>'+
+    '<div class="sub"><span>'+mes.charAt(0).toUpperCase()+mes.slice(1)+'</span>'+deltaTexto+'</div>'+
+    '<div class="hero">'+
+      '<div class="glob"><div class="l">Atingimento global ponderado</div>'+
+        '<div class="v">'+gOte+'% '+_pillBandeiraReport(bandOte.name)+'</div>'+
+        '<div class="bar"><div style="width:'+Math.min(gOte,150)/1.5+'%;"></div></div>'+
+        '<div class="esc"><span>0–79% Vermelha 0%</span><span>80–99% Amarela 50%</span><span>100–120% Verde 100%</span><span>121–150% Azul 150%</span><span>&gt;150% Elite 200%</span></div>'+
+      '</div>'+
+      '<div class="pag">'+
+        '<div class="kpi"><div class="l">Variável pago</div><div class="v">'+brl(vp)+'</div><div class="muted" style="font-size:10.5px;">de '+brl(nv.variavel*2)+' máx</div></div>'+
+        '<div class="kpi"><div class="l">Fixo</div><div class="v">'+brl(nv.fixo)+'</div></div>'+
+        '<div class="kpi tot"><div class="l">Total do mês</div><div class="v">'+brl(nv.fixo+vp)+'</div></div>'+
+      '</div>'+
     '</div>'+
     '<h2>Detalhamento por KPI</h2>'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">'+cardsKPI+'</div>'+
-    '<div class="footer">Claire · Painel de Gestão WeCare · '+new Date().getFullYear()+'</div>'+
-    '<script>window.onload=function(){window.print();}<\/script></body></html>';
-  const win=window.open('','_blank');
-  if(!win){showToast('Permita pop-ups no browser para gerar o PDF.','peach');return;}
-  win.document.write(html);win.document.close();
+    '<div class="grade">'+cardsKPI+'</div>'+
+    _relRodape()+'</div>';
+
+  const fr=document.getElementById('kpi-rel-frame');
+  fr.onload=()=>{ try{ const ajustar=()=>{ fr.style.height=(fr.contentDocument.body.scrollHeight+4)+'px'; }; ajustar(); setTimeout(ajustar,400); }catch(e){} };
+  fr.srcdoc=_relDocumento(corpo,_KPI_REL_CSS,'<title>Relatório KPI — '+mes+'</title><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">');
+  document.getElementById('modal-kpi-relatorio').classList.add('open');
+}
+function imprimirRelatorioKPI(){
+  const fr=document.getElementById('kpi-rel-frame');
+  if(!fr||!fr.contentWindow) return;
+  fr.contentWindow.focus(); fr.contentWindow.print();
 }
 
 function zerarKPIs(){
@@ -4856,10 +4855,10 @@ tfoot td{font-weight:700;font-size:13.5px;border-bottom:0;border-top:2px solid #
 .ass div.d{flex:0 0 150px}
 .rod{margin-top:26px;font-size:10px;color:#b3aaa1;text-align:center}
 .vazio{padding:40px;text-align:center;color:#9a918a}`;
-function _relDocumento(corpo){
-  return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">'+
+function _relDocumento(corpo,cssExtra,headExtra){
+  return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">'+(headExtra||'')+
     '<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">'+
-    '<style>'+_REL_CSS+'</style></head><body>'+corpo+'</body></html>';
+    '<style>'+_REL_CSS+(cssExtra||'')+'</style></head><body>'+corpo+'</body></html>';
 }
 function _relTopo(docTitulo){
   return '<div class="topo"><div class="marca"><img src="'+location.origin+'/assets/wecare-logo.png" alt="">WeCare Hosting</div>'+
@@ -9285,7 +9284,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 134;
+const APP_VERSION = 135;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

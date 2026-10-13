@@ -3741,23 +3741,29 @@ function moverLimpeza(id,delta){
 
 function enviarWhatsappLimpeza(id){
   const l=limpezaItens.find(x=>x.id===id); if(!l) return;
-  const link=_lzGrupo(l);
-  if(!link){ showToast('Cadastre o link do grupo de WhatsApp.','peach'); return; }
+  const link=_lzGrupo(l), nomeGrupo=_lzGrupoNome(l);
+  if(!link&&!nomeGrupo){ showToast('Defina a empresa de limpeza (com o grupo de WhatsApp).','peach'); return; }
   const msg='Oi pessoal! Precisamos de uma limpeza no imóvel '+(l.imovelExterno||'')+
     (l.endereco?' ('+l.endereco+')':'')+' para '+(fd(l.dataLimpeza)||'data a combinar')+(l.horaLimpeza?' às '+l.horaLimpeza:'')+
     '. Check-out: '+(fd(l.checkout)||'—')+', próximo check-in: '+(fd(l.checkin)||'—')+'.';
+  // Com link (cards antigos) abre o grupo direto; com o nome do grupo, copia a
+  // mensagem e diz em qual grupo colar.
+  const aviso='Mensagem copiada — cole no grupo'+(nomeGrupo?' “'+nomeGrupo+'”':'')+' do WhatsApp.';
+  const manual=()=>prompt('Copie a mensagem e cole no grupo'+(nomeGrupo?' “'+nomeGrupo+'”':'')+':',msg);
   if(navigator.clipboard && navigator.clipboard.writeText){
-    navigator.clipboard.writeText(msg).then(()=>showToast('Mensagem copiada — cole no grupo.','sage')).catch(()=>{});
-  }
-  window.open(link,'_blank');
+    navigator.clipboard.writeText(msg).then(()=>showToast(aviso,'sage')).catch(manual);
+  } else manual();
+  if(link) window.open(link,'_blank');
 }
 
 // ── Empresas de limpeza (nx_lc_empresas) ──
 // Cada imóvel marcado na automação aponta pra uma empresa; o card guarda só o
-// empresaId e o grupo de WhatsApp é lido da empresa na hora — trocar o grupo da
-// empresa vale pra todos os imóveis e cards dela. Grupo preenchido no próprio
-// card tem prioridade (exceção pontual).
+// empresaId e o nome do grupo de WhatsApp é lido da empresa na hora — trocar o
+// grupo da empresa vale pra todos os imóveis e cards dela. Cadastro da empresa:
+// só nome + nome do grupo (grupoNome). grupoWpp (link) é legado: empresas/cards
+// antigos que tinham link continuam abrindo o grupo direto.
 function _lcEmpresa(id){ return id==null||id===''?null:(lcEmpresasLimpeza.find(e=>String(e.id)===String(id))||null); }
+function _lzGrupoNome(l){ const e=_lcEmpresa(l.empresaId); return e&&e.grupoNome?e.grupoNome.trim():''; }
 function _lzGrupo(l){ const e=_lcEmpresa(l.empresaId); return ((l.grupoWpp||'').trim())||(e&&e.grupoWpp?e.grupoWpp.trim():''); }
 function _lcEmpresaOptions(sel){
   return '<option value="">— sem empresa —</option>'+lcEmpresasLimpeza.filter(e=>e.ativo!==false||String(e.id)===String(sel)).map(e=>'<option value="'+e.id+'"'+(String(e.id)===String(sel)?' selected':'')+'>'+_seEsc(e.nome||'(sem nome)')+'</option>').join('');
@@ -3771,8 +3777,8 @@ function _lcRenderEmpresas(){
   el.innerHTML='<div style="border:1px solid var(--border);border-radius:var(--r-sm);">'+ativas.map((e,i)=>{
     const n=lcImoveisLimpeza.filter(im=>im.ativo!==false&&String(im.empresaId)===String(e.id)).length;
     const inp=(campo,ph,extra)=>'<input type="text" class="form-input" placeholder="'+ph+'" value="'+_seEsc(e[campo]||'')+'" onchange="_lcSetEmpresaCampo('+e.id+',\''+campo+'\',this.value)" style="padding:5px 9px;font-size:12.5px;'+(extra||'')+'">';
-    return '<div style="display:grid;grid-template-columns:1fr 1.4fr 1fr auto;gap:8px;align-items:center;padding:8px 10px;'+(i?'border-top:1px solid var(--border);':'')+'">'+
-      inp('nome','Nome da empresa','font-weight:600;')+inp('grupoWpp','Link do grupo de WhatsApp')+inp('contato','Contato (nome/telefone)')+
+    return '<div style="display:grid;grid-template-columns:1fr 1.2fr auto;gap:8px;align-items:center;padding:8px 10px;'+(i?'border-top:1px solid var(--border);':'')+'">'+
+      inp('nome','Nome da empresa','font-weight:600;')+inp('grupoNome','Nome do grupo de WhatsApp')+
       '<div style="display:flex;align-items:center;gap:6px;white-space:nowrap;"><span style="font-size:11px;color:var(--text3);">'+n+' imóve'+(n===1?'l':'is')+'</span>'+
       '<button onclick="removerEmpresaLimpeza('+e.id+')" title="Remover empresa" style="background:none;border:none;color:var(--text3);cursor:pointer;"><i class="fa-solid fa-trash"></i></button></div></div>';
   }).join('')+'</div>';
@@ -3788,7 +3794,7 @@ function _lcRenderEmpresasResumo(){
     '<button class="btn btn-sm" onclick="closeModal(\'modal-lc-automacao\');abrirEmpresasLimpeza()">'+(n?'Gerenciar empresas':'Cadastrar empresas')+'</button>';
 }
 function adicionarEmpresaLimpeza(){
-  lcEmpresasLimpeza.push({id:Date.now(),nome:'',grupoWpp:'',contato:'',ativo:true});
+  lcEmpresasLimpeza.push({id:Date.now(),nome:'',grupoNome:'',ativo:true});
   saveAll(); _lcRenderEmpresas(); _lcRenderListings();
   const ins=document.querySelectorAll('#lc-auto-empresas input[placeholder="Nome da empresa"]'); if(ins.length) ins[ins.length-1].focus();
 }
@@ -3824,9 +3830,9 @@ function renderLimpezaKanban(){
         +'</div>'
         +'<div style="font-size:10.5px;color:var(--text3);margin-bottom:5px;"><i class="fa-solid fa-user"></i> '+esc(l.hospede||'—')+' · Check-in '+(fd(l.checkin)||'—')+' · Check-out '+(fd(l.checkout)||'—')+'</div>'
         +'<div style="font-size:12px;color:var(--text2);line-height:1.4;margin-bottom:6px;">Limpeza: '+(fd(l.dataLimpeza)||'—')+(l.horaLimpeza?' às '+l.horaLimpeza:'')+(l.responsavel?' · '+esc(l.responsavel):'')+'</div>'
-        +(_lcEmpresa(l.empresaId)?'<div style="font-size:11px;color:var(--text3);margin-bottom:6px;"><i class="fa-solid fa-broom"></i> '+esc(_lcEmpresa(l.empresaId).nome)+'</div>':'')
+        +(_lcEmpresa(l.empresaId)?'<div style="font-size:11px;color:var(--text3);margin-bottom:6px;"><i class="fa-solid fa-broom"></i> '+esc(_lcEmpresa(l.empresaId).nome)+(_lzGrupoNome(l)?' · <i class="fa-brands fa-whatsapp"></i> '+esc(_lzGrupoNome(l)):'')+'</div>':'')
         +'<div style="display:flex;justify-content:flex-end;gap:4px;" onclick="event.stopPropagation()">'
-        +(_lzGrupo(l)?'<button onclick="enviarWhatsappLimpeza('+l.id+')" class="btn btn-sm" title="Enviar para o grupo de WhatsApp" style="color:#25D366;"><i class="fa-brands fa-whatsapp"></i></button>':'')
+        +(_lzGrupo(l)||_lzGrupoNome(l)?'<button onclick="enviarWhatsappLimpeza('+l.id+')" class="btn btn-sm" title="Copiar mensagem para o grupo'+(_lzGrupoNome(l)?' '+_seEsc(_lzGrupoNome(l)):'')+'" style="color:#25D366;"><i class="fa-brands fa-whatsapp"></i></button>':'')
         +(podeVoltar?'<button onclick="moverLimpeza('+l.id+',-1)" class="btn btn-sm" title="Voltar etapa"><i class="fa-solid fa-arrow-left"></i></button>':'')
         +(podeAvancar?'<button onclick="moverLimpeza('+l.id+',1)" class="btn btn-sm btn-rose" title="Avançar etapa"><i class="fa-solid fa-arrow-right"></i></button>':'')
         +'<button onclick="deletarLimpeza('+l.id+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:4px 6px;" title="Apagar"><i class="fa-solid fa-trash"></i></button>'
@@ -9365,7 +9371,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 137;
+const APP_VERSION = 138;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

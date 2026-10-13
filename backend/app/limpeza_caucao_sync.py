@@ -125,8 +125,13 @@ def _canal(r: dict) -> str:
     return CANAIS.get(r.get("channelId")) or r.get("channelName") or ""
 
 
-def aplicar(state: dict, saidas: list[dict], chegadas: list[dict]) -> tuple[dict, dict]:
-    """Função pura: recebe o documento atual + reservas e devolve (novo_doc, resumo)."""
+def aplicar(state: dict, saidas: list[dict], chegadas: list[dict], nomes_internos: dict | None = None) -> tuple[dict, dict]:
+    """Função pura: recebe o documento atual + reservas e devolve (novo_doc, resumo).
+
+    nomes_internos: id do imóvel -> nome interno no Hostaway (internalListingName).
+    A limpeza usa o nome interno (é como a equipe e as empresas de limpeza
+    conhecem o imóvel); a reserva só traz o nome externo (listingName)."""
+    nomes_internos = nomes_internos or {}
     agora = now_ms()
     tombs = {t.get("id") for t in (state.get("nx_tombstones") or []) if isinstance(t, dict)}
     limpeza = list(state.get("nx_limpeza") or [])
@@ -177,7 +182,7 @@ def aplicar(state: dict, saidas: list[dict], chegadas: list[dict]) -> tuple[dict
                     "id": lid,
                     "status": "a_solicitar",
                     "hospede": r.get("guestName") or "",
-                    "imovelExterno": cfg.get("nome") or r.get("listingName") or "",
+                    "imovelExterno": nomes_internos.get(listing) or cfg.get("nome") or r.get("listingName") or "",
                     "endereco": cfg.get("endereco") or "",
                     "empresaId": cfg.get("empresaId") if str(cfg.get("empresaId")) in empresas else None,
                     "responsavel": cfg.get("responsavel") or "",
@@ -205,6 +210,10 @@ def aplicar(state: dict, saidas: list[dict], chegadas: list[dict]) -> tuple[dict
                 novo_ci = prox_checkin(listing, checkout)
                 if novo_ci and novo_ci != existente.get("checkin"):
                     existente["checkin"] = novo_ci
+                    mudou = True
+                nome_int = nomes_internos.get(listing)
+                if existente.get("origem") == "hostaway" and nome_int and nome_int != existente.get("imovelExterno"):
+                    existente["imovelExterno"] = nome_int
                     mudou = True
                 cancelada = not valida
                 if bool(existente.get("reservaCancelada")) != cancelada:
@@ -255,6 +264,7 @@ async def sincronizar() -> dict:
             "departureEndDate": (hoje + timedelta(days=DIAS_FRENTE)).isoformat(),
             "includeResources": 1,
         })
+        listings = await buscar_listings(client, token)
         chegadas = await _paginar(client, token, "reservations", {
             "arrivalStartDate": (hoje - timedelta(days=DIAS_ATRAS)).isoformat(),
             "arrivalEndDate": (hoje + timedelta(days=DIAS_PROX_CHECKIN)).isoformat(),
@@ -266,7 +276,8 @@ async def sincronizar() -> dict:
     try:
         # cópia profunda: o JSON do SQLAlchemy só grava se o objeto for outro
         state = copy.deepcopy(crud.get_state(db) or {})
-        novo, resumo = aplicar(state, saidas, chegadas)
+        nomes = {str(x["id"]): x["nome"] for x in listings if x.get("id") is not None and x.get("nome")}
+        novo, resumo = aplicar(state, saidas, chegadas, nomes)
         resumo["ultimoSync"] = iso_now()
         resumo["ok"] = True
         novo["nx_lc_status"] = resumo

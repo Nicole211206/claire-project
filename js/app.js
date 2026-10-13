@@ -2688,19 +2688,16 @@ function exportarSalariosPDF(){
   const nicComissao=nicoleComissaoOverride!==null?nicoleComissaoOverride:vp;
   const [_msAno,_msMes]=_mesAtualSal().split('-').map(Number);
   const mes=new Date(_msAno,_msMes-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  const r$=v=>'R$ '+(v||0).toLocaleString('pt-BR');
   // Atendentes
-  let attRows='';
-  let totAtt=0;
+  let attRows='', totAtt=0;
   ATTS.forEach(a=>{
     const d1=_wd1()[a.id]!==undefined?_wd1()[a.id]:8;
     const d2=_wd2()[a.id]!==undefined?_wd2()[a.id]:7;
     const v1=d1*12*a.rate,v2=d2*12*a.rate,t=v1+v2;
     totAtt+=t;
-    attRows+='<tr><td style="padding:8px;border-bottom:1px solid #eee;">'+a.name+'</td>'+
-      '<td style="padding:8px;border-bottom:1px solid #eee;text-align:center;">R$ '+a.rate+'/h</td>'+
-      '<td style="padding:8px;border-bottom:1px solid #eee;text-align:center;">'+d1+' / R$ '+v1.toLocaleString('pt-BR')+'</td>'+
-      '<td style="padding:8px;border-bottom:1px solid #eee;text-align:center;">'+d2+' / R$ '+v2.toLocaleString('pt-BR')+'</td>'+
-      '<td style="padding:8px;border-bottom:1px solid #eee;text-align:right;font-weight:600;">R$ '+t.toLocaleString('pt-BR')+'</td></tr>';
+    attRows+='<tr><td><b>'+esc(a.name)+'</b></td><td class="num">R$ '+a.rate+'/h</td>'+
+      '<td class="num">'+d1+' dias · '+r$(v1)+'</td><td class="num">'+d2+' dias · '+r$(v2)+'</td><td class="num"><b>'+r$(t)+'</b></td></tr>';
   });
   // Heads
   const heads=[
@@ -2708,29 +2705,22 @@ function exportarSalariosPDF(){
     {nome:'Gabriela — Head de RevOps',fixo:headFixo.gabriela||6000,com:headComissao.gabriela||0},
     {nome:'Felipe — Head de AI',fixo:headFixo.felipe||6000,com:headComissao.felipe||0},
   ];
-  let headRows='';let totHead=0;
+  let headRows='', totHead=0;
   heads.forEach(h=>{
-    const t=h.fixo+h.com;totHead+=t;
-    headRows+='<tr><td style="padding:8px;border-bottom:1px solid #eee;">'+h.nome+'</td>'+
-      '<td style="padding:8px;border-bottom:1px solid #eee;text-align:center;">R$ '+h.fixo.toLocaleString('pt-BR')+'</td>'+
-      '<td style="padding:8px;border-bottom:1px solid #eee;text-align:center;">R$ '+h.com.toLocaleString('pt-BR')+'</td>'+
-      '<td style="padding:8px;border-bottom:1px solid #eee;text-align:right;font-weight:600;">R$ '+t.toLocaleString('pt-BR')+'</td></tr>';
+    const t=h.fixo+h.com; totHead+=t;
+    headRows+='<tr><td><b>'+esc(h.nome)+'</b></td><td class="num">'+r$(h.fixo)+'</td><td class="num">'+r$(h.com)+'</td><td class="num"><b>'+r$(t)+'</b></td></tr>';
   });
   const totalGeral=totAtt+totHead;
-  const html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Folha de Pagamento — '+mes+'</title>'+
-    '<style>body{font-family:Arial,sans-serif;padding:40px;color:#222}h1{color:#c0616a;font-size:22px}h2{font-size:15px;color:#444;margin-top:24px;border-bottom:2px solid #c0616a;padding-bottom:4px}table{width:100%;border-collapse:collapse;margin-top:8px}th{background:#f5f5f5;padding:8px;text-align:left;font-size:11px;text-transform:uppercase;color:#666}.tot{background:#c0616a;color:#fff;padding:14px 20px;display:flex;justify-content:space-between;font-size:17px;font-weight:700;margin-top:24px;border-radius:8px}@media print{button{display:none}}</style></head><body>'+
-    '<h1>💰 Folha de Pagamento — WeCare</h1>'+
-    '<p style="color:#666;font-size:13px;">Período: <strong>'+mes+'</strong> · Gerado em '+new Date().toLocaleString('pt-BR')+'</p>'+
-    '<h2>Atendimento (escala 12×36)</h2>'+
-    '<table><thead><tr><th>Atendente</th><th style="text-align:center;">Valor/h</th><th style="text-align:center;">1ª parcela (01-15)</th><th style="text-align:center;">2ª parcela (16-31)</th><th style="text-align:right;">Total</th></tr></thead><tbody>'+attRows+'</tbody></table>'+
-    '<h2>Heads</h2>'+
-    '<table><thead><tr><th>Head</th><th style="text-align:center;">Fixo</th><th style="text-align:center;">Comissão</th><th style="text-align:right;">Total</th></tr></thead><tbody>'+headRows+'</tbody></table>'+
-    '<div class="tot"><span>TOTAL DA FOLHA</span><span>R$ '+totalGeral.toLocaleString('pt-BR')+'</span></div>'+
-    '<p style="margin-top:24px;font-size:11px;color:#aaa;">Claire · Painel de Gestão WeCare</p>'+
-    '<script>window.onload=function(){window.print();}<\/script></body></html>';
-  const win=window.open('','_blank');
-  if(!win){showToast('Permita pop-ups para gerar o PDF.','peach');return;}
-  win.document.write(html);win.document.close();
+  const corpo='<div class="pg">'+_relTopo('Folha de pagamento')+
+    '<h1>Folha de Pagamento</h1><div class="sub"><span>'+mes.charAt(0).toUpperCase()+mes.slice(1)+'</span></div>'+
+    _relKpis([['Total da folha',r$(totalGeral),true],['Atendimento',r$(totAtt)],['Heads',r$(totHead)],['Pessoas',ATTS.length+heads.length]])+
+    '<div class="sec"><h2>Atendimento <span class="muted" style="font-size:12px;">escala 12×36</span></h2><table><thead><tr><th>Atendente</th><th class="num">Valor/h</th><th class="num">1ª parcela (01–15)</th><th class="num">2ª parcela (16–31)</th><th class="num">Total</th></tr></thead><tbody>'+attRows+'</tbody>'+
+    '<tfoot><tr><td colspan="4">Total atendimento</td><td class="num">'+r$(totAtt)+'</td></tr></tfoot></table></div>'+
+    '<div class="sec"><h2>Heads</h2><table><thead><tr><th>Head</th><th class="num">Fixo</th><th class="num">Comissão</th><th class="num">Total</th></tr></thead><tbody>'+headRows+'</tbody>'+
+    '<tfoot><tr><td colspan="3">Total heads</td><td class="num">'+r$(totHead)+'</td></tr></tfoot></table></div>'+
+    _relTotalFaixa('Total da folha',r$(totalGeral))+
+    _relRodape()+'</div>';
+  _abrirDocRelatorio(corpo,_REL_CSS_EXTRA,'Folha de Pagamento — '+mes);
 }
 
 // ═══════════════════ NOTES ═══════════════════
@@ -3566,15 +3556,7 @@ function exportarKPIPDF(){
     '<div class="grade">'+cardsKPI+'</div>'+
     _relRodape()+'</div>';
 
-  const fr=document.getElementById('kpi-rel-frame');
-  fr.onload=()=>{ try{ const ajustar=()=>{ fr.style.height=(fr.contentDocument.body.scrollHeight+4)+'px'; }; ajustar(); setTimeout(ajustar,400); }catch(e){} };
-  fr.srcdoc=_relDocumento(corpo,_KPI_REL_CSS,'<title>Relatório KPI — '+mes+'</title><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">');
-  document.getElementById('modal-kpi-relatorio').classList.add('open');
-}
-function imprimirRelatorioKPI(){
-  const fr=document.getElementById('kpi-rel-frame');
-  if(!fr||!fr.contentWindow) return;
-  fr.contentWindow.focus(); fr.contentWindow.print();
+  _abrirDocRelatorio(corpo,_KPI_REL_CSS,'Relatório KPI — '+mes,true);
 }
 
 function zerarKPIs(){
@@ -3782,9 +3764,10 @@ function _lcEmpresaOptions(sel){
 }
 function _lzPreencherEmpresas(sel){ document.getElementById('lz-empresa').innerHTML=_lcEmpresaOptions(sel); }
 function _lcRenderEmpresas(){
+  _lcRenderEmpresasResumo();
   const el=document.getElementById('lc-auto-empresas'); if(!el) return;
   const ativas=lcEmpresasLimpeza.filter(e=>e.ativo!==false);
-  if(!ativas.length){ el.innerHTML='<div style="font-size:12.5px;color:var(--text3);padding:10px 12px;border:1px dashed var(--border);border-radius:var(--r-sm);">Nenhuma empresa cadastrada. Cadastre as empresas e depois escolha a empresa de cada imóvel abaixo.</div>'; return; }
+  if(!ativas.length){ el.innerHTML='<div style="font-size:12.5px;color:var(--text3);padding:10px 12px;border:1px dashed var(--border);border-radius:var(--r-sm);">Nenhuma empresa cadastrada ainda. Clique em <b>Nova empresa</b>.</div>'; return; }
   el.innerHTML='<div style="border:1px solid var(--border);border-radius:var(--r-sm);">'+ativas.map((e,i)=>{
     const n=lcImoveisLimpeza.filter(im=>im.ativo!==false&&String(im.empresaId)===String(e.id)).length;
     const inp=(campo,ph,extra)=>'<input type="text" class="form-input" placeholder="'+ph+'" value="'+_seEsc(e[campo]||'')+'" onchange="_lcSetEmpresaCampo('+e.id+',\''+campo+'\',this.value)" style="padding:5px 9px;font-size:12.5px;'+(extra||'')+'">';
@@ -3793,6 +3776,16 @@ function _lcRenderEmpresas(){
       '<div style="display:flex;align-items:center;gap:6px;white-space:nowrap;"><span style="font-size:11px;color:var(--text3);">'+n+' imóve'+(n===1?'l':'is')+'</span>'+
       '<button onclick="removerEmpresaLimpeza('+e.id+')" title="Remover empresa" style="background:none;border:none;color:var(--text3);cursor:pointer;"><i class="fa-solid fa-trash"></i></button></div></div>';
   }).join('')+'</div>';
+}
+function abrirEmpresasLimpeza(){
+  _lcRenderEmpresas();
+  document.getElementById('modal-lc-empresas').classList.add('open');
+}
+function _lcRenderEmpresasResumo(){
+  const el=document.getElementById('lc-auto-empresas-resumo'); if(!el) return;
+  const n=lcEmpresasLimpeza.filter(e=>e.ativo!==false).length;
+  el.innerHTML='<i class="fa-solid fa-broom" style="color:var(--text3);"></i><span style="flex:1;">'+(n?n+' empresa'+(n>1?'s':'')+' de limpeza cadastrada'+(n>1?'s':''):'Nenhuma empresa de limpeza cadastrada ainda')+'</span>'+
+    '<button class="btn btn-sm" onclick="closeModal(\'modal-lc-automacao\');abrirEmpresasLimpeza()">'+(n?'Gerenciar empresas':'Cadastrar empresas')+'</button>';
 }
 function adicionarEmpresaLimpeza(){
   lcEmpresasLimpeza.push({id:Date.now(),nome:'',grupoWpp:'',contato:'',ativo:true});
@@ -4925,6 +4918,29 @@ function _relTopo(docTitulo){
   return '<div class="topo"><div class="marca"><img src="'+location.origin+'/assets/wecare-logo.png" alt="">WeCare Hosting</div>'+
     '<div class="doc">'+docTitulo+'<small>gerado em '+_seDf(_seHoje())+'</small></div></div>';
 }
+// Abre qualquer relatório no modal padrão (iframe) — o que aparece é o que sai no PDF.
+function _abrirDocRelatorio(corpo,cssExtra,titulo,fa){
+  const fr=document.getElementById('doc-rel-frame');
+  fr.onload=()=>{ try{ const ajustar=()=>{ fr.style.height=(fr.contentDocument.body.scrollHeight+4)+'px'; }; ajustar(); setTimeout(ajustar,400); }catch(e){} };
+  fr.srcdoc=_relDocumento(corpo,cssExtra,'<title>'+_seEsc(titulo||'Relatório')+'</title>'+(fa?'<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">':''));
+  document.getElementById('modal-doc-relatorio').classList.add('open');
+}
+function imprimirDocRelatorio(){
+  const fr=document.getElementById('doc-rel-frame');
+  if(!fr||!fr.contentWindow) return;
+  fr.contentWindow.focus(); fr.contentWindow.print();
+}
+function _relTotalFaixa(rot,val){ return '<div class="totfx"><span>'+rot+'</span><span>'+val+'</span></div>'; }
+const _REL_CSS_EXTRA=`
+.totfx{display:flex;justify-content:space-between;align-items:center;background:#14283a;color:#fff;border-radius:10px;padding:12px 18px;margin-top:18px;font-weight:700;font-size:15px;break-inside:avoid}
+.totfx span:first-child{font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:#d9c08a}
+.info{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px;border:1px solid #ebe5dc;border-radius:10px;padding:12px 16px;margin:16px 0 4px}
+.info .l{font-size:9.5px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:#9a918a}
+.info .v{font-weight:600}
+tr.grp td{background:#f6f2ec!important;font-weight:700;font-size:12px;letter-spacing:.3px;border-bottom:1px solid #e6dfd5}
+tr.sub td{color:#7a716b;font-size:11.5px;background:#fff!important}
+.ok{color:#3b7a5b;font-weight:600}
+.txt{white-space:pre-wrap;line-height:1.7}`;
 function _relRodape(){ return '<div class="rod">WeCare Hosting · documento gerado pela Claire</div>'; }
 // g = extrato de uma pessoa: a previsão é a dos itens dela, não a do lote todo
 function _relStatusPill(g){
@@ -6298,16 +6314,20 @@ function exportarTurnosPDF(){
   const doMes=turnos.filter(t=>t.data.startsWith(mes)).sort((a,b)=>a.data.localeCompare(b.data)||a.turno.localeCompare(b.turno));
   if(doMes.length===0){ showToast('Não há turnos neste mês.','peach'); return; }
   const nome=id=>{const a=ATTS.find(x=>x.id===id);return a?a.name:id;};
-  let linhas=doMes.map(t=>'<tr><td style="padding:6px 10px;border-bottom:1px solid #eee;">'+t.data.split('-').reverse().join('/')+'</td><td style="padding:6px 10px;border-bottom:1px solid #eee;">'+(t.turno==='dia'?'Dia (07-19h)':'Noite (19-07h)')+'</td><td style="padding:6px 10px;border-bottom:1px solid #eee;">'+nome(t.attId)+'</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:center;">'+(t.confirmado?'✓ Confirmado':'—')+'</td></tr>').join('');
-  const resumo=ATTS.map(a=>{const c=doMes.filter(t=>t.attId===a.id).length;return c>0?'<li>'+a.name+': '+c+' turnos</li>':'';}).join('');
-  const html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Escala '+mes+'</title><style>body{font-family:Arial,sans-serif;padding:40px;color:#222}h1{color:#c0616a;font-size:20px}table{width:100%;border-collapse:collapse;margin-top:12px}th{background:#c0616a;color:#fff;padding:8px 10px;text-align:left;font-size:12px}@media print{button{display:none}}</style></head><body>'+
-    '<h1>📅 Escala de Turnos — '+mes+'</h1>'+
-    '<ul style="font-size:13px;color:#555;">'+resumo+'</ul>'+
-    '<table><thead><tr><th>Data</th><th>Turno</th><th>Atendente</th><th style="text-align:center;">Status</th></tr></thead><tbody>'+linhas+'</tbody></table>'+
-    '<p style="margin-top:24px;font-size:11px;color:#aaa;">Claire · WeCare · gerado em '+new Date().toLocaleString('pt-BR')+'</p>'+
-    '<script>window.onload=function(){window.print();}<\/script></body></html>';
-  const win=window.open('','_blank'); if(!win){ showToast('Permita pop-ups para gerar o PDF.','peach'); return; }
-  win.document.write(html); win.document.close();
+  const [ano,m]=mes.split('-').map(Number);
+  const mesNome=new Date(ano,m-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  const conf=doMes.filter(t=>t.confirmado).length;
+  const dow=d=>new Date(d+'T12:00:00').toLocaleDateString('pt-BR',{weekday:'short'}).replace('.','');
+  const linhas=doMes.map(t=>'<tr><td style="white-space:nowrap;">'+t.data.split('-').reverse().join('/')+' <span class="muted">'+dow(t.data)+'</span></td>'+
+    '<td>'+(t.turno==='dia'?'☀️ Dia (07–19h)':'🌙 Noite (19–07h)')+'</td><td><b>'+esc(nome(t.attId))+'</b></td>'+
+    '<td class="num">'+(t.confirmado?'<span class="ok">✓ Confirmado</span>':'<span class="muted">pendente</span>')+'</td></tr>').join('');
+  const porAtt=ATTS.map(a=>({a,c:doMes.filter(t=>t.attId===a.id).length})).filter(x=>x.c>0);
+  const corpo='<div class="pg">'+_relTopo('Escala de turnos')+
+    '<h1>Escala de Turnos</h1><div class="sub"><span>'+mesNome.charAt(0).toUpperCase()+mesNome.slice(1)+'</span></div>'+
+    _relKpis([['Turnos no mês',doMes.length,true],['Confirmados',conf+' de '+doMes.length]].concat(porAtt.map(x=>[esc(x.a.name),x.c+' turno'+(x.c>1?'s':'')])))+
+    '<table><thead><tr><th>Data</th><th>Turno</th><th>Atendente</th><th class="num">Status</th></tr></thead><tbody>'+linhas+'</tbody></table>'+
+    _relRodape()+'</div>';
+  _abrirDocRelatorio(corpo,_REL_CSS_EXTRA,'Escala '+mes);
 }
 function confirmarQuinzena(attId, parcela){
   const mes = turnosMesSel || new Date().toISOString().substring(0,7);
@@ -7415,33 +7435,31 @@ function obGerarOrcamentoPDF(id){
     });
     tabelaHtml+='<tr><td colspan="3" style="padding:8px 12px;text-align:right;font-size:13px;font-weight:700;background:#fdf5f5;">Total '+grupo+'</td><td style="padding:8px 12px;text-align:right;font-size:14px;font-weight:700;color:#c0616a;background:#fdf5f5;">R$ '+g.total.toFixed(2).replace('.',',')+'</td></tr>';
   });
-  const enxovalInfo=(im.defEnxoval&&im.defEnxoval.tipo)?'<div class="info-item"><label>Enxoval</label><span>'+(im.defEnxoval.tipo==='comprado'?'Compra — ':'Aluguel — ')+(im.defEnxoval.fornecedor||'—')+'</span></div>':'';
-  const htmlDoc='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Orçamento — '+(im.nome||'Imóvel')+'</title>'+
-    '<style>body{font-family:Arial,sans-serif;padding:0;margin:0;color:#222;}.header{background:#c0616a;color:white;padding:28px 40px;display:flex;justify-content:space-between;align-items:center;}.logo{font-size:28px;font-weight:700;letter-spacing:1px;}.logo span{opacity:0.7;font-size:13px;display:block;font-weight:400;letter-spacing:0;}.content{padding:32px 40px;}h2{color:#c0616a;font-size:18px;margin:0 0 4px;}.meta{font-size:12px;color:#888;margin-bottom:24px;}.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;background:#f9f9f9;border-radius:8px;padding:16px;margin-bottom:24px;}.info-item label{font-size:10px;text-transform:uppercase;color:#999;display:block;}.info-item span{font-size:13px;font-weight:600;}table{width:100%;border-collapse:collapse;margin-bottom:24px;}th{background:#c0616a;color:white;padding:10px 12px;text-align:left;font-size:12px;}th:nth-child(2),th:nth-child(3),th:nth-child(4){text-align:center;}th:nth-child(3),th:nth-child(4){text-align:right;}.total-geral{background:#c0616a;color:white;padding:14px 40px;display:flex;justify-content:space-between;font-size:16px;font-weight:700;}.footer{padding:20px 40px;font-size:11px;color:#aaa;border-top:1px solid #eee;margin-top:8px;}@media print{button{display:none;}body{margin:0;}}</style></head><body>'+
-    '<div class="header"><div class="logo">WeCare<br><span>Hosting &amp; Management</span></div><div style="text-align:right;font-size:12px;opacity:0.85;">'+dataHoje+'</div></div>'+
-    '<div class="content"><h2>Orçamento de Compras</h2><div class="meta">Documento gerado pelo sistema Claire</div>'+
-    '<div class="info-grid">'+
-    '<div class="info-item"><label>Imóvel</label><span>'+(im.nome||'—')+'</span></div>'+
-    '<div class="info-item"><label>Proprietário</label><span>'+(im.proprietarioNome||'—')+'</span></div>'+
-    '<div class="info-item"><label>Endereço</label><span>'+(im.endereco||'—')+'</span></div>'+
-    '<div class="info-item"><label>Contato</label><span>'+(im.proprietarioTel||'—')+'</span></div>'+
-    enxovalInfo+
-    '</div>'+
-    '<table><thead><tr><th>Item</th><th style="text-align:center;">Qtd.</th><th style="text-align:right;">Valor Unit.</th><th style="text-align:right;">Total</th></tr></thead>'+
-    '<tbody>'+tabelaHtml+'</tbody></table></div>'+
-    (descontoAplicado>0
-      ? '<div style="padding:10px 40px;display:flex;justify-content:space-between;font-size:13px;color:#666;"><span>Subtotal</span><span>R$ '+totalGeral.toFixed(2).replace(".",",")+'</span></div>'+
-        '<div style="padding:6px 40px;display:flex;justify-content:space-between;font-size:13px;color:#2e7d32;"><span>Desconto'+(im.descontoTipo==="percent"?" ("+im.descontoValor+"%)":"")+'</span><span>- R$ '+descontoAplicado.toFixed(2).replace(".",",")+'</span></div>'
-      : '')+
-    '<div class="total-geral"><span>TOTAL '+(descontoAplicado>0?'FINAL':'GERAL')+'</span><span>R$ '+totalComDesconto.toFixed(2).replace(".",",")+'</span></div>'+
-    (im.formasPagamento?'<div style="padding:14px 40px;font-size:12.5px;color:#444;"><strong>Formas de pagamento:</strong> '+esc(im.formasPagamento)+'</div>':'')+
-    '<div class="footer">WeCare Hosting &amp; Management · Claire Sistema de Gestão · Documento gerado em '+dataHoje+'</div>'+
-    '<script>window.onload=function(){window.print();};<\/script>'+
-    '</body></html>';
-  const win=window.open('','_blank');
-  if(!win){showToast('Permita pop-ups no browser para gerar o PDF.','peach');return;}
-  win.document.write(htmlDoc);
-  win.document.close();
+  const r2=v=>'R$ '+(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  let linhas='';
+  Object.entries(grupos).forEach(([grupo,g])=>{
+    linhas+='<tr class="grp"><td colspan="4">'+esc(grupo)+'</td></tr>';
+    g.cats.forEach(c=>{
+      c.linhas.forEach(l=>{
+        linhas+='<tr><td>'+esc(l.item)+'</td><td class="num">'+l.qtd+'</td><td class="num">'+(l.valorUnit>0?r2(l.valorUnit):'—')+'</td><td class="num">'+(l.total>0?'<b>'+r2(l.total)+'</b>':'—')+'</td></tr>';
+      });
+      linhas+='<tr class="sub"><td colspan="3" class="num">Total '+esc(c.cat)+'</td><td class="num">'+r2(c.linhas.reduce((s,l)=>s+l.total,0))+'</td></tr>';
+    });
+    linhas+='<tr class="sub"><td colspan="3" class="num"><b>Total '+esc(grupo)+'</b></td><td class="num"><b>'+r2(g.total)+'</b></td></tr>';
+  });
+  const info=[['Imóvel',im.nome],['Proprietário',im.proprietarioNome],['Endereço',im.endereco],['Contato',im.proprietarioTel]];
+  if(im.defEnxoval&&im.defEnxoval.tipo) info.push(['Enxoval',(im.defEnxoval.tipo==='comprado'?'Compra — ':'Aluguel — ')+(im.defEnxoval.fornecedor||'—')]);
+  const corpo='<div class="pg">'+_relTopo('Orçamento de compras')+
+    '<h1>Orçamento de Compras</h1><div class="sub"><span>'+esc(im.nome||'Imóvel')+'</span><span>'+dataHoje+'</span></div>'+
+    '<div class="info">'+info.map(x=>'<div><div class="l">'+x[0]+'</div><div class="v">'+esc(x[1]||'—')+'</div></div>').join('')+'</div>'+
+    '<table><thead><tr><th>Item</th><th class="num">Qtd.</th><th class="num">Valor unit.</th><th class="num">Total</th></tr></thead><tbody>'+linhas+'</tbody>'+
+    (descontoAplicado>0?'<tfoot><tr><td colspan="3" class="num" style="font-weight:400;">Subtotal</td><td class="num" style="font-weight:400;">'+r2(totalGeral)+'</td></tr>'+
+      '<tr><td colspan="3" class="num ok" style="border-top:0;">Desconto'+(im.descontoTipo==='percent'?' ('+im.descontoValor+'%)':'')+'</td><td class="num ok" style="border-top:0;">− '+r2(descontoAplicado)+'</td></tr></tfoot>':'')+
+    '</table>'+
+    _relTotalFaixa('Total '+(descontoAplicado>0?'final':'geral'),r2(totalComDesconto))+
+    (im.formasPagamento?'<div class="pagto"><div class="t">Formas de pagamento</div>'+esc(im.formasPagamento)+'</div>':'')+
+    _relRodape()+'</div>';
+  _abrirDocRelatorio(corpo,_REL_CSS_EXTRA,'Orçamento — '+(im.nome||'Imóvel'));
 }
 
 function obAvancarFase(){
@@ -9347,7 +9365,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 136;
+const APP_VERSION = 137;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;
@@ -10331,14 +10349,12 @@ function excluirEntradaManual(id) {
 function gerarPlaybook() {
   if (manualEntradas.length === 0) { showToast('Nenhuma entrada no manual.', 'peach'); return; }
   const data = new Date().toLocaleDateString('pt-BR', {day:'2-digit',month:'long',year:'numeric'});
-  let body = '';
-  manualEntradas.forEach((e, i) => {
-    body += '<h2 style="color:#c0616a;font-size:17px;border-bottom:1px solid #eee;padding-bottom:5px;margin-top:28px;">'+(i+1)+'. '+e.titulo+(e.categoria?' <span style="font-size:12px;color:#888;">('+e.categoria+')</span>':'')+'</h2>';
-    body += '<p style="font-size:13px;line-height:1.8;white-space:pre-wrap;color:#333;">'+e.conteudo.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</p>';
-  });
-  const scriptClose = '<' + '/script>';
-  const htmlDoc = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Playbook WeCare</title><style>body{font-family:Arial,sans-serif;padding:50px;max-width:800px;margin:0 auto;color:#222;}h1{color:#c0616a;font-size:26px;}@media print{button{display:none}}</style></head><body><h1>📖 Playbook Operacional — WeCare</h1><p style="color:#666;font-size:13px;">Gerado em '+data+'</p>'+body+'<p style="margin-top:40px;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:12px;">Claire · Painel de Gestão WeCare</p><script>window.onload=function(){window.print();}'+scriptClose+'</body></html>';
-  const win = window.open('', '_blank');
-  if (!win) { showToast('Permita pop-ups para gerar o Playbook.', 'peach'); return; }
-  win.document.write(htmlDoc); win.document.close();
+  const cats=[...new Set(manualEntradas.map(e=>e.categoria).filter(Boolean))];
+  const corpo='<div class="pg">'+_relTopo('Playbook operacional')+
+    '<h1>Playbook Operacional</h1><div class="sub"><span>Gerado em '+data+'</span></div>'+
+    _relKpis([['Entradas',manualEntradas.length,true]].concat(cats.length?[['Categorias',cats.length]]:[]))+
+    manualEntradas.map((e,i)=>'<div class="sec"><h2>'+(i+1)+'. '+esc(e.titulo)+(e.categoria?' <span class="muted" style="font-size:12px;">'+esc(e.categoria)+'</span>':'')+'</h2>'+
+      '<div class="txt">'+esc(e.conteudo||'')+'</div></div>').join('')+
+    _relRodape()+'</div>';
+  _abrirDocRelatorio(corpo,_REL_CSS_EXTRA,'Playbook WeCare');
 }

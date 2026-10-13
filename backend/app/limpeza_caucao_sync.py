@@ -129,8 +129,8 @@ def aplicar(state: dict, saidas: list[dict], chegadas: list[dict], nomes_interno
     """Função pura: recebe o documento atual + reservas e devolve (novo_doc, resumo).
 
     nomes_internos: id do imóvel -> nome interno no Hostaway (internalListingName).
-    A limpeza usa o nome interno (é como a equipe e as empresas de limpeza
-    conhecem o imóvel); a reserva só traz o nome externo (listingName)."""
+    Limpeza e caução usam o nome interno (é como a equipe e as empresas de
+    limpeza conhecem o imóvel); a reserva só traz o nome externo (listingName)."""
     nomes_internos = nomes_internos or {}
     agora = now_ms()
     tombs = {t.get("id") for t in (state.get("nx_tombstones") or []) if isinstance(t, dict)}
@@ -231,7 +231,7 @@ def aplicar(state: dict, saidas: list[dict], chegadas: list[dict], nomes_interno
                 "id": cid,
                 "status": "aguardando",
                 "hospede": r.get("guestName") or "",
-                "imovelExterno": r.get("listingName") or "",
+                "imovelExterno": nomes_internos.get(listing) or r.get("listingName") or "",
                 "valorCaucao": valor,
                 "formaPagamento": "outro",
                 "dadosBancarios": None,

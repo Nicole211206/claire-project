@@ -428,9 +428,11 @@ function _validarLogin(){
           <p style="color:var(--text3);font-size:13px;margin-top:2px;">Controle de solicitação de limpeza e devolução de caução</p>
         </div>
         <div id="lc-actions-limpeza" style="display:flex;gap:8px;">
+          <button class="btn" onclick="abrirAutomacaoLC()"><i class="fa-solid fa-robot"></i> Automação Hostaway</button>
           <button class="btn btn-rose" onclick="abrirNovaLimpeza()"><i class="fa-solid fa-plus"></i> Nova Limpeza</button>
         </div>
         <div id="lc-actions-caucao" style="display:none;gap:8px;">
+          <button class="btn" onclick="abrirAutomacaoLC()"><i class="fa-solid fa-robot"></i> Automação Hostaway</button>
           <button class="btn btn-rose" onclick="abrirNovaCaucao()"><i class="fa-solid fa-plus"></i> Nova Caução</button>
         </div>
       </div>
@@ -439,6 +441,8 @@ function _validarLogin(){
         <button class="tab-btn lc-tab-btn active" onclick="switchLCTab('limpeza',this)">Limpeza</button>
         <button class="tab-btn lc-tab-btn" onclick="switchLCTab('caucao',this)">Caução</button>
       </div>
+
+      <div id="lc-automacao-bar" style="margin-bottom:14px;"></div>
 
       <div id="lc-content-limpeza">
         <div id="limpeza-kanban" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;"></div>
@@ -834,6 +838,7 @@ function _validarLogin(){
       <div style="display:flex;gap:8px;margin-bottom:16px;">
         <button class="tab-btn active" id="manut-tab-kanban" onclick="switchManutTab('kanban',this)">Kanban</button>
         <button class="tab-btn" id="manut-tab-saldo" onclick="switchManutTab('saldo',this)">Saldo Geral</button>
+        <button class="tab-btn" id="manut-tab-sinistros" onclick="switchManutTab('sinistros',this)"><i class="fa-solid fa-shield-halved"></i> Sinistros</button>
       </div>
       <div id="manutencao-tab-kanban">
         <div id="manutencao-pausadas-bar"></div>
@@ -842,6 +847,19 @@ function _validarLogin(){
       <div id="manutencao-tab-saldo" style="display:none;">
         <div id="manutencao-saldo-geral"></div>
         <div id="manutencao-saldo-imoveis" style="margin-top:24px;"></div>
+      </div>
+      <div id="manutencao-tab-sinistros" style="display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+          <div style="font-size:13px;color:var(--text3);">Acompanhamento de sinistros e reembolsos junto às seguradoras</div>
+          <button class="btn btn-rose" onclick="abrirNovoSinistro()"><i class="fa-solid fa-plus"></i> Novo Sinistro</button>
+        </div>
+        <div id="sinistros-resumo" style="margin-bottom:14px;"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+          <div id="sin-filtro-seg" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+          <select class="form-select" id="sin-filtro-status" onchange="renderSinistros()" style="width:auto;padding:6px 10px;font-size:13px;margin-left:auto;"></select>
+          <input type="text" class="form-input" id="sin-busca" placeholder="Buscar protocolo, imóvel, reserva..." oninput="renderSinistros()" style="width:240px;padding:6px 10px;font-size:13px;">
+        </div>
+        <div id="sinistros-lista"></div>
       </div>
     </div>
 
@@ -1650,9 +1668,9 @@ function _validarLogin(){
 
 <!-- Modal: relatório -->
 <div class="modal-overlay" id="modal-se-relatorio">
-  <div class="modal" style="width:720px;max-width:calc(100vw - 24px);max-height:90vh;overflow-y:auto;">
+  <div class="modal" style="width:860px;max-width:calc(100vw - 24px);max-height:92vh;overflow-y:auto;">
     <select class="form-select" id="se-rel-modo" onchange="trocarModoRelatorio(this.value)" style="margin-bottom:14px;"></select>
-    <div id="se-relatorio"></div>
+    <div id="se-relatorio" style="background:var(--bg3);border-radius:var(--r-sm);padding:10px;"><iframe id="se-rel-frame" title="Relatório" style="width:100%;height:600px;border:0;border-radius:6px;background:#fff;display:block;box-shadow:0 1px 4px rgba(0,0,0,.08);"></iframe></div>
     <div class="modal-footer"><button class="btn" onclick="closeModal('modal-se-relatorio')">Fechar</button><button class="btn" id="se-rel-copiar" onclick="copiarResumoRelatorio()"><i class="fa-regular fa-copy"></i> Copiar resumo</button><button class="btn btn-sage" id="se-rel-whats" onclick="enviarWhatsRelatorio()" style="display:none;"><i class="fa-brands fa-whatsapp"></i> Enviar no WhatsApp</button><button class="btn btn-rose" onclick="_seImprimirRelatorio()"><i class="fa-solid fa-print"></i> Imprimir / PDF</button></div>
   </div>
 </div>
@@ -1884,6 +1902,61 @@ function _validarLogin(){
   </div>
 </div>
 
+<div class="modal-overlay" id="modal-lc-automacao">
+  <div class="modal" style="width:720px;max-width:calc(100vw - 24px);max-height:92vh;overflow-y:auto;">
+    <h3 class="modal-title">Automação Hostaway — Limpeza &amp; Caução</h3>
+    <div style="font-size:12.5px;color:var(--text2);line-height:1.5;margin-bottom:12px;">
+      A cada 30 minutos o servidor lê as reservas do Hostaway com check-out entre 2 dias atrás e os próximos 7 dias e cria os cards sozinho:<br>
+      <b>Limpeza</b> — só dos imóveis marcados abaixo (os que precisam de solicitação manual), em <i>A Solicitar</i>.<br>
+      <b>Caução</b> — de toda reserva com caução/depósito registrado no Hostaway, em <i>Aguardando Devolução</i>, já com o valor.<br>
+      Card apagado aqui não é recriado.
+    </div>
+    <div id="lc-auto-status" style="margin-bottom:14px;"></div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+      <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);">Imóveis com limpeza manual</div>
+      <input type="text" class="form-input" id="lc-auto-busca" placeholder="Buscar imóvel..." oninput="_lcRenderListings()" style="margin-left:auto;width:220px;padding:6px 10px;font-size:13px;">
+    </div>
+    <div id="lc-auto-listings" style="max-height:380px;overflow:auto;border:1px solid var(--border);border-radius:var(--r-sm);"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-lc-automacao')">Fechar</button>
+      <button class="btn btn-rose" id="lc-auto-btn-sync" onclick="sincronizarLCAgora()"><i class="fa-solid fa-rotate"></i> Salvar e sincronizar agora</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-sinistro">
+  <div class="modal" style="width:640px;max-width:calc(100vw - 24px);max-height:92vh;overflow-y:auto;">
+    <h3 class="modal-title" id="modal-sinistro-titulo">Novo Sinistro</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group"><label class="form-label">Seguradora / Plataforma</label><select class="form-select" id="sin-seguradora"></select></div>
+      <div class="form-group"><label class="form-label">Status</label><select class="form-select" id="sin-status"></select></div>
+      <div class="form-group"><label class="form-label">Protocolo</label><input type="text" class="form-input" id="sin-protocolo" placeholder="Ex.: CLSF-06542058"></div>
+      <div class="form-group"><label class="form-label">Reserva / Ref. interna</label><input type="text" class="form-input" id="sin-reserva" placeholder="Código da reserva"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Imóvel / Apto</label><input type="text" class="form-input" id="sin-imovel" list="sin-imoveis-dl" placeholder="Nome do imóvel"><datalist id="sin-imoveis-dl"></datalist></div>
+    <div class="form-group"><label class="form-label">Descrição do dano / sinistro</label><textarea class="form-input" id="sin-descricao" rows="2"></textarea></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group"><label class="form-label">Data de abertura</label><input type="date" class="form-input" id="sin-data"></div>
+      <div class="form-group"><label class="form-label">Prazo de resposta</label><input type="date" class="form-input" id="sin-prazo"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group"><label class="form-label">Valor estimado (R$)</label><input type="number" step="0.01" class="form-input" id="sin-valor" placeholder="0,00"></div>
+      <div class="form-group"><label class="form-label">Valor recebido (R$)</label><input type="number" step="0.01" class="form-input" id="sin-recebido" placeholder="0,00"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Próximos passos</label><textarea class="form-input" id="sin-proximos" rows="2" placeholder="O que falta fazer neste caso"></textarea></div>
+    <div class="form-group">
+      <label class="form-label">Acompanhamento</label>
+      <div id="sin-historico" style="max-height:180px;overflow:auto;margin-bottom:8px;"></div>
+      <div style="display:flex;gap:8px;"><input type="text" class="form-input" id="sin-nova-atualizacao" placeholder="Registrar atualização (ex.: enviei os documentos solicitados)" onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarAtualizacaoSinistro();}"><button class="btn" onclick="adicionarAtualizacaoSinistro()"><i class="fa-solid fa-plus"></i></button></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" id="sin-btn-apagar" onclick="deletarSinistro()" style="display:none;margin-right:auto;"><i class="fa-solid fa-trash"></i> Apagar</button>
+      <button class="btn" onclick="closeModal('modal-sinistro')">Cancelar</button>
+      <button class="btn btn-rose" onclick="salvarSinistro()"><i class="fa-solid fa-check"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-superhost">
   <div class="modal" style="max-width:480px;">
     <div class="modal-header"><h3 class="modal-title">Período Superhost</h3><button class="modal-close" onclick="closeModal('modal-superhost')">✕</button></div>
@@ -1976,6 +2049,6 @@ function _validarLogin(){
   </div>
 </div>
 
-<script src="js/app.js?v=130"></script>
+<script src="js/app.js?v=131"></script>
 </body>
 </html>

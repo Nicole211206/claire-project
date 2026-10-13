@@ -234,6 +234,8 @@ let imovelsCatalog = [
 let manutencoes=[];
 let limpezaItens=[];
 let caucaoItens=[];
+let sinistros=[];
+let lcImoveisLimpeza=[]; // imóveis do Hostaway que exigem solicitação manual de limpeza (lidos pela automação do servidor)
 let manutAtiva=null, manutAba='solicitacao';
 let fornecedoresCadastro=[]; // cadastro de fornecedores reutilizáveis
 let manutExibirPausadas=false;
@@ -3664,7 +3666,11 @@ function switchLCTab(tab,btn){
   document.querySelectorAll('.lc-tab-btn').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
 }
-function renderLimpezaCaucao(){ renderLimpezaKanban(); renderCaucaoKanban(); }
+function renderLimpezaCaucao(){
+  renderLimpezaKanban(); renderCaucaoKanban();
+  const bar=document.getElementById('lc-automacao-bar');
+  if(bar){ bar.innerHTML=_lcStatusHTML(); if(Date.now()-_lcStatusEm>5*60*1000){ _lcStatusEm=Date.now(); _lcCarregarStatus(); } }
+}
 
 const LIMPEZA_COLS=[
   {id:'a_solicitar',label:'A Solicitar',color:'var(--peach)'},
@@ -3775,7 +3781,7 @@ function renderLimpezaKanban(){
         return '<div class="card" style="margin-bottom:10px;cursor:pointer;" onclick="abrirEditarLimpeza('+l.id+')"><div class="card-body" style="padding:10px 12px;">'
         +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:4px;">'
         +'<span style="font-size:12.5px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(l.imovelExterno||'Imóvel')+'</span>'
-        +(urgente?'<span style="font-size:10px;background:var(--vermelha-bg);color:var(--vermelha);padding:2px 8px;border-radius:8px;font-weight:600;white-space:nowrap;">Check-in próximo</span>':'')
+        +(l.reservaCancelada?'<span style="font-size:10px;background:var(--bg3);color:var(--text3);padding:2px 8px;border-radius:8px;font-weight:600;white-space:nowrap;text-decoration:line-through;">Reserva cancelada</span>':'')+(urgente&&!l.reservaCancelada?'<span style="font-size:10px;background:var(--vermelha-bg);color:var(--vermelha);padding:2px 8px;border-radius:8px;font-weight:600;white-space:nowrap;">Check-in próximo</span>':'')+(l.origem==='hostaway'?_lcSeloHostaway():'')
         +'</div>'
         +'<div style="font-size:10.5px;color:var(--text3);margin-bottom:5px;"><i class="fa-solid fa-user"></i> '+esc(l.hospede||'—')+' · Check-in '+(fd(l.checkin)||'—')+' · Check-out '+(fd(l.checkout)||'—')+'</div>'
         +'<div style="font-size:12px;color:var(--text2);line-height:1.4;margin-bottom:6px;">Limpeza: '+(fd(l.dataLimpeza)||'—')+(l.horaLimpeza?' às '+l.horaLimpeza:'')+(l.responsavel?' · '+esc(l.responsavel):'')+'</div>'
@@ -3943,7 +3949,7 @@ function renderCaucaoKanban(){
         return '<div class="card" style="margin-bottom:10px;cursor:pointer;" onclick="abrirEditarCaucao('+c.id+')"><div class="card-body" style="padding:10px 12px;">'
         +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:4px;">'
         +'<span style="font-size:12.5px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(c.imovelExterno||'Imóvel')+'</span>'
-        +(c.irregularidade?'<span style="font-size:10px;background:var(--vermelha-bg);color:var(--vermelha);padding:2px 8px;border-radius:8px;font-weight:600;white-space:nowrap;">Irregularidade</span>':'')
+        +(c.irregularidade?'<span style="font-size:10px;background:var(--vermelha-bg);color:var(--vermelha);padding:2px 8px;border-radius:8px;font-weight:600;white-space:nowrap;">Irregularidade</span>':'')+(c.origem==='hostaway'?_lcSeloHostaway():'')
         +'</div>'
         +'<div style="font-size:10.5px;color:var(--text3);margin-bottom:5px;"><i class="fa-solid fa-user"></i> '+esc(c.hospede||'—')+' · '+brl(c.valorCaucao)+' · '+(formaLbl[c.formaPagamento]||'—')+'</div>'
         +'<div style="font-size:12px;color:var(--text2);line-height:1.4;margin-bottom:6px;">Check-out '+(fd(c.checkout)||'—')+' · Devolução prevista: '+(fd(c.dataPrevistaDevolucao)||'—')+(c.irregularidade?' · '+(rv?('cobrar '+brl(rv.cobrar)+' · devolver '+brl(rv.devolver)+(rv.adicional>0?' · adicional '+brl(rv.adicional):'')):'aguardando avaliação'):'')+'</div>'
@@ -3957,6 +3963,292 @@ function renderCaucaoKanban(){
       }).join(''))
       +'</div>';
   }).join('');
+}
+
+// ── Automação Hostaway (backend/app/limpeza_caucao_sync.py) ──
+// O servidor cria os cards sozinho a cada 30 min. Aqui só se escolhe quais
+// imóveis exigem limpeza manual (nx_lc_imoveis — desmarcar vira ativo:false em
+// vez de apagar, pra poder remarcar sem esbarrar em tombstone) e se dispara
+// uma sincronização na hora.
+let _lcListings=null, _lcStatus=null, _lcStatusEm=0;
+async function _lcApi(path,opts){
+  const c=window.CLAIRE_SYNC||{};
+  if(!c.url) throw new Error('Servidor não configurado');
+  const r=await fetch(c.url+path,Object.assign({},opts||{},{headers:{'X-Token':c.token||''}}));
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
+  return j;
+}
+function _lcQuando(iso){
+  if(!iso) return '—';
+  const d=new Date(iso); if(isNaN(d)) return '—';
+  return d.toLocaleDateString('pt-BR')+' às '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+}
+function _lcStatusHTML(){
+  const s=_lcStatus;
+  const n=lcImoveisLimpeza.filter(x=>x.ativo!==false).length;
+  const linha=(icone,cor,txt)=>'<div style="display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);padding:9px 13px;font-size:12.5px;"><i class="fa-solid '+icone+'" style="color:'+cor+';"></i><div style="flex:1;">'+txt+'</div></div>';
+  if(!s) return linha('fa-robot','var(--text3)','Automação Hostaway · '+n+' imóve'+(n===1?'l':'is')+' com limpeza manual · carregando status...');
+  if(s.ok===false) return linha('fa-triangle-exclamation','var(--vermelha)','<b>Automação Hostaway com erro</b> (última tentativa '+_lcQuando(s.ultimaTentativa)+'): '+esc(s.erro||'')+(s.ultimoSync?' · último sucesso '+_lcQuando(s.ultimoSync):''));
+  if(!s.ultimoSync) return linha('fa-robot','var(--text3)','Automação Hostaway ainda não rodou · '+n+' imóve'+(n===1?'l':'is')+' com limpeza manual');
+  return linha('fa-circle-check','var(--sage)','Automação Hostaway ativa · última sincronização '+_lcQuando(s.ultimoSync)+' · '+n+' imóve'+(n===1?'l':'is')+' com limpeza manual'+
+    ' <span style="color:var(--text3);">(na última: '+(s.limpezaCriados||0)+' limpeza(s) e '+(s.caucaoCriados||0)+' caução(ões) novas)</span>');
+}
+async function _lcCarregarStatus(){
+  try{ _lcStatus=await _lcApi('/hostaway/limpeza-caucao/status'); }catch(e){ _lcStatus={ok:false,erro:e.message}; }
+  const bar=document.getElementById('lc-automacao-bar'); if(bar) bar.innerHTML=_lcStatusHTML();
+  const st=document.getElementById('lc-auto-status'); if(st) st.innerHTML=_lcStatusHTML();
+}
+async function abrirAutomacaoLC(){
+  document.getElementById('modal-lc-automacao').classList.add('open');
+  document.getElementById('lc-auto-busca').value='';
+  _lcCarregarStatus();
+  if(_lcListings){ _lcRenderListings(); return; }
+  document.getElementById('lc-auto-listings').innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px;"><i class="fa-solid fa-spinner fa-spin"></i> Buscando imóveis no Hostaway...</div>';
+  try{ _lcListings=(await _lcApi('/hostaway/listings')).listings||[]; _lcRenderListings(); }
+  catch(e){ document.getElementById('lc-auto-listings').innerHTML='<div style="padding:20px;text-align:center;color:var(--vermelha);font-size:13px;">Não foi possível buscar os imóveis do Hostaway: '+esc(e.message)+'</div>'; }
+}
+function _lcSeloHostaway(){ return '<span title="Criado automaticamente a partir do Hostaway" style="font-size:10px;background:var(--sky-light);color:var(--sky);padding:2px 7px;border-radius:8px;font-weight:600;white-space:nowrap;"><i class="fa-solid fa-robot"></i></span>'; }
+function _lcCfg(id){ return lcImoveisLimpeza.find(x=>String(x.id)===String(id)); }
+function _lcRenderListings(){
+  const el=document.getElementById('lc-auto-listings'); if(!el||!_lcListings) return;
+  const q=_seSemAcento(document.getElementById('lc-auto-busca').value||'');
+  const ativo=l=>{ const c=_lcCfg(l.id); return !!(c&&c.ativo!==false); };
+  const lst=_lcListings.filter(l=>!q||_seSemAcento(l.nome+' '+l.nomeExterno+' '+l.endereco).includes(q))
+    .sort((a,b)=>(ativo(b)-ativo(a))||a.nome.localeCompare(b.nome));
+  if(!lst.length){ el.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px;">Nenhum imóvel encontrado.</div>'; return; }
+  el.innerHTML=lst.map((l,i)=>{
+    const c=_lcCfg(l.id), on=ativo(l);
+    return '<div style="padding:9px 12px;'+(i?'border-top:1px solid var(--border);':'')+(on?'background:var(--sage-light);':'')+'">'+
+      '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;"><input type="checkbox" '+(on?'checked':'')+' onchange="_lcToggleImovel('+l.id+',this.checked)">'+
+      '<span style="flex:1;min-width:0;"><b>'+_seEsc(l.nome)+'</b>'+(l.nomeExterno&&l.nomeExterno!==l.nome?' <span style="color:var(--text3);font-size:11.5px;">· '+_seEsc(l.nomeExterno)+'</span>':'')+'</span></label>'+
+      (on?'<div style="display:grid;grid-template-columns:1.4fr 1fr;gap:8px;margin:8px 0 2px 24px;">'+
+        '<input type="text" class="form-input" placeholder="Link do grupo de WhatsApp" value="'+_seEsc(c.grupoWpp||'')+'" onchange="_lcSetCampo('+l.id+',\'grupoWpp\',this.value)" style="padding:5px 9px;font-size:12.5px;">'+
+        '<input type="text" class="form-input" placeholder="Responsável pela limpeza" value="'+_seEsc(c.responsavel||'')+'" onchange="_lcSetCampo('+l.id+',\'responsavel\',this.value)" style="padding:5px 9px;font-size:12.5px;">'+
+      '</div>':'')+
+    '</div>';
+  }).join('');
+}
+function _lcToggleImovel(id,on){
+  const l=(_lcListings||[]).find(x=>x.id===id)||{};
+  const c=_lcCfg(id);
+  if(c){ c.ativo=on; }
+  else if(on){ lcImoveisLimpeza.push({id,nome:l.nome||'',endereco:l.endereco||'',grupoWpp:'',responsavel:'',ativo:true}); }
+  saveAll(); _lcRenderListings();
+  ['lc-automacao-bar','lc-auto-status'].forEach(id=>{ const el=document.getElementById(id); if(el) el.innerHTML=_lcStatusHTML(); });
+}
+function _lcSetCampo(id,campo,v){ const c=_lcCfg(id); if(!c) return; c[campo]=String(v||'').trim(); saveAll(); }
+async function sincronizarLCAgora(){
+  const btn=document.getElementById('lc-auto-btn-sync');
+  btn.disabled=true; btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Sincronizando...';
+  try{
+    saveAll();
+    if(typeof _kvFlush==='function') await _kvFlush(); // o servidor precisa da lista de imóveis atualizada antes de rodar
+    const r=await _lcApi('/hostaway/limpeza-caucao/sync',{method:'POST'});
+    if(typeof kvPull==='function') await kvPull();
+    renderLimpezaCaucao();
+    showToast('Sincronizado: '+(r.limpezaCriados||0)+' limpeza(s) e '+(r.caucaoCriados||0)+' caução(ões) novas.','sage');
+  }catch(e){ showToast('Falha ao sincronizar: '+e.message,'peach'); }
+  btn.disabled=false; btn.innerHTML='<i class="fa-solid fa-rotate"></i> Salvar e sincronizar agora';
+  _lcCarregarStatus();
+}
+
+// ═══════════════════ SINISTROS (aba da Manutenção) ═══════════════════
+// Acompanhamento de sinistros/reembolsos junto às seguradoras (Easy Cover,
+// AirCover, Crawford/Booking). Substitui a planilha "Controle Sinistros - WeCare".
+const SIN_SEGURADORAS=[
+  {id:'easycover',label:'Easy Cover',sub:'Now Seguros'},
+  {id:'aircover',label:'AirCover',sub:'Airbnb'},
+  {id:'crawford',label:'Crawford',sub:'Booking'},
+  {id:'outro',label:'Outro',sub:''}
+];
+const SIN_STATUS=[
+  {id:'aberto',label:'Aberto',cor:'var(--text3)',bg:'var(--bg3)',ativo:true},
+  {id:'em_analise',label:'Em análise',cor:'var(--sky)',bg:'var(--sky-light)',ativo:true},
+  {id:'aguardando_docs',label:'Aguardando documentos',cor:'var(--amarela)',bg:'var(--amarela-bg)',ativo:true},
+  {id:'aprovado',label:'Aprovado',cor:'var(--teal)',bg:'var(--teal-light)',ativo:true},
+  {id:'reembolsado',label:'Reembolsado',cor:'var(--sage)',bg:'var(--sage-light)',ativo:false},
+  {id:'negado',label:'Negado',cor:'var(--vermelha)',bg:'var(--vermelha-bg)',ativo:false},
+  {id:'encerrado',label:'Encerrado',cor:'var(--text3)',bg:'var(--bg3)',ativo:false}
+];
+let _sinEditId=null, _sinFiltroSeg='todas', _sinHistoricoTmp=[];
+function _sinStatus(id){ return SIN_STATUS.find(s=>s.id===id)||SIN_STATUS[0]; }
+function _sinSeg(id){ return SIN_SEGURADORAS.find(s=>s.id===id)||SIN_SEGURADORAS[3]; }
+function _sinBrl(v){ return 'R$ '+(parseFloat(v)||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function _sinDf(d){ return d?d.split('-').reverse().join('/'):'—'; }
+function _sinHoje(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+
+// Casos que já estavam na planilha em 13/10/2026. Ids fixos + _ts antigo: todo
+// aparelho semeia os MESMOS registros (o merge por id não duplica) e qualquer
+// edição feita depois sempre vence a semente.
+const _SIN_SEED=[
+  ['easycover','NS03102026182150','3128','Apartamento 1104','Danos enxoval','2026-10-03','em_analise',125,'Enviei os documentos solicitados (11/10/2026).',''],
+  ['easycover','NS27092026112248','3110','Afonso 1908','Danos mesa e janela','2026-09-27','em_analise',0,'Pedi mais prazo, será necessário contratar uma empresa para emitir um laudo — estou procurando uma empresa para isso.',''],
+  ['easycover','NS28082026072158','3034','Carinas 715','Fechadura','2026-08-28','em_analise',0,'O seguro negou inicialmente, pedi para reabrir e estão solicitando um laudo de que foi dano do hóspede. Não temos o laudo e o técnico que foi até o apto informou que foi instalação mal feita. A WeCare arcou com os custos — verificar com a Nicole se vamos dar continuidade ou encerrar com o seguro.',''],
+  ['easycover','NS27092026163520','3034','Alves 502','Multas e danos área comum','2026-09-27','negado',0,'Seguro não cobre áreas comuns.',''],
+  ['easycover','NS05092026152650','3048','Simpatia 501','Controle remoto','2026-09-05','negado',49.90,'Item recusado pelo valor. O mínimo para cobertura é um valor que cubra os 10% mínimos da franquia.',''],
+  ['aircover','CLSF-06542058','HMEHWTMBEY','Osório 109','Jogo de jantar e fogão quebrados','2026-09-27','encerrado',1899.00,'Tivemos um retorno de que não respondemos aos e-mails e solicitações; verifiquei e não recebemos nada. Podem ter mandado pelas mensagens do Airbnb e passou pelos turnos sem resposta. Pedi a reabertura do caso.',''],
+  ['aircover','CLSF-06566238','HMSXWKBWPM','Rebouças 1716','Registro do chuveiro, sofá manchado, danos no fogão, enxoval e outras questões','2026-09-27','em_analise',1931.68,'O hóspede pagou R$ 965 e o valor dos danos é de R$ 1.931,68. Acionei o Airbnb para completar o valor; pediram o laudo do Dé, já fiz e ele vai assinar na terça-feira.',''],
+  ['aircover','','HM8AWMM9XH','Alves 1104','Enxoval manchado','2026-10-01','negado',1463.52,'Airbnb recusou: enxoval não está coberto e não respondemos no prazo. Fiz a escalação do caso — acompanhar.',''],
+  ['aircover','','HMEHWTMBEY','Ária Higienópolis 905','Enxoval manchado, controle quebrado','2026-09-27','em_analise',1892.54,'Retirei o valor da bancada, pois a Dina conseguiu limpar. Respondi o e-mail — acompanhar.',''],
+  ['crawford','8267522','67009907','Simpatia 501','Enxoval queimado','2026-10-11','em_analise',293.60,'',''],
+  ['crawford','8203595 / BR26009872','','Rafael de Barros 131','Tentativa de furto — danos na porta do apto 83','2026-08-30','em_analise',650,'',''],
+  ['crawford','BR26009873','','Simpatia 501','Controle remoto','','aberto',0,'',''],
+  ['crawford','8216494 / BR26010773','5712014295','Alves 502','Danos e multas área comum','2026-09-24','em_analise',0,'',''],
+  ['crawford','8263104 / BR26011740','HLISF-06563242 / HMR3ZRHD24','Rebouças','Furto no apto 11','2026-10-07','em_analise',0,'A proprietária do outro apto já enviou algumas informações, mas ainda faltam dados. Não deixar de responder os e-mails e ficar atento ao prazo.','2026-11-02']
+];
+function _sinSemear(){
+  if(sinistros.length) return;
+  const tomb=new Set((tombstones||[]).map(t=>t.id));
+  _SIN_SEED.forEach((r,i)=>{
+    const id=7000000000001+i;
+    if(tomb.has(id)) return;
+    sinistros.push({id,_ts:1,seguradora:r[0],protocolo:r[1],reserva:r[2],imovel:r[3],descricao:r[4],dataAbertura:r[5],status:r[6],valorEstimado:r[7],valorRecebido:0,proximosPassos:r[8],prazo:r[9],historico:[],dataCriacao:'2026-10-13T00:00:00.000Z'});
+  });
+  if(sinistros.length && typeof saveAll==='function') saveAll();
+}
+
+function renderSinistros(){
+  const lista=document.getElementById('sinistros-lista'); if(!lista) return;
+  if(_dataLoaded) _sinSemear();
+  const hoje=_sinHoje();
+  const ativos=sinistros.filter(s=>_sinStatus(s.status).ativo);
+  const card=(lbl,val,cor,sub)=>'<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;">'+
+    '<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:'+cor+';margin-bottom:4px;">'+lbl+'</div>'+
+    '<div style="font-size:20px;font-weight:700;color:'+cor+';">'+val+'</div>'+(sub?'<div style="font-size:11px;color:var(--text3);margin-top:2px;">'+sub+'</div>':'')+'</div>';
+  const vencendo=ativos.filter(s=>s.prazo&&s.prazo<=_sinMaisDias(hoje,5)).length;
+  document.getElementById('sinistros-resumo').innerHTML='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">'+
+    card('Em andamento',ativos.length,'var(--sky)',vencendo?vencendo+' com prazo nos próximos 5 dias':'')+
+    card('Valor em análise',_sinBrl(ativos.reduce((t,s)=>t+(parseFloat(s.valorEstimado)||0),0)),'var(--peach)','estimado dos casos em andamento')+
+    card('Recebido',_sinBrl(sinistros.reduce((t,s)=>t+(parseFloat(s.valorRecebido)||0),0)),'var(--sage)',sinistros.filter(s=>s.status==='reembolsado').length+' reembolsado(s)')+
+    card('Negados',sinistros.filter(s=>s.status==='negado').length,'var(--vermelha)','de '+sinistros.length+' no total')+
+  '</div>';
+
+  // chips de seguradora (com contagem) + select de status
+  const chip=(id,lbl,n)=>'<button class="btn btn-sm'+(_sinFiltroSeg===id?' btn-rose':'')+'" onclick="_sinFiltroSeg=\''+id+'\';renderSinistros()">'+lbl+' <span style="opacity:.7;">'+n+'</span></button>';
+  document.getElementById('sin-filtro-seg').innerHTML=chip('todas','Todas',sinistros.length)+
+    SIN_SEGURADORAS.filter(g=>g.id!=='outro'||sinistros.some(s=>s.seguradora==='outro')).map(g=>chip(g.id,g.label,sinistros.filter(s=>s.seguradora===g.id).length)).join('');
+  const selSt=document.getElementById('sin-filtro-status');
+  const stAtual=selSt.value||'ativos';
+  selSt.innerHTML='<option value="ativos">Em andamento</option><option value="todos">Todos os status</option>'+SIN_STATUS.map(s=>'<option value="'+s.id+'">'+s.label+'</option>').join('');
+  selSt.value=stAtual;
+
+  const q=_seSemAcento(document.getElementById('sin-busca').value||'');
+  let itens=sinistros.filter(s=>(_sinFiltroSeg==='todas'||s.seguradora===_sinFiltroSeg)
+    &&(stAtual==='todos'||(stAtual==='ativos'?_sinStatus(s.status).ativo:s.status===stAtual))
+    &&(!q||_seSemAcento([s.protocolo,s.reserva,s.imovel,s.descricao,s.proximosPassos].join(' ')).includes(q)));
+  // em andamento primeiro; dentro disso, prazo mais próximo e depois abertura mais recente
+  itens.sort((a,b)=>(_sinStatus(b.status).ativo-_sinStatus(a.status).ativo)||((a.prazo||'9999')).localeCompare(b.prazo||'9999')||(b.dataAbertura||'').localeCompare(a.dataAbertura||''));
+
+  if(!itens.length){ lista.innerHTML='<div style="text-align:center;color:var(--text3);font-size:13px;padding:40px 0;border:1px dashed var(--border);border-radius:var(--r-sm);">Nenhum sinistro neste filtro.</div>'; return; }
+  lista.innerHTML='<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;">'+itens.map((s,i)=>{
+    const st=_sinStatus(s.status), seg=_sinSeg(s.seguradora);
+    const prazoAlerta=st.ativo&&s.prazo&&s.prazo<=_sinMaisDias(hoje,5);
+    const ult=(s.historico||[]).slice(-1)[0];
+    return '<div onclick="abrirEditarSinistro('+s.id+')" style="display:grid;grid-template-columns:150px minmax(0,1.3fr) minmax(0,1fr) 110px minmax(0,1.6fr);gap:14px;align-items:start;padding:12px 16px;cursor:pointer;'+(i?'border-top:1px solid var(--border);':'')+'" onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\'\'">'+
+      '<div><span style="display:inline-block;font-size:11px;font-weight:600;padding:3px 9px;border-radius:10px;background:'+st.bg+';color:'+st.cor+';">'+st.label+'</span>'+
+        (s.prazo&&st.ativo?'<div style="font-size:11px;margin-top:6px;color:'+(prazoAlerta?'var(--vermelha)':'var(--text3)')+';font-weight:'+(prazoAlerta?'600':'400')+';"><i class="fa-regular fa-clock"></i> prazo '+_sinDf(s.prazo)+'</div>':'')+'</div>'+
+      '<div style="min-width:0;"><div style="font-weight:700;font-size:13px;">'+_seEsc(s.imovel||'—')+'</div><div style="font-size:12px;color:var(--text2);margin-top:2px;">'+_seEsc(s.descricao||'')+'</div></div>'+
+      '<div style="min-width:0;font-size:12px;"><div style="font-weight:600;">'+seg.label+(seg.sub?' <span style="color:var(--text3);font-weight:400;">· '+seg.sub+'</span>':'')+'</div>'+
+        '<div style="color:var(--text3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+_seEsc(s.protocolo||'')+'">'+(s.protocolo?'Prot. '+_seEsc(s.protocolo):'sem protocolo')+'</div>'+
+        (s.reserva?'<div style="color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+_seEsc(s.reserva)+'">Reserva '+_seEsc(s.reserva)+'</div>':'')+
+        '<div style="color:var(--text3);">Aberto em '+_sinDf(s.dataAbertura)+'</div></div>'+
+      '<div style="text-align:right;font-size:12px;"><div style="font-weight:700;font-size:13px;">'+(parseFloat(s.valorEstimado)?_sinBrl(s.valorEstimado):'—')+'</div>'+
+        (parseFloat(s.valorRecebido)?'<div style="color:var(--sage);font-weight:600;">recebido '+_sinBrl(s.valorRecebido)+'</div>':'')+'</div>'+
+      '<div style="min-width:0;font-size:12px;color:var(--text2);line-height:1.45;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">'+
+        (s.proximosPassos?_seEsc(s.proximosPassos):'<span style="color:var(--text3);">Sem próximos passos</span>')+
+        (ult?'<div style="font-size:11px;color:var(--text3);margin-top:3px;">Últ. atualização '+_sinDf((ult.data||'').substring(0,10))+': '+_seEsc(ult.texto)+'</div>':'')+'</div>'+
+    '</div>';
+  }).join('')+'</div>';
+}
+function _sinMaisDias(iso,n){ const d=new Date(iso+'T12:00:00'); d.setDate(d.getDate()+n); return d.toISOString().substring(0,10); }
+
+function _sinPreencherSelects(){
+  document.getElementById('sin-seguradora').innerHTML=SIN_SEGURADORAS.map(g=>'<option value="'+g.id+'">'+g.label+(g.sub?' ('+g.sub+')':'')+'</option>').join('');
+  document.getElementById('sin-status').innerHTML=SIN_STATUS.map(s=>'<option value="'+s.id+'">'+s.label+'</option>').join('');
+  document.getElementById('sin-imoveis-dl').innerHTML=(imovelsCatalog||[]).map(im=>'<option value="'+_seEsc(im.nome||'')+'">').join('');
+}
+function _sinRenderHistorico(){
+  const el=document.getElementById('sin-historico');
+  el.innerHTML=_sinHistoricoTmp.length?_sinHistoricoTmp.slice().reverse().map(h=>
+    '<div style="font-size:12px;padding:6px 10px;background:var(--bg3);border-radius:var(--r-sm);margin-bottom:5px;"><span style="color:var(--text3);">'+_sinDf((h.data||'').substring(0,10))+(h.autor?' · '+_seEsc(h.autor):'')+'</span><div>'+_seEsc(h.texto)+'</div></div>').join('')
+    :'<div style="font-size:12px;color:var(--text3);">Nenhuma atualização registrada ainda.</div>';
+}
+function abrirNovoSinistro(){
+  _sinEditId=null; _sinHistoricoTmp=[];
+  _sinPreencherSelects();
+  document.getElementById('modal-sinistro-titulo').textContent='Novo Sinistro';
+  ['sin-protocolo','sin-reserva','sin-imovel','sin-descricao','sin-prazo','sin-valor','sin-recebido','sin-proximos','sin-nova-atualizacao'].forEach(id=>{document.getElementById(id).value='';});
+  document.getElementById('sin-seguradora').value=_sinFiltroSeg!=='todas'?_sinFiltroSeg:'easycover';
+  document.getElementById('sin-status').value='aberto';
+  document.getElementById('sin-data').value=_sinHoje();
+  document.getElementById('sin-btn-apagar').style.display='none';
+  _sinRenderHistorico();
+  document.getElementById('modal-sinistro').classList.add('open');
+}
+function abrirEditarSinistro(id){
+  const s=sinistros.find(x=>x.id===id); if(!s) return;
+  _sinEditId=id; _sinHistoricoTmp=(s.historico||[]).slice();
+  _sinPreencherSelects();
+  document.getElementById('modal-sinistro-titulo').textContent='Sinistro — '+(s.imovel||'');
+  document.getElementById('sin-seguradora').value=s.seguradora||'outro';
+  document.getElementById('sin-status').value=s.status||'aberto';
+  document.getElementById('sin-protocolo').value=s.protocolo||'';
+  document.getElementById('sin-reserva').value=s.reserva||'';
+  document.getElementById('sin-imovel').value=s.imovel||'';
+  document.getElementById('sin-descricao').value=s.descricao||'';
+  document.getElementById('sin-data').value=s.dataAbertura||'';
+  document.getElementById('sin-prazo').value=s.prazo||'';
+  document.getElementById('sin-valor').value=s.valorEstimado||'';
+  document.getElementById('sin-recebido').value=s.valorRecebido||'';
+  document.getElementById('sin-proximos').value=s.proximosPassos||'';
+  document.getElementById('sin-nova-atualizacao').value='';
+  document.getElementById('sin-btn-apagar').style.display='';
+  _sinRenderHistorico();
+  document.getElementById('modal-sinistro').classList.add('open');
+}
+function adicionarAtualizacaoSinistro(){
+  const inp=document.getElementById('sin-nova-atualizacao'), t=inp.value.trim();
+  if(!t) return;
+  _sinHistoricoTmp.push({id:Date.now(),data:new Date().toISOString(),texto:t,autor:_manutCriadoPorAtual()});
+  inp.value='';
+  _sinRenderHistorico();
+}
+function salvarSinistro(){
+  const imovel=document.getElementById('sin-imovel').value.trim();
+  const descricao=document.getElementById('sin-descricao').value.trim();
+  if(!imovel&&!descricao){ showToast('Informe o imóvel ou a descrição.','peach'); return; }
+  if(document.getElementById('sin-nova-atualizacao').value.trim()) adicionarAtualizacaoSinistro();
+  const existente=_sinEditId?sinistros.find(x=>x.id===_sinEditId):null;
+  const obj=Object.assign({},existente||{},{
+    id:_sinEditId||Date.now(),
+    seguradora:document.getElementById('sin-seguradora').value,
+    status:document.getElementById('sin-status').value,
+    protocolo:document.getElementById('sin-protocolo').value.trim(),
+    reserva:document.getElementById('sin-reserva').value.trim(),
+    imovel, descricao,
+    dataAbertura:document.getElementById('sin-data').value,
+    prazo:document.getElementById('sin-prazo').value,
+    valorEstimado:parseFloat(document.getElementById('sin-valor').value)||0,
+    valorRecebido:parseFloat(document.getElementById('sin-recebido').value)||0,
+    proximosPassos:document.getElementById('sin-proximos').value.trim(),
+    historico:_sinHistoricoTmp.slice(),
+  });
+  if(!existente){ obj.dataCriacao=new Date().toISOString(); obj.criadoPor=_manutCriadoPorAtual(); }
+  if(existente){ const i=sinistros.findIndex(x=>x.id===_sinEditId); sinistros[i]=obj; }
+  else sinistros.unshift(obj);
+  closeModal('modal-sinistro');
+  if(typeof saveAll==='function') saveAll();
+  renderSinistros();
+  showToast('Sinistro salvo!','sage');
+}
+function deletarSinistro(){
+  if(!_sinEditId || !confirm('Apagar este sinistro?')) return;
+  sinistros=sinistros.filter(x=>x.id!==_sinEditId);
+  closeModal('modal-sinistro');
+  if(typeof saveAll==='function') saveAll();
+  renderSinistros();
+  showToast('Sinistro removido.','peach');
 }
 
 // ═══════════════════ SERVIÇOS DA EQUIPE ═══════════════════
@@ -4441,52 +4733,112 @@ function irParaPendentes(){
 // uma pessoa) sem recalcular de onde veio (prévia do fechamento ou lote pago).
 let _relCtx=null; // {grupos, tipo:'previa'|'pago', periodo, pagoEm, obs}
 let _relModo='geral'; // 'geral' | 'separado' | membroId
-function _relCabecalho(titulo,linhas){
-  return '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;border-bottom:1px solid var(--border2);padding-bottom:10px;">'+
-    '<div>'+titulo+linhas.map(l=>'<div style="color:var(--text2);font-size:12.5px;">'+l+'</div>').join('')+'</div>'+
-    '<div style="text-align:right;font-size:11.5px;color:var(--text3);">WeCare Hosting<br>gerado em '+_seDf(_seHoje())+'</div></div>';
+// O relatório é um documento HTML próprio (cabeçalho com a marca, resumo,
+// tabelas), mostrado num iframe dentro do modal e impresso direto dele — o que
+// aparece na tela é exatamente o que sai no PDF.
+const _REL_CSS=`@page{size:A4;margin:14mm}
+*{box-sizing:border-box}
+html,body{margin:0;background:#fff}
+body{font-family:'Plus Jakarta Sans',sans-serif;color:#2d2926;font-size:12.5px;line-height:1.45;padding:18px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+@media print{body{padding:0}}
+.pg+.pg{break-before:page;margin-top:36px;padding-top:28px;border-top:1px dashed #d8d1c7}
+@media print{.pg+.pg{margin-top:0;padding-top:0;border-top:0}}
+.topo{display:flex;align-items:center;justify-content:space-between;gap:16px;background:#14283a;color:#fff;border-radius:12px;padding:12px 18px}
+.marca{display:flex;align-items:center;gap:12px;font-family:Fraunces,serif;font-size:15px;font-weight:600}
+.marca img{height:44px;width:44px;border-radius:8px;display:block}
+.doc{text-align:right;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#d9c08a}
+.doc small{display:block;font-size:11px;font-weight:400;letter-spacing:0;text-transform:none;color:#aeb8c2;margin-top:2px}
+h1{font-family:Fraunces,serif;font-size:26px;font-weight:700;margin:22px 0 6px;letter-spacing:-.2px}
+.sub{display:flex;align-items:center;gap:10px;flex-wrap:wrap;color:#7a716b;font-size:12.5px}
+.pill{display:inline-block;padding:3px 11px;border-radius:20px;font-weight:600;font-size:11.5px}
+.pill.prev{background:#fbf2df;color:#94701f}.pill.pago{background:#e3f1e9;color:#3b7a5b}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:18px 0 6px}
+.kpi{border:1px solid #ebe5dc;border-radius:10px;padding:10px 14px}
+.kpi .l{font-size:9.5px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:#9a918a}
+.kpi .v{font-size:19px;font-weight:700;margin-top:2px;white-space:nowrap}
+.kpi.dest{background:#14283a;border-color:#14283a;color:#fff}.kpi.dest .l{color:#d9c08a}
+h2{display:flex;justify-content:space-between;align-items:baseline;font-family:Fraunces,serif;font-size:16px;margin:26px 0 4px}
+h2 span{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px}
+.sec{break-inside:avoid}
+table{width:100%;border-collapse:collapse;margin-top:6px}
+th{font-size:9.5px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:#9a918a;text-align:left;padding:8px 10px;border-bottom:2px solid #14283a}
+td{padding:8px 10px;border-bottom:1px solid #efe9e1;vertical-align:top}
+tbody tr:nth-child(even) td{background:#faf8f4}
+tr{break-inside:avoid}
+.num{text-align:right;white-space:nowrap}
+tfoot td{font-weight:700;font-size:13.5px;border-bottom:0;border-top:2px solid #14283a;background:#fff!important}
+.tag{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;padding:1px 7px;border-radius:20px;background:#efecf7;color:#7d72ad;border:1px solid #dcd7ee;vertical-align:middle;margin-left:4px}
+.obs{font-size:11px;color:#9a918a;margin-top:1px}
+.muted{color:#9a918a}
+.pagto{margin-top:18px;border:1px solid #ead9b0;background:#fdf9f0;border-radius:10px;padding:12px 16px;break-inside:avoid}
+.pagto .t{font-size:9.5px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:#94701f;margin-bottom:4px}
+.ass{display:flex;gap:32px;margin-top:56px;break-inside:avoid}
+.ass div{flex:1;border-top:1px solid #9a918a;padding-top:5px;font-size:11px;color:#7a716b}
+.ass div.d{flex:0 0 150px}
+.rod{margin-top:26px;font-size:10px;color:#b3aaa1;text-align:center}
+.vazio{padding:40px;text-align:center;color:#9a918a}`;
+function _relDocumento(corpo){
+  return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">'+
+    '<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">'+
+    '<style>'+_REL_CSS+'</style></head><body>'+corpo+'</body></html>';
 }
-function _relTabela(g){
-  return '<table class="data-table" style="margin-top:12px;"><thead><tr><th>Data</th><th>Serviço</th><th>Imóvel</th><th style="text-align:right;">Qtd</th><th style="text-align:right;">Valor</th></tr></thead><tbody>'+
-    g.itens.map(s=>'<tr><td style="white-space:nowrap;">'+_seDf(s.data)+'</td><td>'+_seEsc(seNomeServico(s))+(s.onboarding?' <span class="se-tag-onb">Onboarding</span>':'')+(s.obs?'<div style="font-size:11px;color:var(--text3);">'+_seEsc(s.obs)+'</div>':'')+'</td><td>'+_seEsc(s.imovelNome||'—')+'</td><td style="text-align:right;">'+(s.qtd||1)+'</td><td style="text-align:right;white-space:nowrap;">'+_seBrl(seValorItem(s))+'</td></tr>').join('')+
-    '</tbody></table>';
+function _relTopo(docTitulo){
+  return '<div class="topo"><div class="marca"><img src="'+location.origin+'/assets/wecare-logo.png" alt="">WeCare Hosting</div>'+
+    '<div class="doc">'+docTitulo+'<small>gerado em '+_seDf(_seHoje())+'</small></div></div>';
 }
+function _relRodape(){ return '<div class="rod">WeCare Hosting · documento gerado pela Claire</div>'; }
 // g = extrato de uma pessoa: a previsão é a dos itens dela, não a do lote todo
-function _relStatusTxt(g){
+function _relStatusPill(g){
   const c=_relCtx, prev=g?_fcPrevisao(g.itens).data:c.previsao;
-  return c.tipo==='pago'?'Pago em '+_seDf(c.pagoEm)+(c.obs?' · '+_seEsc(c.obs):''):'<b>Previsão de pagamento: '+(prev?_seDf(prev):'a definir')+'</b>';
+  return c.tipo==='pago'
+    ? '<span class="pill pago">Pago em '+_seDf(c.pagoEm)+'</span>'+(c.obs?' <span>'+_seEsc(c.obs)+'</span>':'')
+    : '<span class="pill prev">Previsão de pagamento: '+(prev?_seDf(prev):'a definir')+'</span>';
+}
+function _relKpis(lst){
+  return '<div class="kpis">'+lst.map(k=>'<div class="kpi'+(k[2]?' dest':'')+'"><div class="l">'+k[0]+'</div><div class="v">'+k[1]+'</div></div>').join('')+'</div>';
+}
+function _relOnbTotal(itens){ return itens.filter(s=>s.onboarding).reduce((t,s)=>t+seValorItem(s),0); }
+function _relTabela(g){
+  return '<table><thead><tr><th style="width:84px;">Data</th><th>Serviço</th><th>Imóvel</th><th class="num">Qtd</th><th class="num">Valor unit.</th><th class="num">Total</th></tr></thead><tbody>'+
+    g.itens.map(s=>'<tr><td style="white-space:nowrap;">'+_seDf(s.data)+'</td>'+
+      '<td>'+_seEsc(seNomeServico(s))+(s.onboarding?'<span class="tag">Onboarding</span>':'')+(s.obs?'<div class="obs">'+_seEsc(s.obs)+'</div>':'')+'</td>'+
+      '<td>'+(s.imovelNome?_seEsc(s.imovelNome):'<span class="muted">—</span>')+'</td>'+
+      '<td class="num">'+(s.qtd||1)+'</td><td class="num">'+_seBrl(s.valorUnit)+'</td><td class="num">'+_seBrl(seValorItem(s))+'</td></tr>').join('')+
+    '</tbody><tfoot><tr><td colspan="5">Total</td><td class="num">'+_seBrl(g.total)+'</td></tr></tfoot></table>';
 }
 // Extrato de uma pessoa só — é o que vai pra cada um
 function _relIndividual(g){
-  const c=_relCtx;
-  return '<div class="rel-pagina">'+
-    _relCabecalho('<div style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);font-weight:600;">Extrato de serviços adicionais</div><div style="font-family:var(--font-display);font-size:22px;font-weight:700;margin:2px 0 4px;">'+_seEsc(g.nome)+'</div>',
-      [_seEsc(c.periodo),_relStatusTxt(g)])+
-    _relTabela(g)+
-    '<div class="rel-total"><span>Total a receber</span><span>'+_seBrl(g.total)+'</span></div>'+
-    _relDadosPag(g.id)+
-    (c.tipo==='pago'?'<div style="margin-top:40px;display:flex;gap:30px;font-size:12px;color:var(--text2);"><div style="flex:1;border-top:1px solid var(--text3);padding-top:4px;">Assinatura de '+_seEsc(g.nome)+'</div><div style="width:140px;border-top:1px solid var(--text3);padding-top:4px;">Data</div></div>':'')+
-  '</div>';
+  const c=_relCtx, onb=_relOnbTotal(g.itens);
+  const kp=[['Total a receber',_seBrl(g.total),true],['Serviços',g.itens.length]];
+  if(onb) kp.push(['Onboarding',_seBrl(onb)]);
+  return '<div class="pg">'+_relTopo('Extrato de serviços adicionais')+
+    '<h1>'+_seEsc(g.nome)+'</h1><div class="sub"><span>'+_seEsc(c.periodo)+'</span>'+_relStatusPill(g)+'</div>'+
+    _relKpis(kp)+_relTabela(g)+_relDadosPag(g.id)+
+    (c.tipo==='pago'?'<div class="ass"><div>Assinatura de '+_seEsc(g.nome)+'</div><div class="d">Data</div></div>':'')+
+    _relRodape()+'</div>';
 }
 function _relDadosPag(id){
   const p=_sePessoa(id); if(!p) return '';
   const linhas=[];
-  if(p.documento) linhas.push(['CPF/CNPJ',p.documento]);
   if(p.pixChave) linhas.push(['PIX'+(p.pixTipo?' ('+SE_PIX_TIPOS[p.pixTipo]+')':''),p.pixChave]);
   if(p.banco||p.conta) linhas.push(['Conta',[p.banco,p.agencia?'ag. '+p.agencia:'',p.conta?'cc '+p.conta:''].filter(Boolean).join(' · ')]);
+  if(p.documento) linhas.push(['CPF/CNPJ',p.documento]);
   if(!linhas.length) return '';
-  return '<div style="margin-top:14px;background:var(--bg3);border-radius:var(--r-sm);padding:10px 13px;font-size:12.5px;">'+
-    '<div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);font-weight:600;margin-bottom:4px;">Dados para pagamento</div>'+
-    linhas.map(l=>'<div><span style="color:var(--text3);">'+_seEsc(l[0])+':</span> '+_seEsc(l[1])+'</div>').join('')+'</div>';
+  return '<div class="pagto"><div class="t">Dados para pagamento</div>'+
+    linhas.map(l=>'<div><span class="muted">'+_seEsc(l[0])+':</span> <b>'+_seEsc(l[1])+'</b></div>').join('')+'</div>';
 }
 function _relGeral(grupos){
-  const c=_relCtx, total=grupos.reduce((t,g)=>t+g.total,0);
-  return _relCabecalho('<div style="font-family:var(--font-display);font-size:19px;font-weight:700;">Serviços Adicionais — '+(c.tipo==='pago'?'pagamento':'prévia')+'</div>',[_seEsc(c.periodo),_relStatusTxt()])+
-    '<table class="data-table" style="margin-top:12px;"><thead><tr><th>Pessoa</th><th>Pagamento</th><th style="text-align:right;">Serviços</th><th style="text-align:right;">Total</th></tr></thead><tbody>'+
-    grupos.map(g=>'<tr><td style="font-weight:600;">'+_seEsc(g.nome)+'</td><td style="font-size:12px;">'+_seEsc(_sePixTxt(_sePessoa(g.id))||'—')+'</td><td style="text-align:right;">'+g.itens.length+'</td><td style="text-align:right;white-space:nowrap;">'+_seBrl(g.total)+'</td></tr>').join('')+
-    '</tbody></table>'+
-    grupos.map(g=>'<h3><span>'+_seEsc(g.nome)+'</span><span>'+_seBrl(g.total)+'</span></h3>'+_relTabela(g)).join('')+
-    '<div class="rel-total"><span>Total geral</span><span>'+_seBrl(total)+'</span></div>';
+  const c=_relCtx, todos=grupos.flatMap(g=>g.itens), total=grupos.reduce((t,g)=>t+g.total,0), onb=_relOnbTotal(todos);
+  const kp=[['Total geral',_seBrl(total),true],['Pessoas',grupos.length],['Serviços',todos.length]];
+  if(onb) kp.push(['Onboarding',_seBrl(onb)]);
+  return '<div class="pg">'+_relTopo(c.tipo==='pago'?'Pagamento de serviços adicionais':'Fechamento de serviços adicionais')+
+    '<h1>Serviços Adicionais</h1><div class="sub"><span>'+_seEsc(c.periodo)+'</span>'+_relStatusPill()+'</div>'+
+    _relKpis(kp)+
+    '<div class="sec"><h2>Resumo por pessoa</h2><table><thead><tr><th>Pessoa</th><th>Pagamento</th><th class="num">Serviços</th><th class="num">Total</th></tr></thead><tbody>'+
+    grupos.map(g=>'<tr><td><b>'+_seEsc(g.nome)+'</b></td><td>'+(_sePixTxt(_sePessoa(g.id))?_seEsc(_sePixTxt(_sePessoa(g.id))):'<span class="muted">sem dados de pagamento</span>')+'</td><td class="num">'+g.itens.length+'</td><td class="num">'+_seBrl(g.total)+'</td></tr>').join('')+
+    '</tbody><tfoot><tr><td colspan="3">Total geral</td><td class="num">'+_seBrl(total)+'</td></tr></tfoot></table></div>'+
+    grupos.map(g=>'<div class="sec"><h2>'+_seEsc(g.nome)+'<span>'+_seBrl(g.total)+'</span></h2>'+_relTabela(g)+'</div>').join('')+
+    _relRodape()+'</div>';
 }
 function _renderRelatorio(){
   const c=_relCtx; if(!c) return;
@@ -4502,8 +4854,10 @@ function _renderRelatorio(){
   let html;
   if(_relModo==='geral') html=_relGeral(grupos);
   else if(_relModo==='separado') html=grupos.map(_relIndividual).join('');
-  else { const g=grupos.find(x=>x.id===_relModo); html=g?_relIndividual(g):'<div class="se-vazio">Nada para esta pessoa.</div>'; }
-  document.getElementById('se-relatorio').innerHTML=html;
+  else { const g=grupos.find(x=>x.id===_relModo); html=g?_relIndividual(g):'<div class="vazio">Nada para esta pessoa.</div>'; }
+  const fr=document.getElementById('se-rel-frame');
+  fr.onload=()=>{ try{ const ajustar=()=>{ fr.style.height=(fr.contentDocument.body.scrollHeight+4)+'px'; }; ajustar(); setTimeout(ajustar,400); }catch(e){} };
+  fr.srcdoc=_relDocumento(html);
   document.getElementById('se-rel-copiar').style.display=_relModo==='separado'?'none':'';
   // WhatsApp direto pra pessoa: só no extrato individual, pela admin, com telefone cadastrado
   const p=_sePessoa(_relModo);
@@ -4552,11 +4906,9 @@ function _relTexto(){
     (_sePixTxt(_sePessoa(g.id))?'\n'+(c.tipo==='pago'?'Enviado para ':'Vai para ')+_sePixTxt(_sePessoa(g.id)):'');
 }
 function _seImprimirRelatorio(){
-  document.body.classList.add('se-imprimindo');
-  const tirar=()=>{ document.body.classList.remove('se-imprimindo'); window.removeEventListener('afterprint',tirar); };
-  window.addEventListener('afterprint',tirar);
-  window.print();
-  setTimeout(tirar,1500);
+  const fr=document.getElementById('se-rel-frame');
+  if(!fr||!fr.contentWindow) return;
+  fr.contentWindow.focus(); fr.contentWindow.print();
 }
 function copiarResumoRelatorio(){
   const t=_relTexto();
@@ -4762,6 +5114,8 @@ const _PERSIST_KEYS = {
   nx_notasfiscais:()=>notasFiscais,
   nx_limpeza:()=>limpezaItens,
   nx_caucao:()=>caucaoItens,
+  nx_sinistros:()=>sinistros,
+  nx_lc_imoveis:()=>lcImoveisLimpeza,
   nx_despesas:()=>despesasFixas,
   nx_anotacoes_controle:()=>anotacoesControle,
   nx_pagamentos_fin:()=>pagamentosFinanceiro,
@@ -4781,7 +5135,7 @@ const _PERSIST_KEYS = {
 // Listas com id próprio que o servidor mescla registro a registro (id + _ts).
 // DEVE espelhar a MERGE_POR_ID do backend (backend/app/merge.py).
 // Mantido em sincronia com MERGE_POR_ID em backend/app/merge.py.
-const _MERGE_POR_ID_KEYS=['nx_manutencoes','nx_tasks','nx_plantao','nx_projetos','nx_compras','nx_extras','nx_limpeza','nx_caucao','nx_despesas','nx_anotacoes_controle','nx_superhost','nx_cancelamentos','nx_imoveis','nx_pagamentos_fin','nx_relatorios_fin','nx_validacoes_fin','nx_avaliacoes_negativas','nx_taskcats','nx_kpidefs','nx_transcricoes','nx_outros','nx_fornecedores_cad','nx_manual','nx_update_tombstones','nx_servicos_equipe','nx_servicos_pessoas','nx_servicos_tipos','nx_servicos_pagamentos'];
+const _MERGE_POR_ID_KEYS=['nx_manutencoes','nx_tasks','nx_plantao','nx_projetos','nx_compras','nx_extras','nx_limpeza','nx_caucao','nx_sinistros','nx_lc_imoveis','nx_despesas','nx_anotacoes_controle','nx_superhost','nx_cancelamentos','nx_imoveis','nx_pagamentos_fin','nx_relatorios_fin','nx_validacoes_fin','nx_avaliacoes_negativas','nx_taskcats','nx_kpidefs','nx_transcricoes','nx_outros','nx_fornecedores_cad','nx_manual','nx_update_tombstones','nx_servicos_equipe','nx_servicos_pessoas','nx_servicos_tipos','nx_servicos_pagamentos'];
 function _semTs(o){ const c=Object.assign({},o); delete c._ts; return JSON.stringify(c); }
 // Antes de salvar: carimba _ts nos registros novos/alterados e cria tombstone
 // para os que foram apagados. Assim o servidor sabe qual versão é a mais recente
@@ -5606,6 +5960,7 @@ function _renderTudo(){
     if(typeof renderExtras==='function') renderExtras();
     if(typeof renderManutencaoKanban==='function') renderManutencaoKanban();
     if(typeof renderLimpezaCaucao==='function') renderLimpezaCaucao();
+    if(typeof renderSinistros==='function') renderSinistros();
     if(typeof aplicarPermissoes==='function') aplicarPermissoes();
   }catch(e){ console.warn('render falhou', e); }
 }
@@ -5665,6 +6020,8 @@ function loadAll(){
     v=g('nx_notasfiscais'); if(v&&typeof v==='object') notasFiscais=v;
     v=g('nx_limpeza'); if(Array.isArray(v)) limpezaItens=v;
     v=g('nx_caucao'); if(Array.isArray(v)) caucaoItens=v;
+    v=g('nx_sinistros'); if(Array.isArray(v)) sinistros=v;
+    v=g('nx_lc_imoveis'); if(Array.isArray(v)) lcImoveisLimpeza=v;
     v=g('nx_despesas'); if(Array.isArray(v)) despesasFixas=v;
     v=g('nx_anotacoes_controle'); if(Array.isArray(v)) anotacoesControle=v;
     v=g('nx_pagamentos_fin'); if(Array.isArray(v)) pagamentosFinanceiro=v;
@@ -8082,9 +8439,14 @@ function switchManutTab(tab,btn){
   manutTabAtiva=tab;
   document.getElementById('manutencao-tab-kanban').style.display=tab==='kanban'?'':'none';
   document.getElementById('manutencao-tab-saldo').style.display=tab==='saldo'?'':'none';
+  document.getElementById('manutencao-tab-sinistros').style.display=tab==='sinistros'?'':'none';
+  // Resumo e busca do topo são da manutenção — na aba Sinistros ela tem os próprios
+  document.getElementById('manutencao-resumo').style.display=tab==='sinistros'?'none':'';
+  document.getElementById('manut-busca').parentElement.style.display=tab==='sinistros'?'none':'';
   document.querySelectorAll('#panel-manutencao .tab-btn').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
   if(tab==='saldo'){ renderManutSaldoGeral(); renderManutSaldoImoveis(); }
+  if(tab==='sinistros') renderSinistros();
 }
 // Cards de saldo individual (imóveis pontuais que não usam o saldo geral) +
 // controle simples pra ativar em um imóvel do catálogo. Ver _manutencoesComSaldoGeral()
@@ -8842,7 +9204,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 130;
+const APP_VERSION = 131;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

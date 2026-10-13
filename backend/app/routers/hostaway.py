@@ -1,8 +1,13 @@
 import httpx
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
+
+from .. import crud
+from .. import limpeza_caucao_sync as lc_sync
 
 from ..auth import auth_dependency
 from ..config import settings
+from ..db import get_db
 from ..hostaway_client import (
     HOSTAWAY_BASE,
     fetch_all_reviews,
@@ -148,3 +153,62 @@ async def debug():
                     })
             offset += 100
     return {"amostras": achados}
+
+
+# ── Automação Limpeza & Caução (ver app/limpeza_caucao_sync.py) ──
+
+@router.get("/listings")
+async def listings():
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        token = await _get_token(client)
+        lst = await lc_sync.buscar_listings(client, token)
+    lst.sort(key=lambda x: (x["nome"] or "").lower())
+    return {"listings": lst}
+
+
+@router.post("/limpeza-caucao/sync")
+async def limpeza_caucao_sync():
+    return await lc_sync.sincronizar()
+
+
+@router.get("/limpeza-caucao/status")
+def limpeza_caucao_status(db: Session = Depends(get_db)):
+    state = crud.get_state(db) or {}
+    return state.get("nx_lc_status") or {}
+
+
+# Diagnóstico pra conferir onde o Hostaway manda o valor da caução: só campos
+# financeiros/estruturais das reservas (sem nome, telefone ou e-mail de hóspede).
+@router.get("/limpeza-caucao/debug")
+async def limpeza_caucao_debug(from_: str | None = Query(None, alias="from"), to: str | None = None):
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        token = await _get_token(client)
+        params = {"limit": "20", "includeResources": "1"}
+        if from_:
+            params["departureStartDate"] = from_
+        if to:
+            params["departureEndDate"] = to
+        r = await client.get(
+            f"{HOSTAWAY_BASE}/reservations",
+            params=params,
+            headers={"Authorization": f"Bearer {token}", "Cache-control": "no-cache"},
+        )
+        data = r.json()
+    out = []
+    for rv in data.get("result") or []:
+        fin = [
+            {k: f.get(k) for k in ("name", "alias", "title", "type", "feeType", "value", "amount", "total", "isDeleted") if k in f}
+            for f in (rv.get("financeField") or []) + (rv.get("reservationFees") or []) if isinstance(f, dict)
+        ]
+        out.append({
+            "id": rv.get("id"),
+            "listingMapId": rv.get("listingMapId"),
+            "listingName": rv.get("listingName"),
+            "status": rv.get("status"),
+            "canal": rv.get("channelName") or rv.get("channelId"),
+            "departureDate": rv.get("departureDate"),
+            "camposDeposito": {k: v for k, v in rv.items() if "deposit" in k.lower()},
+            "financeiro": fin,
+            "valorCaucaoDetectado": lc_sync.valor_caucao(rv),
+        })
+    return {"reservas": out}

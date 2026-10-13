@@ -1,8 +1,11 @@
+import asyncio
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from .limpeza_caucao_sync import loop_automatico
 from .routers import hostaway, jarvis, records, root
 
 app = FastAPI(title="claire-dados")
@@ -42,3 +45,15 @@ app.include_router(root.router)
 # mesmo processo, sob /hostaway (evita colidir com o /health do claire-dados,
 # que exige token; o hostaway original não tem autenticação nenhuma).
 app.include_router(hostaway.router, prefix="/hostaway")
+
+
+# Automação Limpeza & Caução: puxa reservas do Hostaway a cada 30 min e cria
+# os cards sozinha (ver app/limpeza_caucao_sync.py).
+_tarefas_fundo = set()
+
+
+@app.on_event("startup")
+async def _iniciar_automacoes():
+    t = asyncio.create_task(loop_automatico())
+    _tarefas_fundo.add(t)
+    t.add_done_callback(_tarefas_fundo.discard)

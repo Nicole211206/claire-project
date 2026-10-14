@@ -281,6 +281,11 @@ async def sincronizar() -> dict:
         resumo["ultimoSync"] = iso_now()
         resumo["ok"] = True
         novo["nx_lc_status"] = resumo
+        # Os aparelhos só puxam do servidor quando nx_lastSaved muda (kvPull no
+        # app.js); sem isso os cards criados aqui só apareceriam depois que
+        # alguém salvasse outra coisa. Mesmo formato do /save (string).
+        if resumo["limpezaCriados"] or resumo["limpezaAtualizados"] or resumo["caucaoCriados"]:
+            novo["nx_lastSaved"] = str(now_ms())
         crud.put_state(db, novo)
     finally:
         db.close()

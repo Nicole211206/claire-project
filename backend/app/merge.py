@@ -171,6 +171,25 @@ def do_merge(db: Session, prev: dict, parsed_in: dict) -> dict:
         merged[k] = _merge_profundo(P, N)
 
     # ── tombstones: exclusões explícitas { id, ts } ──
+    # União por id entre o que o servidor já tinha e o que chegou, ficando com
+    # o MAIOR ts. Antes valia só a lista do último cliente a salvar (spread):
+    # um aparelho desatualizado com lista curta apagava tombstones do servidor,
+    # e itens apagados ressuscitavam quando outro aparelho os reenviava.
+    uniao: dict = {}
+    for origem in (prev_f.get("nx_tombstones"), parsed.get("nx_tombstones")):
+        if not isinstance(origem, list):
+            continue
+        for t in origem:
+            if isinstance(t, dict) and t.get("id") is not None and not isinstance(t.get("id"), (list, dict)):
+                atual = uniao.get(t["id"])
+                if atual is None or to_number(t.get("ts") or 0) > to_number(atual.get("ts") or 0):
+                    uniao[t["id"]] = t
+    if uniao:
+        lista = list(uniao.values())
+        if len(lista) > 500:  # mesma poda do cliente (>120 dias)
+            corte = now_ms() - 120 * 86400 * 1000
+            lista = [t for t in lista if to_number(t.get("ts") or 0) >= corte]
+        merged["nx_tombstones"] = lista
     tombs = merged.get("nx_tombstones") if isinstance(merged.get("nx_tombstones"), list) else []
     tomb_map: dict = {}
     for t in tombs:

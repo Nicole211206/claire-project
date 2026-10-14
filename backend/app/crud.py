@@ -60,7 +60,8 @@ def create_backup(db: Session, hour_key: str, data: dict, ttl_seconds: int):
 
 
 def list_backups(db: Session):
-    return db.query(Backup).order_by(Backup.hour_key.desc()).all()
+    # só a chave: a coluna `data` (JSON completo de cada snapshot) não é usada aqui
+    return db.query(Backup.hour_key).order_by(Backup.hour_key.desc()).all()
 
 
 # ─── anexos (bytes em disco; só o metadado mora no banco) ───

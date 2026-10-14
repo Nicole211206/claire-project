@@ -1,5 +1,6 @@
 import base64
 import json
+import logging
 import re
 from pathlib import Path
 from urllib.parse import quote
@@ -16,6 +17,7 @@ from ..merge import do_merge
 from ..utils import hour_key_now, now_ms, rand_suffix
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 BACKUP_TTL_SECONDS = 8 * 24 * 3600  # 8 dias, igual ao worker original
 DATA_URL_RE = re.compile(r"^data:([^;]+);base64,(.+)$", re.DOTALL)
@@ -73,22 +75,31 @@ async def save(request: Request, db: Session = Depends(get_db), token: str = Dep
         # valida que é JSON antes de gravar (JSON.parse jogando erro -> 500, igual ao original)
         return JSONResponse({"error": str(e)}, status_code=500)
 
-    # ── TRAVA ANTI-PERDA (lado do servidor) — falha-segura: qualquer erro
-    # aqui cai no salvamento normal do body (sem merge). ──
+    # O documento é sempre um objeto com chaves nx_*: qualquer outra coisa
+    # ([], null, número...) sobrescreveria o estado inteiro e é recusada.
+    if not isinstance(parsed, dict) or not any(str(k).startswith("nx_") for k in parsed):
+        return JSONResponse({"error": "corpo invalido: esperado objeto com chaves nx_*"}, status_code=400)
+
+    # ── TRAVA ANTI-PERDA (lado do servidor) — FALHA FECHADA: se o merge der
+    # erro, NÃO grava o corpo cru por cima do estado (antes caía em
+    # final_state = parsed e um corpo malformado apagava tudo). O aparelho
+    # mantém a edição pendente e tenta de novo no próximo ciclo. ──
+    prev = crud.get_state(db)
     final_state = parsed
-    try:
-        prev = crud.get_state(db)
-        if prev is not None:
+    if prev is not None:
+        try:
             final_state = do_merge(db, prev, parsed)
-    except Exception:
-        final_state = parsed
+        except Exception:
+            logger.exception("save: do_merge falhou — nada foi gravado")
+            return JSONResponse({"error": "falha ao mesclar; nada foi gravado"}, status_code=500)
 
-    crud.put_state(db, final_state)
-
-    # Snapshot de hora em hora: só grava se ainda não existe o snapshot da hora atual.
+    # Snapshot de hora em hora, do estado ANTERIOR ao save (assim um save
+    # destrutivo ainda pode ser desfeito pelo backup da hora).
     hora_atual = hour_key_now()
     if crud.get_backup(db, hora_atual) is None:
-        crud.create_backup(db, hora_atual, final_state, BACKUP_TTL_SECONDS)
+        crud.create_backup(db, hora_atual, prev if prev is not None else final_state, BACKUP_TTL_SECONDS)
+
+    crud.put_state(db, final_state)
 
     return {"ok": True}
 

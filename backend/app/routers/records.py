@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Body, Depends
+from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
@@ -7,11 +7,19 @@ from ..auth import auth_dependency
 from ..db import get_db
 from ..utils import json_merge_patch, now_ms, to_number
 
+def _nao_state(collection: str):
+    # O documento único da Claire vive em collection="state": mexer nele por
+    # aqui contornaria todo o merge/trava do /save.
+    if collection == "state":
+        raise HTTPException(status_code=403, detail={"error": "colecao reservada"})
+
+
 router = APIRouter(dependencies=[Depends(auth_dependency)])
 
 
 @router.get("/{collection}")
 def list_items(collection: str, db: Session = Depends(get_db)):
+    _nao_state(collection)
     rows = crud.list_records(db, collection)
     items = [{**r.data, "id": r.id, "_ts": r.updated_at} for r in rows]
     return {"items": items}
@@ -19,6 +27,7 @@ def list_items(collection: str, db: Session = Depends(get_db)):
 
 @router.get("/{collection}/{id}")
 def get_item(collection: str, id: str, db: Session = Depends(get_db)):
+    _nao_state(collection)
     row = crud.get_record(db, collection, id)
     if row is None:
         return JSONResponse({"error": "nao encontrado"}, status_code=404)
@@ -27,6 +36,7 @@ def get_item(collection: str, id: str, db: Session = Depends(get_db)):
 
 @router.post("/{collection}", status_code=201)
 def create_item(collection: str, body: dict = Body(...), db: Session = Depends(get_db)):
+    _nao_state(collection)
     new_id = str(body["id"]) if body.get("id") is not None else str(now_ms())
     # Number(body._ts) || Date.now() -- 0/ausente/"não numérico" cai pro "agora".
     computed_ts = to_number(body.get("_ts"))
@@ -37,6 +47,7 @@ def create_item(collection: str, body: dict = Body(...), db: Session = Depends(g
 
 @router.patch("/{collection}/{id}")
 def patch_item(collection: str, id: str, patch: dict = Body(...), db: Session = Depends(get_db)):
+    _nao_state(collection)
     existing = crud.get_record_raw(db, collection, id)
     if existing is None:
         return JSONResponse({"error": "nao encontrado"}, status_code=404)
@@ -48,5 +59,6 @@ def patch_item(collection: str, id: str, patch: dict = Body(...), db: Session = 
 
 @router.delete("/{collection}/{id}")
 def delete_item(collection: str, id: str, db: Session = Depends(get_db)):
+    _nao_state(collection)
     crud.soft_delete_record(db, collection, id, now_ms())
     return {"ok": True}

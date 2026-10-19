@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .limpeza_caucao_sync import loop_automatico
-from .routers import hostaway, jarvis, records, root
+from .routers import agente, hostaway, jarvis, records, root
 
 app = FastAPI(title="claire-dados")
 
@@ -37,6 +37,8 @@ async def unhandled_exception_handler(request, exc: Exception):
 
 # API v2 checada antes da API Jarvis, igual ao worker original (não colidem
 # mesmo assim, mas mantém a mesma ordem de registro por fidelidade).
+# Agente de manutenções: token próprio, só leitura das listas dele + acrescentar linhas.
+app.include_router(agente.router, prefix="/api/agente")
 app.include_router(records.router, prefix="/api/v2")
 app.include_router(jarvis.router, prefix="/api")
 app.include_router(root.router)

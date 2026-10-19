@@ -4165,25 +4165,10 @@ function _sinBrl(v){ return 'R$ '+(parseFloat(v)||0).toLocaleString('pt-BR',{min
 function _sinDf(d){ return d?d.split('-').reverse().join('/'):'—'; }
 function _sinHoje(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 
-// Casos que já estavam na planilha em 13/10/2026. Ids fixos + _ts antigo: todo
-// aparelho semeia os MESMOS registros (o merge por id não duplica) e qualquer
-// edição feita depois sempre vence a semente.
-const _SIN_SEED=[
-  ['easycover','NS03102026182150','3128','Apartamento 1104','Danos enxoval','2026-10-03','em_analise',125,'Enviei os documentos solicitados (11/10/2026).',''],
-  ['easycover','NS27092026112248','3110','Afonso 1908','Danos mesa e janela','2026-09-27','em_analise',0,'Pedi mais prazo, será necessário contratar uma empresa para emitir um laudo — estou procurando uma empresa para isso.',''],
-  ['easycover','NS28082026072158','3034','Carinas 715','Fechadura','2026-08-28','em_analise',0,'O seguro negou inicialmente, pedi para reabrir e estão solicitando um laudo de que foi dano do hóspede. Não temos o laudo e o técnico que foi até o apto informou que foi instalação mal feita. A WeCare arcou com os custos — verificar com a Nicole se vamos dar continuidade ou encerrar com o seguro.',''],
-  ['easycover','NS27092026163520','3034','Alves 502','Multas e danos área comum','2026-09-27','negado',0,'Seguro não cobre áreas comuns.',''],
-  ['easycover','NS05092026152650','3048','Simpatia 501','Controle remoto','2026-09-05','negado',49.90,'Item recusado pelo valor. O mínimo para cobertura é um valor que cubra os 10% mínimos da franquia.',''],
-  ['aircover','CLSF-06542058','HMEHWTMBEY','Osório 109','Jogo de jantar e fogão quebrados','2026-09-27','encerrado',1899.00,'Tivemos um retorno de que não respondemos aos e-mails e solicitações; verifiquei e não recebemos nada. Podem ter mandado pelas mensagens do Airbnb e passou pelos turnos sem resposta. Pedi a reabertura do caso.',''],
-  ['aircover','CLSF-06566238','HMSXWKBWPM','Rebouças 1716','Registro do chuveiro, sofá manchado, danos no fogão, enxoval e outras questões','2026-09-27','em_analise',1931.68,'O hóspede pagou R$ 965 e o valor dos danos é de R$ 1.931,68. Acionei o Airbnb para completar o valor; pediram o laudo do Dé, já fiz e ele vai assinar na terça-feira.',''],
-  ['aircover','','HM8AWMM9XH','Alves 1104','Enxoval manchado','2026-10-01','negado',1463.52,'Airbnb recusou: enxoval não está coberto e não respondemos no prazo. Fiz a escalação do caso — acompanhar.',''],
-  ['aircover','','HMEHWTMBEY','Ária Higienópolis 905','Enxoval manchado, controle quebrado','2026-09-27','em_analise',1892.54,'Retirei o valor da bancada, pois a Dina conseguiu limpar. Respondi o e-mail — acompanhar.',''],
-  ['crawford','8267522','67009907','Simpatia 501','Enxoval queimado','2026-10-11','em_analise',293.60,'',''],
-  ['crawford','8203595 / BR26009872','','Rafael de Barros 131','Tentativa de furto — danos na porta do apto 83','2026-08-30','em_analise',650,'',''],
-  ['crawford','BR26009873','','Simpatia 501','Controle remoto','','aberto',0,'',''],
-  ['crawford','8216494 / BR26010773','5712014295','Alves 502','Danos e multas área comum','2026-09-24','em_analise',0,'',''],
-  ['crawford','8263104 / BR26011740','HLISF-06563242 / HMR3ZRHD24','Rebouças','Furto no apto 11','2026-10-07','em_analise',0,'A proprietária do outro apto já enviou algumas informações, mas ainda faltam dados. Não deixar de responder os e-mails e ficar atento ao prazo.','2026-11-02']
-];
+// A semente com os casos da planilha (13/10/2026) saiu do código: tinha dado real
+// de sinistro (protocolos, reservas). Os casos já estão no banco; a semente vazia
+// mantém _sinSemear() inofensiva.
+const _SIN_SEED=[];
 function _sinSemear(){
   if(sinistros.length) return;
   const tomb=new Set((tombstones||[]).map(t=>t.id));

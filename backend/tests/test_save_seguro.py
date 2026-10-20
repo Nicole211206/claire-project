@@ -4,12 +4,19 @@ import os
 import tempfile
 
 _tmp = tempfile.mkdtemp()
-os.environ["DATABASE_URL"] = f"sqlite:///{_tmp}/t.db"
-os.environ["UPLOADS_DIR"] = f"{_tmp}/up"
-os.environ["CLAIRE_TOKEN"] = "t"
+# setdefault: se outro arquivo de teste (ex.: test_agente.py) já configurou o
+# ambiente antes do import do app, usamos o dele em vez de brigar por ele.
+os.environ.setdefault("DATABASE_URL", f"sqlite:///{_tmp}/t.db")
+os.environ.setdefault("UPLOADS_DIR", f"{_tmp}/up")
+os.environ.setdefault("CLAIRE_TOKEN", "t")
 os.environ["HOSTAWAY_ACCOUNT_ID"] = ""   # desliga a automação em background
 
-import pytest
+import unittest
+
+try:
+    import pytest
+except ImportError:  # `python -m unittest discover` não tem pytest: pula este arquivo
+    raise unittest.SkipTest("pytest nao instalado")
 from fastapi.testclient import TestClient
 
 from app.db import Base, engine
@@ -17,7 +24,9 @@ from app.main import app
 from app import crud
 from app.db import SessionLocal
 
-H = {"X-Token": "t"}
+from app.config import settings  # noqa: E402
+
+H = {"X-Token": settings.claire_token}
 
 
 @pytest.fixture()

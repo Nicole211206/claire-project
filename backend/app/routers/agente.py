@@ -29,6 +29,11 @@ MAX_TEXTO = 4000
 LISTAS_LEITURA = ("nx_manutencoes", "nx_sinistros", "nx_plantao", "nx_catalog")
 
 # Uma escrita do agente por vez (ler → acrescentar → gravar).
+# As rotas de escrita são `async def` DE PROPÓSITO e sem `await` lá dentro: assim
+# rodam no mesmo event loop do /save e da sincronização do Hostaway (que também
+# leem e gravam o documento sem ceder o loop) e nunca se intercalam com eles.
+# Em `def` normal elas iriam para outra thread e uma escrita do agente poderia
+# regravar o documento antigo por cima de um /save que acabou de entrar.
 _trava = threading.Lock()
 
 
@@ -101,17 +106,17 @@ def estado(db: Session = Depends(get_db)):
 
 
 @router.post("/manutencoes/{id}/updates")
-def manutencao_update(id: str, body: dict = Body(...), db: Session = Depends(get_db)):
+async def manutencao_update(id: str, body: dict = Body(...), db: Session = Depends(get_db)):
     return _acrescentar(db, "nx_manutencoes", id, "updates", _texto(body), _chave(body))
 
 
 @router.post("/sinistros/{id}/historico")
-def sinistro_historico(id: str, body: dict = Body(...), db: Session = Depends(get_db)):
+async def sinistro_historico(id: str, body: dict = Body(...), db: Session = Depends(get_db)):
     return _acrescentar(db, "nx_sinistros", id, "historico", _texto(body), _chave(body))
 
 
 @router.post("/plantao")
-def plantao(body: dict = Body(...), db: Session = Depends(get_db)):
+async def plantao(body: dict = Body(...), db: Session = Depends(get_db)):
     chave = _chave(body)
     situacao = str(body.get("situacao") or "").strip()[:200]
     detalhes = str(body.get("detalhes") or "").strip()[:MAX_TEXTO]

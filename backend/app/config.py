@@ -3,6 +3,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     claire_token: str = ""
+    # Token só do agente de manutenções (rotas /api/agente/*). Vazio = rotas desligadas.
+    claire_agente_token: str = ""
     database_url: str = "sqlite:///./claire.db"
     uploads_dir: str = "./uploads"
     port: int = 18792

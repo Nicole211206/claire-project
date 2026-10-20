@@ -110,6 +110,64 @@ class RotasAgente(unittest.TestCase):
         textos = [u["texto"] for u in self.estado()["nx_manutencoes"][0]["updates"]]
         self.assertIn("linha do agente", textos)
 
+    # ── agente como atendente ──
+    def card(self, id_):
+        return next(c for c in self.estado()["nx_manutencoes"] if c["id"] == id_)
+
+    def test_abrir_card_so_com_wc_do_catalogo_e_sem_duplicar(self):
+        corpo = {"chave": "novo1", "wc": "WC-90001", "origem": "hospede", "tipo": "dano",
+                 "descricao": "Ar não gela", "fonte": "e-mail Airbnb 20/10", "itens": ["ar-condicionado"]}
+        r = self.c.post("/api/agente/manutencoes", headers=AG, json=corpo).json()
+        self.assertFalse(r["duplicado"])
+        novo = self.card(r["id"])
+        self.assertEqual(novo["status"], "solicitacao")
+        self.assertEqual(novo["imovelNome"], "WC-90001 - Exemplo 101")
+        self.assertTrue(novo["criadoPeloAgente"])
+        self.assertEqual(novo["quemPaga"], "")  # quem paga nunca é decidido pelo agente
+        self.assertEqual(self.c.post("/api/agente/manutencoes", headers=AG, json=corpo).json()["duplicado"], True)
+        self.assertEqual(len(self.estado()["nx_manutencoes"]), 2)
+        ruim = dict(corpo, chave="novo2", wc="WC-99999")
+        self.assertEqual(self.c.post("/api/agente/manutencoes", headers=AG, json=ruim).status_code, 422)
+
+    def test_preenche_so_campo_vazio(self):
+        r = self.c.post("/api/agente/manutencoes/111/campos", headers=AG, json={
+            "chave": "c1", "campos": {"dataPrazo": "2026-10-25", "tipo": "desgaste", "hospede": {"checkout": "2026-10-11"}},
+            "motivo": "check-out do Hostaway"}).json()
+        self.assertEqual(sorted(r["preenchidos"]), ["dataPrazo", "hospede.checkout", "tipo"])
+        card = self.card(111)
+        self.assertEqual(card["dataPrazo"], "2026-10-25")
+        self.assertEqual(card["updates"][-1]["autor"], "Agente")
+        # campo já preenchido (pela equipe ou antes) nunca é trocado
+        r2 = self.c.post("/api/agente/manutencoes/111/campos", headers=AG, json={
+            "chave": "c2", "campos": {"dataPrazo": "2026-12-31", "tipo": "dano"}}).json()
+        self.assertEqual(r2["preenchidos"], [])
+        self.assertEqual(sorted(r2["ignorados"]), ["dataPrazo", "tipo"])
+        self.assertEqual((self.card(111)["dataPrazo"], self.card(111)["tipo"]), ("2026-10-25", "desgaste"))
+
+    def test_campos_do_agente_e_marca_da_atendente_preservada(self):
+        rasc = [{"id": "aviso_inicial_dano", "titulo": "Aviso 4.1", "para": "hóspede", "texto": "v1"}]
+        self.c.post("/api/agente/manutencoes/111/agente", headers=AG, json={
+            "alerta": {"texto": "Airbnb D+8", "nivel": "amarelo", "prazo": "2026-10-25"},
+            "sugestao": {"quemPaga": "proprietario", "motivo": "desgaste"}, "rascunhos": rasc})
+        card = self.card(111)
+        self.assertEqual(card["alertaAgente"]["texto"], "Airbnb D+8")
+        self.assertEqual(card["sugestaoAgente"]["quemPaga"], "proprietario")
+        self.assertEqual(card["quemPaga"], "hospede")  # sugestão não troca o campo
+        # a atendente marca "enviado" pela tela (via /save) ...
+        estado = self.estado()
+        estado["nx_manutencoes"][0]["rascunhosAgente"][0]["status"] = "enviado_sem_edicao"
+        estado["nx_manutencoes"][0]["_ts"] = estado["nx_manutencoes"][0]["_ts"] + 1
+        self.c.post("/save", headers={"X-Token": "token-da-tela"}, content=json.dumps(estado))
+        # ... e o agente manda o mesmo rascunho de novo: a marca dela fica
+        self.c.post("/api/agente/manutencoes/111/agente", headers=AG, json={"rascunhos": [dict(rasc[0], texto="v2")]})
+        r0 = self.card(111)["rascunhosAgente"][0]
+        self.assertEqual((r0["status"], r0["texto"]), ("enviado_sem_edicao", "v1"))
+
+    def test_campos_do_agente_sem_mudanca_nao_regrava(self):
+        corpo = {"alerta": {"texto": "x", "nivel": "ok"}}
+        self.assertTrue(self.c.post("/api/agente/manutencoes/111/agente", headers=AG, json=corpo).json()["mudou"])
+        self.assertFalse(self.c.post("/api/agente/manutencoes/111/agente", headers=AG, json=corpo).json()["mudou"])
+
 
 if __name__ == "__main__":
     unittest.main()

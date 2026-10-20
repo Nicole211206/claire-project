@@ -340,3 +340,36 @@ copiar no meio de uma escrita.
 > **Atenção:** resincronizar **sobrescreve qualquer dado criado/editado em staging** desde a
 > última cópia — se estiver no meio de um teste que depende de dados que só existem em staging,
 > resincronize depois de terminar, não antes.
+
+---
+
+## 12. Backup fora da VPS (Google Drive via rclone)
+
+Até aqui o único backup era interno (snapshots por hora dentro do próprio `claire.db`): se o disco
+da VPS morresse, dados e backups iam juntos. O `deploy/backup-offsite.sh` envia, todo dia, uma
+cópia consistente do banco (`VACUUM INTO` + `integrity_check` + gzip, retenção de 14 dias) e os
+anexos (incremental, sem apagar) para `gdrive-wecare:claire-backups/`. **Não inclui o `.env`**
+(segredos) — guarde-o à parte.
+
+**Configuração (uma vez):**
+
+1. Na máquina com navegador (ex.: seu PC): `rclone authorize "drive" --drive-scope drive.file`
+   (o escopo `drive.file` só enxerga arquivos criados pelo próprio rclone, não o Drive todo).
+   Entre com a conta Google da WeCare e copie o JSON do token que o comando imprime.
+2. Na VPS (como `jarvis`):
+   ```bash
+   rclone config create gdrive-wecare drive scope drive.file config_is_local false token '<JSON>'
+   rclone lsd gdrive-wecare:      # deve listar sem erro
+   ```
+3. Rode uma vez à mão e teste a restauração:
+   ```bash
+   /home/jarvis/apps/claire-project/deploy/backup-offsite.sh
+   /home/jarvis/apps/claire-project/deploy/restore-test-offsite.sh
+   ```
+4. Cron do `jarvis` (`crontab -e`):
+   ```cron
+   30 3 * * * /home/jarvis/apps/claire-project/deploy/backup-offsite.sh >> /home/jarvis/apps/claire-project/deploy/backup-offsite.log 2>&1
+   ```
+
+**Acompanhar:** `cat /home/jarvis/claire-backup-offsite.status` (uma linha: `OK ...` ou `FALHOU ...`).
+Repita o `restore-test-offsite.sh` de vez em quando: backup que nunca foi restaurado não é backup.

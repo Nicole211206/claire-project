@@ -5714,7 +5714,7 @@ function _mergeManutencoes(base, local, server){
       if(porTs){ out.push(porTs); continue; }
       const merged={...l};
       Object.keys(s).forEach(k=>{
-        if(_MANUT_ARRAY_FIELDS.includes(k)||k==='updates'||k==='lembretes') return; // tratados abaixo
+        if(_MANUT_ARRAY_FIELDS.includes(k)||k==='updates'||k==='lembretes'||k==='rascunhosAgente') return; // tratados abaixo
         const bv = b?JSON.stringify(b[k]):undefined;
         const localMudou = JSON.stringify(l[k])!==bv;
         if(!localMudou) merged[k]=s[k];
@@ -5731,6 +5731,9 @@ function _mergeManutencoes(base, local, server){
       // distinguir "servidor não mudou desde que este aparelho apagou" (respeita
       // a exclusão) de "outro aparelho criou um lembrete novo" (nunca some).
       merged.lembretes=_mergeById(b&&b.lembretes, l.lembretes, s.lembretes);
+      // Rascunhos do agente: por id (o agente renova o texto no servidor enquanto a
+      // atendente marca "enviei" aqui — um não pode apagar o outro).
+      if(l.rascunhosAgente||s.rascunhosAgente) merged.rascunhosAgente=_mergeById(b&&b.rascunhosAgente, l.rascunhosAgente, s.rascunhosAgente);
       out.push(merged);
     } else if(l){ out.push(l); }
     else if(s){
@@ -7840,6 +7843,7 @@ function manutAbaSolicitacao(m){
   const margem=isNaN(parseFloat(m.margemPercent))?20:parseFloat(m.margemPercent);
   const total=sub*(1+margem/100);
   return '<div style="display:grid;gap:12px;">'+
+    _manutAgenteHtml(m)+
     '<div class="form-row">'+
     '<div class="form-group"><label class="form-label">Origem</label><select class="form-select" onchange="manutSetOrigem('+m.id+',this.value)">'+
       Object.keys(MANUT_ORIGEM).map(function(k){return '<option value="'+k+'"'+(m.origem===k?' selected':'')+'>'+MANUT_ORIGEM[k]+'</option>';}).join('')+
@@ -7912,6 +7916,80 @@ function manutAbaSolicitacao(m){
     _manutUpdatesHtml(m)+
     _manutLembretesHtml(m)+
     '</div>';
+}
+
+// ═══════════════════ AGENTE DE MANUTENÇÕES (repo manutencao-icm) ═══════════════════
+// O agente escreve só nos campos dele (alertaAgente, sugestaoAgente, rascunhosAgente)
+// pelas rotas /api/agente/*. Aqui a atendente vê o alerta, confirma a sugestão de
+// "quem paga" com 1 clique e copia/envia os rascunhos (o agente NUNCA envia nada).
+const _RASC_STATUS={enviado_sem_edicao:'Enviei sem editar',editado:'Enviei com edição',reescrito:'Reescrevi',descartado:'Não vou enviar'};
+const _AGENTE_COR={perdido:'var(--vermelha)',urgente:'var(--vermelha)',vermelho:'var(--vermelha)',atrasado:'var(--vermelha)',amarelo:'var(--peach)',atencao:'var(--peach)'};
+function _manutAgenteHtml(m){
+  const a=m.alertaAgente, s=m.sugestaoAgente;
+  const rasc=(m.rascunhosAgente||[]);
+  const pend=rasc.filter(function(r){return r.status==='pendente';});
+  const feitos=rasc.filter(function(r){return r.status!=='pendente';});
+  if(!a&&!s&&!rasc.length) return '';
+  const cor=a?(_AGENTE_COR[a.nivel]||'var(--sky)'):'var(--sky)';
+  let h='<div style="border:1px solid var(--lavender)66;background:var(--lav-light);border-radius:var(--r-sm);padding:10px 12px;display:grid;gap:8px;">'+
+    '<div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--lavender);"><i class="fa-solid fa-robot"></i> Agente</div>';
+  if(a&&a.texto) h+='<div style="font-size:13px;font-weight:600;color:'+cor+';"><i class="fa-regular fa-clock"></i> '+esc(a.texto)+(a.prazo?' · até '+fd(a.prazo):'')+'</div>';
+  if(s&&s.quemPaga&&m.quemPaga!==s.quemPaga) h+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;">'+
+    '<span>Sugere <b>quem paga: '+esc(MANUT_PAGADOR[s.quemPaga]||s.quemPaga)+'</b>'+(s.motivo?' — '+esc(s.motivo):'')+'</span>'+
+    '<button class="btn btn-sm" onclick="manutConfirmarSugestao('+m.id+')"><i class="fa-solid fa-check"></i> Confirmar</button></div>';
+  if(pend.length) h+='<div style="font-size:12px;font-weight:700;margin-top:2px;"><i class="fa-regular fa-envelope"></i> Rascunhos para enviar ('+pend.length+') <span style="font-weight:400;color:var(--text3);">— copie, envie pelo canal indicado e marque</span></div>'+
+    pend.map(function(r){
+      return '<details style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);padding:6px 10px;">'+
+        '<summary style="cursor:pointer;font-size:12.5px;font-weight:600;">'+esc(r.titulo||r.id)+
+          ' <span style="font-weight:400;color:var(--text3);">· para '+esc(r.para||'—')+(r.canal?' · '+esc(r.canal):'')+'</span>'+
+          (r.comValor?' <span style="font-size:9.5px;padding:1px 6px;border-radius:8px;background:var(--peach)22;color:var(--peach);font-weight:700;">COM VALOR: conferir</span>':'')+
+        '</summary>'+
+        '<div style="white-space:pre-wrap;font-size:12.5px;margin:8px 0;max-height:260px;overflow-y:auto;">'+esc(r.texto)+'</div>'+
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;">'+
+          '<button class="btn btn-sm" onclick="manutCopiarRascunho('+m.id+',\''+esc(r.id)+'\')"><i class="fa-regular fa-copy"></i> Copiar</button>'+
+          Object.keys(_RASC_STATUS).map(function(k){return '<button class="btn btn-sm" onclick="manutMarcarRascunho('+m.id+',\''+esc(r.id)+'\',\''+k+'\')">'+_RASC_STATUS[k]+'</button>';}).join('')+
+        '</div></details>';
+    }).join('');
+  if(feitos.length) h+='<div style="font-size:11px;color:var(--text3);">Já tratados: '+feitos.map(function(r){return esc(r.titulo||r.id)+' ('+(_RASC_STATUS[r.status]||r.status)+(r.marcadoPor?', '+esc(r.marcadoPor):'')+')';}).join(' · ')+'</div>';
+  return h+'</div>';
+}
+function manutCopiarRascunho(id,rid){
+  const m=manutencoes.find(function(x){return x.id===id;}); if(!m) return;
+  const r=(m.rascunhosAgente||[]).find(function(x){return x.id===rid;}); if(!r) return;
+  const ok=function(){showToast('Rascunho copiado. Revise antes de enviar.','sage');};
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(r.texto||'').then(ok,function(){prompt('Copie o texto:',r.texto||'');});
+  else prompt('Copie o texto:',r.texto||'');
+}
+function manutMarcarRascunho(id,rid,status){
+  const m=manutencoes.find(function(x){return x.id===id;}); if(!m) return;
+  const r=(m.rascunhosAgente||[]).find(function(x){return x.id===rid;}); if(!r||!_RASC_STATUS[status]) return;
+  r.status=status; r.marcadoPor=_autorAtual(); r.marcadoEm=new Date().toISOString();
+  if(!m.updates) m.updates=[];
+  m.updates.push({id:Date.now()+Math.floor(Math.random()*1000),texto:'Rascunho "'+(r.titulo||r.id)+'": '+_RASC_STATUS[status].toLowerCase()+(r.para?' (para '+r.para+')':''),data:new Date().toISOString(),autor:_autorAtual()});
+  if(typeof saveAll==='function') saveAll();
+  manutRenderAba(m); renderManutencaoKanban();
+}
+function manutConfirmarSugestao(id){
+  const m=manutencoes.find(function(x){return x.id===id;}); if(!m||!m.sugestaoAgente) return;
+  const s=m.sugestaoAgente;
+  m.quemPaga=s.quemPaga;
+  if(!m.updates) m.updates=[];
+  m.updates.push({id:Date.now()+Math.floor(Math.random()*1000),texto:'Quem paga confirmado: '+(MANUT_PAGADOR[s.quemPaga]||s.quemPaga)+' (sugestão do agente'+(s.motivo?': '+s.motivo:'')+')',data:new Date().toISOString(),autor:_autorAtual()});
+  m.sugestaoAgente=null;
+  if(typeof saveAll==='function') saveAll();
+  manutRenderAba(m); renderManutencaoKanban();
+  showToast('Quem paga confirmado.','sage');
+}
+// Marcas do agente no card do kanban: etiqueta "Agente" (card aberto por ele), relógio e rascunhos pendentes.
+function _manutAgenteKanbanHtml(m){
+  const partes=[];
+  if(m.criadoPeloAgente) partes.push('<span title="Aberto pelo agente" style="font-size:9.5px;padding:1px 6px;border-radius:8px;background:var(--lav-light);color:var(--lavender);font-weight:700;"><i class="fa-solid fa-robot"></i> Agente</span>');
+  const pend=(m.rascunhosAgente||[]).filter(function(r){return r.status==='pendente';}).length;
+  if(pend) partes.push('<span title="Rascunhos do agente para enviar" style="font-size:9.5px;padding:1px 6px;border-radius:8px;background:var(--sky-light);color:var(--sky);font-weight:700;"><i class="fa-regular fa-envelope"></i> '+pend+'</span>');
+  if(m.sugestaoAgente&&m.sugestaoAgente.quemPaga&&m.sugestaoAgente.quemPaga!==m.quemPaga) partes.push('<span title="Agente sugere quem paga" style="font-size:9.5px;padding:1px 6px;border-radius:8px;background:var(--peach)22;color:var(--peach);font-weight:700;">? quem paga</span>');
+  const a=m.alertaAgente;
+  const linhaAlerta=a&&a.texto?'<div style="font-size:10.5px;font-weight:600;margin-top:5px;color:'+(_AGENTE_COR[a.nivel]||'var(--sky)')+';"><i class="fa-regular fa-clock"></i> '+esc(a.texto)+'</div>':'';
+  return (partes.length?'<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:5px;">'+partes.join('')+'</div>':'')+linhaAlerta;
 }
 
 // ═══════════════════ LEMBRETES DE MANUTENÇÃO ("lembrar-me sobre X daqui X tempo") ═══════════════════
@@ -8617,7 +8695,7 @@ function renderManutencaoKanban(){
           '<span style="font-size:9.5px;padding:1px 6px;border-radius:8px;background:var(--sky-light);color:var(--sky);font-weight:600;">'+(MANUT_PAGADOR[m.quemPaga]||m.quemPaga)+'</span>'+
           prazoStr+
           '<span style="font-size:12px;font-weight:700;color:var(--sage);">R$ '+total.toFixed(2).replace('.',',')+'</span>'+
-          '</div>'+manutCriadoHtml(m)+'</div>';
+          '</div>'+_manutAgenteKanbanHtml(m)+manutCriadoHtml(m)+'</div>';
       }).join('')+
       '</div>';
   }).join('');

@@ -1,4 +1,7 @@
+from datetime import date
+
 import httpx
+from fastapi.responses import JSONResponse
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
@@ -164,6 +167,28 @@ async def listings():
         lst = await lc_sync.buscar_listings(client, token)
     lst.sort(key=lambda x: (x["nome"] or "").lower())
     return {"listings": lst}
+
+
+# Calendário de visitas de manutenção: reservas que encostam no período
+# [from, to] (chegada <= to e saída >= from). Só leitura, nada é gravado.
+@router.get("/ocupacao")
+async def ocupacao(from_: str = Query(..., alias="from"), to: str = Query(...)):
+    try:
+        de, ate = date.fromisoformat(from_), date.fromisoformat(to)
+    except ValueError:
+        return JSONResponse({"error": "datas invalidas (use YYYY-MM-DD)"}, status_code=400)
+    if ate < de or (ate - de).days > 62:
+        return JSONResponse({"error": "periodo invalido (maximo 62 dias)"}, status_code=400)
+    async with httpx.AsyncClient(timeout=lc_sync.TIMEOUT) as client:
+        token = await _get_token(client)
+        reservas = await lc_sync._paginar(client, token, "reservations", {
+            "arrivalEndDate": ate.isoformat(),
+            "departureStartDate": de.isoformat(),
+            "includeResources": "0",
+        })
+    # Rede de segurança caso o Hostaway ignore algum filtro: confere a sobreposição aqui também.
+    lst = [r for r in lc_sync.ocupacao_resumo(reservas) if r["chegada"] <= ate.isoformat() and r["saida"] >= de.isoformat()]
+    return {"de": de.isoformat(), "ate": ate.isoformat(), "reservas": lst}
 
 
 @router.post("/limpeza-caucao/sync")

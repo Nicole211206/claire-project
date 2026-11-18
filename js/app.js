@@ -246,6 +246,9 @@ let manutAtiva=null, manutAba='solicitacao';
 let fornecedoresCadastro=[]; // cadastro de fornecedores reutilizáveis
 let manutExibirPausadas=false;
 let manutTabAtiva='kanban';
+let manutVisitas=[]; // visitas de manutenção lançadas no Calendário (nx_manut_visitas)
+let manutCalMes=null; // 'YYYY-MM' exibido no Calendário (null = mês atual)
+let manutCalMostrarPrazos=true;
 let manualEntradas=[];
 let superhostPeriodos=[];
 let cancelamentos=[];
@@ -5314,6 +5317,7 @@ const _PERSIST_KEYS = {
   nx_servicos_pessoas:()=>servicosPessoas,
   nx_servicos_tipos:()=>servicosTipos,
   nx_servicos_pagamentos:()=>servicosPagamentos,
+  nx_manut_visitas:()=>manutVisitas,
   nx_servicos_diapag:()=>servicosConfig.diaPagamento,
   nx_tombstones:()=>tombstones,
   nx_update_tombstones:()=>updateTombstones
@@ -5322,7 +5326,7 @@ const _PERSIST_KEYS = {
 // Listas com id próprio que o servidor mescla registro a registro (id + _ts).
 // DEVE espelhar a MERGE_POR_ID do backend (backend/app/merge.py).
 // Mantido em sincronia com MERGE_POR_ID em backend/app/merge.py.
-const _MERGE_POR_ID_KEYS=['nx_manutencoes','nx_tasks','nx_plantao','nx_projetos','nx_compras','nx_extras','nx_limpeza','nx_caucao','nx_sinistros','nx_lc_imoveis','nx_lc_empresas','nx_despesas','nx_anotacoes_controle','nx_superhost','nx_cancelamentos','nx_imoveis','nx_pagamentos_fin','nx_relatorios_fin','nx_validacoes_fin','nx_avaliacoes_negativas','nx_taskcats','nx_kpidefs','nx_transcricoes','nx_outros','nx_fornecedores_cad','nx_manual','nx_update_tombstones','nx_servicos_equipe','nx_servicos_pessoas','nx_servicos_tipos','nx_servicos_pagamentos'];
+const _MERGE_POR_ID_KEYS=['nx_manutencoes','nx_tasks','nx_plantao','nx_projetos','nx_compras','nx_extras','nx_limpeza','nx_caucao','nx_sinistros','nx_lc_imoveis','nx_lc_empresas','nx_despesas','nx_anotacoes_controle','nx_superhost','nx_cancelamentos','nx_imoveis','nx_pagamentos_fin','nx_relatorios_fin','nx_validacoes_fin','nx_avaliacoes_negativas','nx_taskcats','nx_kpidefs','nx_transcricoes','nx_outros','nx_fornecedores_cad','nx_manual','nx_update_tombstones','nx_servicos_equipe','nx_servicos_pessoas','nx_servicos_tipos','nx_servicos_pagamentos','nx_manut_visitas'];
 function _semTs(o){ const c=Object.assign({},o); delete c._ts; return JSON.stringify(c); }
 // Antes de salvar: carimba _ts nos registros novos/alterados e cria tombstone
 // para os que foram apagados. Assim o servidor sabe qual versão é a mais recente
@@ -6224,6 +6228,7 @@ function loadAll(){
     v=g('nx_servicos_pessoas'); if(Array.isArray(v)) servicosPessoas=v;
     v=g('nx_servicos_tipos'); if(Array.isArray(v)) servicosTipos=v;
     v=g('nx_servicos_pagamentos'); if(Array.isArray(v)) servicosPagamentos=v;
+    v=g('nx_manut_visitas'); if(Array.isArray(v)) manutVisitas=v;
     v=g('nx_servicos_diapag'); if(typeof v==='number') servicosConfig.diaPagamento=v;
     v=g('nx_tombstones'); if(Array.isArray(v)) tombstones=v;
     v=g('nx_update_tombstones'); if(Array.isArray(v)) updateTombstones=v;
@@ -7913,6 +7918,7 @@ function manutAbaSolicitacao(m){
       '<div class="form-group"><label class="form-label">Data de check-out</label><input type="date" class="form-input" value="'+esc(h.checkout||'')+'" onchange="salvarCampoManutNested('+m.id+',\'hospede\',\'checkout\',this.value)"></div></div>'+
       '</div>';})():'')+
     '<div class="form-group"><label class="form-label">Observações</label><textarea class="form-input" rows="3" placeholder="Detalhes da solicitação..." oninput="salvarCampoManut('+m.id+',\'obs\',this.value)">'+esc(m.obs||'')+'</textarea></div>'+
+    _manutVisitasHtml(m)+
     _manutUpdatesHtml(m)+
     _manutLembretesHtml(m)+
     '</div>';
@@ -8645,6 +8651,7 @@ function renderManutSaldoGeral(){
 function renderManutencaoKanban(){
   const el=document.getElementById('manutencao-kanban'); if(!el) return;
   renderManutResumo();
+  if(manutTabAtiva==='calendario') renderManutCalendario();
   if(typeof _sinAtualizarAlertas==='function') _sinAtualizarAlertas();
   const _bf=document.getElementById('manut-busca'); const _bv=_bf?_bf.value.trim().toLowerCase():'';
   const _filtroBusca=function(m){ return !_bv || (manutCardTitulo(m)+' '+(m.obs||'')).toLowerCase().includes(_bv); };
@@ -8700,6 +8707,341 @@ function renderManutencaoKanban(){
       '</div>';
   }).join('');
 }
+// ═══════════════════ CALENDÁRIO DE VISITAS DE MANUTENÇÃO (2026-11-18) ═══════════════════
+// Visitas são lançamentos MANUAIS numa lista própria (nx_manut_visitas, merge por id
+// igual às demais) — nunca mexem nos cards de manutenção. Cada visita pode (opcional)
+// apontar para um card via manutencaoId; o card mostra as visitas dele.
+// Hostaway: o calendário busca as reservas do mês (GET /hostaway/ocupacao) e marca
+// a visita quando, naquele dia, há hóspede no imóvel / check-in / check-out.
+const VISITA_STATUS=[
+  {id:'agendada',label:'Agendada',cor:'var(--sky)'},
+  {id:'confirmada',label:'Confirmada',cor:'var(--lavender)'},
+  {id:'realizada',label:'Realizada',cor:'var(--sage)'},
+  {id:'cancelada',label:'Cancelada',cor:'var(--text3)'}
+];
+let visitaEditId=null, _visitaNovaManutId=null;
+let _hwListings=null, _hwListingsErro='';
+let _hwOcup={}; // 'YYYY-MM' -> {em:ms, reservas:[...]} | {em, erro}
+function _manutCalHoje(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function _visitaStatus(id){ return VISITA_STATUS.find(s=>s.id===id)||VISITA_STATUS[0]; }
+function _visitaFmtHora(v){ return v.hora?(v.hora+(v.horaFim?'–'+v.horaFim:'')):''; }
+function _visitaImovelCurto(n){ return String(n||'').replace(/^WC-\d+\s*-\s*/i,''); }
+function _visitaTitulo(v){ return v.titulo||'Visita'; }
+
+// ── Hostaway: anúncios e reservas ──
+async function _hwCarregarListings(){
+  if(_hwListings) return _hwListings;
+  try{ _hwListings=(await _lcApi('/hostaway/listings')).listings||[]; _hwListingsErro=''; }
+  catch(e){ _hwListingsErro=e.message||'erro'; _hwListings=null; }
+  return _hwListings;
+}
+function _hwAcharListing(nome){
+  if(!_hwListings||!nome) return null;
+  const alvo=_sinNorm(String(nome).replace(/^WC-\d+\s*-\s*/i,''));
+  if(!alvo) return null;
+  const n=l=>[_sinNorm(String(l.nome||'').replace(/^WC-\d+\s*-\s*/i,'')),_sinNorm(l.nomeExterno||'')];
+  return _hwListings.find(l=>n(l).includes(alvo))
+      || _hwListings.find(l=>n(l).some(x=>x&&(x.includes(alvo)||alvo.includes(x))))
+      || null;
+}
+// Reservas que tocam o mês inteiro (com folga de 1 dia em cada ponta). Cache de 10 min.
+async function _hwCarregarOcupacao(mes, forcar){
+  const c=_hwOcup[mes];
+  if(!forcar && c && Date.now()-c.em<10*60000) return c;
+  const [a,m]=mes.split('-').map(Number);
+  const de=new Date(a,m-1,0), ate=new Date(a,m,1); // último dia do mês anterior .. 1º do seguinte
+  const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  try{
+    const r=await _lcApi('/hostaway/ocupacao?from='+iso(de)+'&to='+iso(ate));
+    _hwOcup[mes]={em:Date.now(),reservas:r.reservas||[]};
+  }catch(e){ _hwOcup[mes]={em:Date.now(),erro:e.message||'erro',reservas:[]}; }
+  return _hwOcup[mes];
+}
+// Situação do imóvel num dia: {tipo:'hospedado'|'checkin'|'checkout'|'troca'|'livre', ...} ou null se não dá pra saber
+function _hwSituacao(listingId, dia){
+  if(!listingId) return null;
+  const c=_hwOcup[dia.slice(0,7)]; if(!c||c.erro) return null;
+  const rs=c.reservas.filter(r=>String(r.listingId)===String(listingId) && r.chegada<=dia && r.saida>=dia);
+  const dentro=rs.find(r=>r.chegada<dia && r.saida>dia);
+  if(dentro) return {tipo:'hospedado',r:dentro};
+  const sai=rs.find(r=>r.saida===dia), chega=rs.find(r=>r.chegada===dia);
+  if(sai&&chega) return {tipo:'troca',sai:sai,chega:chega};
+  if(chega) return {tipo:'checkin',r:chega};
+  if(sai) return {tipo:'checkout',r:sai};
+  return {tipo:'livre'};
+}
+const _HW_SIT={
+  hospedado:{cor:'var(--vermelha)',icone:'fa-solid fa-bed',curto:'Hóspede no imóvel'},
+  troca:{cor:'var(--vermelha)',icone:'fa-solid fa-right-left',curto:'Check-out e check-in no dia'},
+  checkin:{cor:'var(--peach)',icone:'fa-solid fa-right-to-bracket',curto:'Check-in no dia'},
+  checkout:{cor:'var(--peach)',icone:'fa-solid fa-right-from-bracket',curto:'Check-out no dia'},
+  livre:{cor:'var(--sage)',icone:'fa-solid fa-circle-check',curto:'Sem hóspede'}
+};
+function _hwSitTexto(s){
+  if(!s) return '';
+  const h=r=>r&&r.hospede?' ('+r.hospede+')':'';
+  if(s.tipo==='hospedado') return 'Reserva'+h(s.r)+' de '+fd(s.r.chegada)+' a '+fd(s.r.saida)+'. Combine o acesso antes.';
+  if(s.tipo==='troca') return 'Saída'+(s.sai.horaSaida?' às '+s.sai.horaSaida:'')+h(s.sai)+' e entrada'+(s.chega.horaChegada?' às '+s.chega.horaChegada:'')+h(s.chega)+'. Janela curta.';
+  if(s.tipo==='checkin') return 'Entrada'+(s.r.horaChegada?' às '+s.r.horaChegada:'')+h(s.r)+'. A visita precisa terminar antes.';
+  if(s.tipo==='checkout') return 'Saída'+(s.r.horaSaida?' às '+s.r.horaSaida:'')+h(s.r)+'. Visita só depois da saída.';
+  return 'Sem reserva no Hostaway nesse dia.';
+}
+function _hwSeloHtml(s, compacto){
+  if(!s||s.tipo==='livre') return '';
+  const t=_HW_SIT[s.tipo];
+  return '<span title="'+_seEsc(t.curto+' — '+_hwSitTexto(s))+'" style="font-size:9.5px;padding:1px 6px;border-radius:8px;background:'+t.cor+'22;color:'+t.cor+';font-weight:700;white-space:nowrap;"><i class="'+t.icone+'"></i>'+(compacto?'':' '+t.curto)+'</span>';
+}
+
+// ── Calendário ──
+function manutCalNavegar(delta){
+  const base=manutCalMes||_manutCalHoje().slice(0,7);
+  let [a,m]=base.split('-').map(Number);
+  if(delta===0){ manutCalMes=null; }
+  else { m+=delta; if(m<1){m=12;a--;} if(m>12){m=1;a++;} manutCalMes=a+'-'+String(m).padStart(2,'0'); }
+  renderManutCalendario();
+}
+function manutCalTogglePrazos(v){ manutCalMostrarPrazos=!!v; renderManutCalendario(); }
+function _manutCalEventos(mesStr){
+  const _bf=document.getElementById('manut-busca'); const bv=_bf?_bf.value.trim().toLowerCase():'';
+  const hoje=_manutCalHoje();
+  const ev={};
+  const add=(d,e)=>{ if(typeof d!=='string'||!/^\d{4}-\d{2}-\d{2}/.test(d)) return; d=d.slice(0,10); if(d.slice(0,7)!==mesStr) return; (ev[d]=ev[d]||[]).push(e); };
+  manutVisitas.forEach(v=>{
+    const m=v.manutencaoId?manutencoes.find(x=>x.id===v.manutencaoId):null;
+    if(bv && !((v.titulo||'')+' '+(v.imovelNome||'')+' '+(v.quem||'')+' '+(v.obs||'')+' '+(m?manutCardTitulo(m):'')).toLowerCase().includes(bv)) return;
+    add(v.data,{kind:'visita',v:v});
+  });
+  if(manutCalMostrarPrazos){
+    manutencoes.forEach(m=>{
+      if(!m.dataPrazo||m.status==='pago') return;
+      if(bv && !(manutCardTitulo(m)+' '+(m.obs||'')).toLowerCase().includes(bv)) return;
+      add(m.dataPrazo,{kind:'prazo',m:m,atrasado:m.dataPrazo<hoje});
+    });
+  }
+  Object.keys(ev).forEach(d=>ev[d].sort((a,b)=>{
+    if(a.kind!==b.kind) return a.kind==='visita'?-1:1;
+    return String(a.v&&a.v.hora||'99').localeCompare(String(b.v&&b.v.hora||'99'));
+  }));
+  return ev;
+}
+function renderManutCalendario(){
+  const el=document.getElementById('manutencao-tab-calendario'); if(!el) return;
+  const hoje=_manutCalHoje();
+  const mesStr=manutCalMes||hoje.slice(0,7);
+  const [ano,mes]=mesStr.split('-').map(Number);
+  const nomeMes=new Date(ano,mes-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  const ev=_manutCalEventos(mesStr);
+  const primeiroDiaSemana=new Date(ano,mes-1,1).getDay();
+  const diasNoMes=new Date(ano,mes,0).getDate();
+  const visitasMes=manutVisitas.filter(v=>(v.data||'').slice(0,7)===mesStr && v.status!=='cancelada');
+  const oc=_hwOcup[mesStr];
+  let comConflito=0;
+  visitasMes.forEach(v=>{ const s=_hwSituacao(_visitaListing(v),v.data); if(s&&s.tipo!=='livre') comConflito++; });
+  let hwInfo;
+  if(!oc) hwInfo='<span><i class="fa-solid fa-spinner fa-spin"></i> consultando Hostaway…</span>';
+  else if(oc.erro) hwInfo='<span style="color:var(--peach);" title="'+_seEsc(oc.erro)+'"><i class="fa-solid fa-plug-circle-xmark"></i> Hostaway indisponível agora — avisos de hóspede não aparecem</span>';
+  else hwInfo='<span><i class="fa-solid fa-rotate"></i> Hostaway conferido '+new Date(oc.em).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+' <a href="#" onclick="_hwCarregarOcupacao(\''+mesStr+'\',true).then(renderManutCalendario);return false;" style="color:var(--text3);">atualizar</a></span>';
+  let html='<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;">'+
+    '<div style="display:flex;align-items:center;gap:6px;">'+
+      '<button class="btn btn-sm" onclick="manutCalNavegar(-1)" title="Mês anterior"><i class="fa-solid fa-chevron-left"></i></button>'+
+      '<div style="font-family:var(--font-display);font-size:16px;font-weight:700;min-width:170px;text-align:center;text-transform:capitalize;">'+_seEsc(nomeMes)+'</div>'+
+      '<button class="btn btn-sm" onclick="manutCalNavegar(1)" title="Próximo mês"><i class="fa-solid fa-chevron-right"></i></button>'+
+      (mesStr!==hoje.slice(0,7)?'<button class="btn btn-sm" onclick="manutCalNavegar(0)">Hoje</button>':'')+
+    '</div>'+
+    '<button class="btn btn-rose" onclick="abrirNovaVisita()"><i class="fa-solid fa-plus"></i> Nova visita</button>'+
+  '</div>'+
+  '<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:11.5px;color:var(--text3);margin-bottom:10px;">'+
+    '<span><strong style="color:var(--text);">'+visitasMes.length+'</strong> visita'+(visitasMes.length===1?'':'s')+' no mês</span>'+
+    (comConflito?'<span style="color:var(--vermelha);font-weight:600;"><i class="fa-solid fa-triangle-exclamation"></i> '+comConflito+' com hóspede/check-in/check-out no dia</span>':'')+
+    hwInfo+
+    '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;margin-left:auto;"><input type="checkbox" '+(manutCalMostrarPrazos?'checked':'')+' onchange="manutCalTogglePrazos(this.checked)"> Mostrar prazos dos cards</label>'+
+  '</div>';
+  html+='<div style="overflow-x:auto;"><div style="display:grid;grid-template-columns:repeat(7,minmax(96px,1fr));gap:4px;">'+
+    ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map(d=>'<div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text3);text-align:center;padding:4px 0;">'+d+'</div>').join('');
+  for(let i=0;i<primeiroDiaSemana;i++) html+='<div></div>';
+  for(let dia=1;dia<=diasNoMes;dia++){
+    const d=mesStr+'-'+String(dia).padStart(2,'0');
+    const lista=ev[d]||[];
+    const ehHoje=d===hoje;
+    html+='<div onclick="if(event.target===this||event.target.dataset.dia)abrirNovaVisita(\''+d+'\')" title="Clique num espaço vazio para lançar uma visita neste dia" style="cursor:pointer;background:var(--bg2);border:1px solid '+(ehHoje?'var(--rose)':'var(--border)')+';border-radius:var(--r-sm);min-height:96px;padding:5px;display:flex;flex-direction:column;gap:3px;min-width:0;">'+
+      '<div data-dia="1" style="font-size:11px;font-weight:'+(ehHoje?'800':'600')+';color:'+(ehHoje?'var(--rose)':'var(--text3)')+';">'+dia+'</div>'+
+      lista.map(e=>{
+        if(e.kind==='prazo'){
+          const cor=e.atrasado?'var(--vermelha)':'var(--peach)';
+          return '<div onclick="event.stopPropagation();abrirManutModal('+e.m.id+')" title="'+_seEsc((e.atrasado?'Prazo vencido: ':'Prazo do card: ')+manutCardTitulo(e.m))+'" style="cursor:pointer;font-size:10px;line-height:1.3;padding:1px 5px;border-radius:5px;border:1px dashed '+cor+';color:'+cor+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><i class="fa-regular fa-flag" style="font-size:9px;"></i> '+_seEsc(manutCardTitulo(e.m))+'</div>';
+        }
+        const v=e.v, st=_visitaStatus(v.status);
+        const sit=v.status==='cancelada'?null:_hwSituacao(_visitaListing(v),v.data);
+        const alerta=sit&&sit.tipo!=='livre'?_HW_SIT[sit.tipo]:null;
+        const tip=(v.hora?_visitaFmtHora(v)+' · ':'')+_visitaTitulo(v)+(v.imovelNome?' · '+v.imovelNome:'')+(v.quem?' · '+v.quem:'')+' ('+st.label+')'+(alerta?'\n⚠ '+alerta.curto+' — '+_hwSitTexto(sit):'');
+        return '<div onclick="event.stopPropagation();abrirVisita('+v.id+')" title="'+_seEsc(tip)+'" style="cursor:pointer;font-size:10.5px;line-height:1.3;padding:2px 5px;border-radius:5px;background:'+st.cor+'1f;color:var(--text);border-left:3px solid '+(alerta?alerta.cor:st.cor)+';min-width:0;'+(v.status==='cancelada'?'opacity:0.45;text-decoration:line-through;':v.status==='realizada'?'opacity:0.65;':'')+'">'+
+          '<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+(v.hora?'<strong>'+_seEsc(v.hora)+'</strong> ':'')+_seEsc(_visitaImovelCurto(v.imovelNome)||_visitaTitulo(v))+'</div>'+
+          (v.imovelNome&&v.titulo?'<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text3);font-size:9.5px;">'+_seEsc(v.titulo)+'</div>':'')+(alerta?'<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:'+alerta.cor+';font-size:9.5px;font-weight:700;"><i class="'+alerta.icone+'"></i> '+alerta.curto+'</div>':'')+
+        '</div>';
+      }).join('')+
+    '</div>';
+  }
+  html+='</div></div>';
+  if(!manutVisitas.length) html+='<p style="color:var(--text3);font-size:13px;text-align:center;padding:16px;">Nenhuma visita lançada ainda. Clique em <strong>Nova visita</strong> ou num dia do calendário.</p>';
+  el.innerHTML=html;
+  // Busca anúncios e reservas do mês em segundo plano e redesenha quando chegar
+  if(!oc){
+    _hwCarregarListings().then(()=>{ _visitasResolverListings(); return _hwCarregarOcupacao(mesStr); }).then(()=>{ if(manutTabAtiva==='calendario') renderManutCalendario(); });
+  }
+}
+// Visitas sem anúncio escolhido: tenta achar o anúncio pelo nome (mapa só em memória — nunca grava no registro)
+const _visitaListingAuto={};
+function _visitaListing(v){ return v.hostawayListingId||_visitaListingAuto[v.id]||null; }
+function _visitasResolverListings(){
+  if(!_hwListings) return;
+  manutVisitas.forEach(v=>{ if(!v.hostawayListingId&&v.imovelNome){ const l=_hwAcharListing(v.imovelNome); if(l) _visitaListingAuto[v.id]=l.id; } });
+}
+
+// ── Modal da visita ──
+function abrirNovaVisita(data, manutId){
+  visitaEditId=null; _visitaNovaManutId=manutId||null;
+  const m=manutId?manutencoes.find(x=>x.id===manutId):null;
+  _visitaPreencherModal({data:data||_manutCalHoje(),hora:'',horaFim:'',imovelNome:m?m.imovelNome||'':'',hostawayListingId:null,titulo:'',quem:'',status:'agendada',manutencaoId:manutId||null,obs:''});
+}
+function abrirVisita(id){
+  const v=manutVisitas.find(x=>x.id===id); if(!v) return;
+  visitaEditId=id; _visitaNovaManutId=null;
+  _visitaPreencherModal(v);
+}
+function _visitaPreencherModal(v){
+  const $=id=>document.getElementById(id);
+  $('visita-titulo-modal').textContent=visitaEditId?'Editar visita':'Nova visita';
+  $('visita-btn-apagar').style.display=visitaEditId?'':'none';
+  $('visita-data').value=v.data||'';
+  $('visita-hora').value=v.hora||'';
+  $('visita-hora-fim').value=v.horaFim||'';
+  $('visita-imovel').value=v.imovelNome||'';
+  $('visita-titulo').value=v.titulo||'';
+  $('visita-quem').value=v.quem||'';
+  $('visita-obs').value=v.obs||'';
+  $('visita-status').innerHTML=VISITA_STATUS.map(s=>'<option value="'+s.id+'"'+(s.id===(v.status||'agendada')?' selected':'')+'>'+s.label+'</option>').join('');
+  $('visita-imoveis-dl').innerHTML=(imovelsCatalog||[]).map(im=>'<option value="'+_seEsc(im.nome||'')+'">').join('');
+  const nomes=new Set();
+  (fornecedoresCadastro||[]).forEach(f=>f&&f.nome&&nomes.add(f.nome));
+  manutVisitas.forEach(x=>x.quem&&nomes.add(x.quem));
+  (ATTS||[]).forEach(a=>a&&a.name&&nomes.add(a.name));
+  $('visita-quem-dl').innerHTML=[...nomes].sort().map(n=>'<option value="'+_seEsc(n)+'">').join('');
+  $('visita-manutencao').innerHTML=_sinOpcoesManut(v.manutencaoId||null,v.imovelNome||'');
+  $('visita-btn-ver-manut').style.display=v.manutencaoId?'':'none';
+  const cr=$('visita-criado');
+  cr.textContent=v.criadoPor||v.dataCriacao?('Lançada'+(v.criadoPor?' por '+v.criadoPor:'')+(v.dataCriacao?' em '+new Date(v.dataCriacao).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'')):'';
+  _visitaListingSelecionado=v.hostawayListingId||null;
+  _visitaRenderListingSel();
+  document.getElementById('modal-visita').classList.add('open');
+  _hwCarregarListings().then(()=>{
+    if(!_visitaListingSelecionado){ const l=_hwAcharListing($('visita-imovel').value); if(l) _visitaListingSelecionado=l.id; }
+    _visitaRenderListingSel(); _visitaAtualizarHostaway();
+  });
+}
+let _visitaListingSelecionado=null;
+function _visitaRenderListingSel(){
+  const sel=document.getElementById('visita-listing');
+  if(!_hwListings){
+    sel.innerHTML='<option value="">'+(_hwListingsErro?'Hostaway indisponível agora':'Carregando anúncios…')+'</option>';
+    sel.disabled=true; return;
+  }
+  sel.disabled=false;
+  sel.innerHTML='<option value="">— não conferir no Hostaway —</option>'+_hwListings.map(l=>'<option value="'+_seEsc(l.id)+'"'+(String(l.id)===String(_visitaListingSelecionado)?' selected':'')+'>'+_seEsc(l.nome||l.nomeExterno)+(l.nomeExterno&&l.nomeExterno!==l.nome?' · '+_seEsc(l.nomeExterno):'')+'</option>').join('');
+}
+function _visitaImovelMudou(){
+  const nome=document.getElementById('visita-imovel').value;
+  const l=_hwAcharListing(nome); _visitaListingSelecionado=l?l.id:null;
+  _visitaRenderListingSel();
+  const sm=document.getElementById('visita-manutencao');
+  const atual=sm.value?Number(sm.value):null;
+  sm.innerHTML=_sinOpcoesManut(atual,nome);
+  _visitaAtualizarHostaway();
+}
+function _visitaSelManutMudou(){
+  const sm=document.getElementById('visita-manutencao');
+  const id=sm.value?Number(sm.value):null;
+  document.getElementById('visita-btn-ver-manut').style.display=id?'':'none';
+  // Card escolhido e imóvel ainda vazio: puxa o imóvel do card
+  const im=document.getElementById('visita-imovel');
+  if(id && !im.value.trim()){ const m=manutencoes.find(x=>x.id===id); if(m&&m.imovelNome){ im.value=m.imovelNome; _visitaImovelMudou(); } }
+}
+function _visitaAbrirManut(){
+  const v=document.getElementById('visita-manutencao').value; if(!v) return;
+  closeModal('modal-visita'); abrirManutModal(Number(v));
+}
+async function _visitaAtualizarHostaway(){
+  const el=document.getElementById('visita-hostaway-aviso'); if(!el) return;
+  const sel=document.getElementById('visita-listing');
+  if(sel && !sel.disabled) _visitaListingSelecionado=sel.value||null;
+  const data=document.getElementById('visita-data').value;
+  if(!_hwListings){ el.innerHTML=_hwListingsErro?'<div style="font-size:11.5px;color:var(--peach);"><i class="fa-solid fa-plug-circle-xmark"></i> Não consegui falar com o Hostaway agora — confira a reserva manualmente.</div>':''; return; }
+  if(!_visitaListingSelecionado||!data){ el.innerHTML=data&&document.getElementById('visita-imovel').value.trim()?'<div style="font-size:11.5px;color:var(--text3);"><i class="fa-solid fa-circle-info"></i> Imóvel não encontrado no Hostaway pelo nome — escolha o anúncio acima para conferir hóspedes.</div>':''; return; }
+  el.innerHTML='<div style="font-size:11.5px;color:var(--text3);"><i class="fa-solid fa-spinner fa-spin"></i> Conferindo reservas…</div>';
+  const oc=await _hwCarregarOcupacao(data.slice(0,7));
+  if(document.getElementById('visita-data').value!==data) return; // mudou no meio
+  if(oc.erro){ el.innerHTML='<div style="font-size:11.5px;color:var(--peach);"><i class="fa-solid fa-plug-circle-xmark"></i> Não consegui ler as reservas do Hostaway agora — confira manualmente.</div>'; return; }
+  const s=_hwSituacao(_visitaListingSelecionado,data);
+  const t=_HW_SIT[s.tipo];
+  el.innerHTML='<div style="font-size:12px;padding:8px 10px;border-radius:var(--r-sm);background:'+t.cor+'18;border:1px solid '+t.cor+'55;color:'+(s.tipo==='livre'?'var(--text2)':'var(--text)')+';"><i class="'+t.icone+'" style="color:'+t.cor+';"></i> <strong style="color:'+t.cor+';">'+t.curto+'</strong> — '+_seEsc(_hwSitTexto(s))+'</div>';
+}
+function salvarVisita(){
+  const $=id=>document.getElementById(id);
+  const data=$('visita-data').value;
+  if(!data){ showToast('Informe a data da visita.','peach'); return; }
+  const imovel=$('visita-imovel').value.trim(), titulo=$('visita-titulo').value.trim();
+  if(!imovel && !titulo){ showToast('Informe pelo menos o imóvel ou o que vai ser feito.','peach'); return; }
+  const sel=$('visita-listing');
+  const campos={
+    data:data, hora:$('visita-hora').value||'', horaFim:$('visita-hora-fim').value||'',
+    imovelNome:imovel, titulo:titulo, quem:$('visita-quem').value.trim(),
+    status:$('visita-status').value||'agendada', obs:$('visita-obs').value.trim(),
+    manutencaoId:$('visita-manutencao').value?Number($('visita-manutencao').value):null,
+    hostawayListingId:(sel&&!sel.disabled)?(sel.value||null):(_visitaListingSelecionado||null)
+  };
+  if(visitaEditId){
+    const v=manutVisitas.find(x=>x.id===visitaEditId); if(!v){ closeModal('modal-visita'); return; }
+    Object.assign(v,campos);
+  } else {
+    manutVisitas.unshift(Object.assign({id:Date.now()+Math.floor(Math.random()*1000),dataCriacao:new Date().toISOString(),criadoPor:_manutCriadoPorAtual()},campos));
+  }
+  saveAll();
+  closeModal('modal-visita');
+  showToast(visitaEditId?'Visita atualizada':'Visita lançada no calendário','sage');
+  _visitaRedesenhar(campos.manutencaoId);
+}
+function apagarVisita(){
+  if(!visitaEditId) return;
+  const v=manutVisitas.find(x=>x.id===visitaEditId);
+  if(!confirm('Apagar esta visita do calendário?')) return;
+  manutVisitas=manutVisitas.filter(x=>x.id!==visitaEditId);
+  saveAll(); closeModal('modal-visita'); showToast('Visita apagada');
+  _visitaRedesenhar(v&&v.manutencaoId);
+}
+function _visitaRedesenhar(manutId){
+  if(manutTabAtiva==='calendario') renderManutCalendario();
+  const modal=document.getElementById('modal-manut');
+  if(modal&&modal.classList.contains('open')&&manutAtiva){
+    const m=manutencoes.find(x=>x.id===manutAtiva); if(m&&manutAba==='solicitacao') manutRenderAba(m);
+  }
+}
+// Bloco "Visitas" dentro do card de manutenção (aba Solicitação)
+function _manutVisitasHtml(m){
+  const vs=manutVisitas.filter(v=>v.manutencaoId===m.id).sort((a,b)=>String(a.data+(a.hora||'')).localeCompare(String(b.data+(b.hora||''))));
+  const hoje=_manutCalHoje();
+  return '<div class="form-group"><label class="form-label" style="display:flex;justify-content:space-between;align-items:center;">Visitas agendadas'+
+    '<button class="btn btn-sm" onclick="abrirNovaVisita(null,'+m.id+')"><i class="fa-regular fa-calendar-plus"></i> Agendar visita</button></label>'+
+    (vs.length?vs.map(v=>{
+      const st=_visitaStatus(v.status);
+      const sit=v.status==='cancelada'?null:_hwSituacao(_visitaListing(v),v.data);
+      return '<div onclick="abrirVisita('+v.id+')" style="cursor:pointer;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 10px;border:1px solid var(--border);border-left:3px solid '+st.cor+';border-radius:var(--r-sm);margin-bottom:5px;font-size:12.5px;'+(v.status==='cancelada'?'opacity:0.5;':'')+'">'+
+        '<strong>'+fd(v.data)+(v.data&&v.data.slice(0,4)!==hoje.slice(0,4)?'/'+v.data.slice(0,4):'')+'</strong>'+(v.hora?'<span>'+_seEsc(_visitaFmtHora(v))+'</span>':'')+
+        '<span style="flex:1;min-width:120px;">'+_seEsc(_visitaTitulo(v))+(v.quem?' <span style="color:var(--text3);">· '+_seEsc(v.quem)+'</span>':'')+'</span>'+
+        _hwSeloHtml(sit)+
+        '<span style="font-size:9.5px;padding:1px 6px;border-radius:8px;background:'+st.cor+'22;color:'+st.cor+';font-weight:700;">'+st.label+'</span>'+
+      '</div>';
+    }).join(''):'<div style="font-size:12px;color:var(--text3);padding:4px 0;">Nenhuma visita ligada a este card.</div>')+
+  '</div>';
+}
 function manutTogglePausadasView(){
   manutExibirPausadas=!manutExibirPausadas;
   renderManutencaoKanban();
@@ -8708,6 +9050,7 @@ function switchManutTab(tab,btn){
   manutTabAtiva=tab;
   document.getElementById('manutencao-tab-kanban').style.display=tab==='kanban'?'':'none';
   document.getElementById('manutencao-tab-saldo').style.display=tab==='saldo'?'':'none';
+  document.getElementById('manutencao-tab-calendario').style.display=tab==='calendario'?'':'none';
   document.getElementById('manutencao-tab-sinistros').style.display=tab==='sinistros'?'':'none';
   // Resumo e busca do topo são da manutenção — na aba Sinistros ela tem os próprios
   document.getElementById('manutencao-resumo').style.display=tab==='sinistros'?'none':'';
@@ -8716,6 +9059,7 @@ function switchManutTab(tab,btn){
   if(btn) btn.classList.add('active');
   if(tab==='saldo'){ renderManutSaldoGeral(); renderManutSaldoImoveis(); }
   if(tab==='sinistros') renderSinistros();
+  if(tab==='calendario') renderManutCalendario();
   _sinAtualizarAlertas();
 }
 // Cards de saldo individual (imóveis pontuais que não usam o saldo geral) +
@@ -9474,7 +9818,7 @@ window.addEventListener('visibilitychange', function(){ if(document.visibilitySt
 // Mantém todas as abas/dispositivos na versão mais nova. Uma aba presa na versão
 // antiga sobrescreve dados dos outros; aqui ela detecta o deploy novo, SALVA e
 // recarrega sozinha. APP_VERSION DEVE ser igual ao ?v= do app.js no index.html.
-const APP_VERSION = 141;
+const APP_VERSION = 142;
 let _verCheckBusy=false;
 async function _checkAppVersion(){
   if(_verCheckBusy) return; _verCheckBusy=true;

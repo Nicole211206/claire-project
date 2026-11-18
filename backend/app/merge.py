@@ -71,6 +71,8 @@ MERGE_POR_ID = [
     # Serviços da Equipe (lançamentos, cadastro de pessoas, tabela de preços e
     # lotes de pagamento) — todos com id próprio, mesmo contrato das demais.
     "nx_servicos_equipe", "nx_servicos_pessoas", "nx_servicos_tipos", "nx_servicos_pagamentos",
+    # Calendário de visitas de manutenção (lançamentos manuais, id próprio).
+    "nx_manut_visitas",
 ]
 
 # Listas com trava de encolhimento (não passam pelo merge por id acima).

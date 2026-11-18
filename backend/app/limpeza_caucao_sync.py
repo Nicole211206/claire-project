@@ -86,6 +86,32 @@ async def buscar_listings(client: httpx.AsyncClient, token: str) -> list[dict]:
     ]
 
 
+def ocupacao_resumo(reservas: list[dict]) -> list[dict]:
+    """Resumo enxuto das reservas pro Calendário de visitas de manutenção:
+    só o necessário pra avisar "tem hóspede nesse dia" (sem dados de contato
+    nem valores). Ignora reservas canceladas/pendentes (status_valido)."""
+    out = []
+    for r in reservas:
+        if not isinstance(r, dict) or not status_valido(r):
+            continue
+        chegada = str(r.get("arrivalDate") or "")[:10]
+        saida = str(r.get("departureDate") or "")[:10]
+        if not chegada or not saida:
+            continue
+        out.append({
+            "listingId": r.get("listingMapId"),
+            "chegada": chegada,
+            "saida": saida,
+            "horaChegada": _hora(r.get("checkInTime")),
+            "horaSaida": _hora(r.get("checkOutTime")),
+            "hospede": (r.get("guestFirstName") or str(r.get("guestName") or "").split(" ")[0] or "").strip(),
+            "canal": _canal(r),
+            "status": r.get("status") or "",
+        })
+    out.sort(key=lambda x: (str(x["listingId"]), x["chegada"]))
+    return out
+
+
 def status_valido(r: dict) -> bool:
     return (r.get("status") or "").lower() in STATUS_VALIDOS
 
